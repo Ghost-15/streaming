@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version:*)",
+      "Bash(flutter --version)",
+      "Bash(go mod:*)",
+      "Bash(go get:*)",
+      "Bash(flutter create:*)",
+      "Bash(flutter pub:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(openssl version:*)",
+      "Bash(where openssl:*)",
+      "Bash(openssl genrsa:*)",
+      "Bash(openssl rsa:*)",
+      "Bash(code \"C:\\\\Users\\\\youri\\\\Desktop\\\\Decode\\\\S2\\\\PEC\\\\streaming\")",
+      "Bash(go install:*)",
+      "Bash(flutter devices:*)",
+      "Bash(go test:*)",
+      "Bash(where psql:*)",
+      "Bash(wsl -e bash -c \"sudo apt-get update -qq && sudo apt-get install -y postgresql-client 2>&1 | tail -5\")",
+      "Bash(wsl -e bash -c \"which psql && psql --version\")",
+      "Bash(flutter analyze:*)"
+    ]
+  }
+}
