@@ -66,7 +66,7 @@ func main() {
 	playlistH := handler.NewPlaylistHandler(playlistUC)
 
 	// 7. Router
-	engine := router.NewRouter(authH, streamH, playlistH)
+	engine := router.NewRouter(cfg, authH, streamH, playlistH)
 
 	// 8. HTTP server with graceful shutdown
 	srv := &http.Server{

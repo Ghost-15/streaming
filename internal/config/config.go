@@ -32,7 +32,7 @@ func Load() (*Config, error) {
 		JWTPrivateKeyPath: os.Getenv("JWT_PRIVATE_KEY_PATH"),
 		JWTPublicKeyPath:  os.Getenv("JWT_PUBLIC_KEY_PATH"),
 		OTELEndpoint:      getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"),
-		CORSOrigins:       getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
+		CORSOrigins:       os.Getenv("CORS_ALLOWED_ORIGINS"),
 		Env:               getEnv("APP_ENV", "development"),
 	}
 
@@ -45,9 +45,10 @@ func Load() (*Config, error) {
 
 func (c *Config) validate() error {
 	required := map[string]string{
-		"SUPABASE_DB_URL":     c.SupabaseDBURL,
+		"SUPABASE_DB_URL":      c.SupabaseDBURL,
 		"JWT_PRIVATE_KEY_PATH": c.JWTPrivateKeyPath,
 		"JWT_PUBLIC_KEY_PATH":  c.JWTPublicKeyPath,
+		"CORS_ALLOWED_ORIGINS": c.CORSOrigins,
 	}
 	for key, val := range required {
 		if val == "" {

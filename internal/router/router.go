@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
+	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/handler"
 	"github.com/Ghost-15/streaming/internal/handler/middleware"
@@ -13,6 +14,7 @@ import (
 // Called once in main.go after dependency injection.
 // ADR-001: gin.New() (not gin.Default()) — middlewares are explicit.
 func NewRouter(
+	cfg *config.Config,
 	authH *handler.AuthHandler,
 	streamH *handler.StreamHandler,
 	playlistH *handler.PlaylistHandler,
@@ -20,9 +22,9 @@ func NewRouter(
 	r := gin.New()
 
 	// Global middlewares (order matters)
-	r.Use(otelgin.Middleware("streampulse-api")) // Sprint 2 — US-008
-	r.Use(middleware.ZerologMiddleware())         // Sprint 1 — US-006
-	r.Use(middleware.CORSMiddleware())
+	r.Use(otelgin.Middleware("streampulse-api"))        // Sprint 2 — US-008
+	r.Use(middleware.ZerologMiddleware())                // Sprint 1 — US-006
+	r.Use(middleware.CORSMiddleware(cfg.CORSOrigins))   // ENV: CORS_ALLOWED_ORIGINS
 	r.Use(gin.Recovery())
 
 	// Public routes — no auth required
