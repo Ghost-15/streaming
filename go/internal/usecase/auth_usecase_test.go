@@ -12,10 +12,10 @@ import (
 // Table-driven pattern — ajouter des cas au fur et à mesure (Sprint 1 — US-001).
 func TestAuthUseCase_Login(t *testing.T) {
 	tests := []struct {
-		name      string
-		email     string
-		password  string
-		wantErr   bool
+		name     string
+		email    string
+		password string
+		wantErr  bool
 	}{
 		{
 			name:     "not implemented yet",

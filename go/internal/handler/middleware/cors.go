@@ -8,8 +8,8 @@ import (
 )
 
 // CORSMiddleware configures strict CORS for the API.
-// origins vient de config.Config.CORSOrigins (ENV CORS_ALLOWED_ORIGINS).
-// Supporte plusieurs origines séparées par une virgule :
+// origins comes from config.Config.CORSOrigins (ENV CORS_ALLOWED_ORIGINS).
+// Supports multiple origins separated by a comma:
 //
 //	CORS_ALLOWED_ORIGINS=http://localhost:3000,https://streampulse.app
 //
@@ -25,9 +25,9 @@ func CORSMiddleware(origins string) gin.HandlerFunc {
 	return cors.New(cfg)
 }
 
-// parseOrigins splits a comma-separated list of origins and trims whitespace.
-// Retourne une slice vide si raw est vide — le caller (config.validate) garantit
-// que CORS_ALLOWED_ORIGINS est défini avant d'arriver ici.
+// parseOrigins splits a comma-separated list of allowed origins and trims whitespace.
+// Returns an empty slice if raw is empty — config.validate ensures
+// CORS_ALLOWED_ORIGINS is set before this is called.
 func parseOrigins(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))

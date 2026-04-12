@@ -31,7 +31,7 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-// Register godoc
+// Register godoc.
 // @Summary     Register a new user
 // @Tags        auth
 // @Accept      json
@@ -56,7 +56,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"id": user.ID, "email": user.Email})
 }
 
-// Login godoc
+// Login godoc.
 // @Summary     Authenticate and receive a JWT token
 // @Tags        auth
 // @Accept      json

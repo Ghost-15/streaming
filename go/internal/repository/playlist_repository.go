@@ -7,7 +7,7 @@ import (
 )
 
 // PlaylistRepository defines the persistence contract for playlists.
-// Implemented in internal/infrastructure/supabase/playlist_repo.go
+// Implemented in internal/infrastructure/supabase/playlist_repo.go.
 type PlaylistRepository interface {
 	FindByID(ctx context.Context, id string) (*entity.Playlist, error)
 	ListByOwner(ctx context.Context, ownerID string) ([]entity.Playlist, error)

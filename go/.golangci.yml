@@ -33,3 +33,7 @@ issues:
     - path: internal/usecase/mock/
       linters:
         - unused
+    # Les handlers ont des annotations Swagger (@Router, @Summary…) sans point final
+    - path: internal/handler/
+      linters:
+        - godot

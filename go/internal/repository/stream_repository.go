@@ -7,7 +7,7 @@ import (
 )
 
 // StreamRepository defines the persistence contract for streams.
-// Implemented in internal/infrastructure/supabase/stream_repo.go
+// Implemented in internal/infrastructure/supabase/stream_repo.go.
 type StreamRepository interface {
 	FindByID(ctx context.Context, id string) (*entity.Stream, error)
 	ListActive(ctx context.Context) ([]entity.Stream, error)

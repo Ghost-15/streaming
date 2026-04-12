@@ -22,9 +22,9 @@ func NewRouter(
 	r := gin.New()
 
 	// Global middlewares (order matters)
-	r.Use(otelgin.Middleware("streampulse-api"))        // Sprint 2 — US-008
-	r.Use(middleware.ZerologMiddleware())                // Sprint 1 — US-006
-	r.Use(middleware.CORSMiddleware(cfg.CORSOrigins))   // ENV: CORS_ALLOWED_ORIGINS
+	r.Use(otelgin.Middleware("streampulse-api"))      // Sprint 2 — US-008
+	r.Use(middleware.ZerologMiddleware())             // Sprint 1 — US-006
+	r.Use(middleware.CORSMiddleware(cfg.CORSOrigins)) // ENV: CORS_ALLOWED_ORIGINS
 	r.Use(gin.Recovery())
 
 	// Public routes — no auth required

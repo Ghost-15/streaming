@@ -24,7 +24,7 @@ type CreatePlaylistRequest struct {
 	Title string `json:"title" binding:"required,min=1,max=100"`
 }
 
-// List godoc
+// List godoc.
 // @Summary     List playlists owned by the authenticated user
 // @Tags        playlists
 // @Produce     json

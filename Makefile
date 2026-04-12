@@ -4,38 +4,39 @@
 
 # Start the API server locally (loads .env automatically via godotenv)
 dev:
-	go run ./cmd/server
+	cd go && go run ./cmd/server
 
 # Build the production binary
 build:
-	CGO_ENABLED=0 go build -ldflags='-w -s' -o bin/streampulse ./cmd/server
+	cd go && CGO_ENABLED=0 go build -ldflags='-w -s' -o ../bin/streampulse ./cmd/server
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 # Run all tests with race detector + coverage report
 test:
-	go test ./... -race -coverprofile=coverage.out -covermode=atomic
+	cd go && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
 	go tool cover -func=coverage.out | tail -1
 
 # Run tests and enforce 80% coverage threshold (CI gate)
 test-ci:
-	go test ./... -race -coverprofile=coverage.out -covermode=atomic
+	cd go && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
 	go tool cover -func=coverage.out | awk '/total/{if ($$3+0 < 80) { print "Coverage below 80%: " $$3; exit 1 }}'
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 
 # Static analysis
 vet:
-	go vet ./...
+	cd go && go vet ./...
 
-# Linter (requires golangci-lint: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+# Linter — installe golangci-lint automatiquement si absent
 lint:
-	golangci-lint run ./...
+	@which golangci-lint > /dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@export PATH=$$PATH:$$(go env GOPATH)/bin && cd go && golangci-lint run ./...
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 
 docker-build:
-	docker build -t streampulse-api:local .
+	docker build -t streampulse-api:local ./go
 
 docker-up:
 	docker compose up -d
@@ -59,16 +60,16 @@ migrate:
 # ── Flutter ───────────────────────────────────────────────────────────────────
 
 flutter-run:
-	cd mobile/streampulse && flutter run
+	cd flutter/streampulse && flutter run
 
 flutter-test:
-	cd mobile/streampulse && flutter test
+	cd flutter/streampulse && flutter test
 
 flutter-build-apk:
-	cd mobile/streampulse && flutter build apk --release
+	cd flutter/streampulse && flutter build apk --release
 
 flutter-build-web:
-	cd mobile/streampulse && flutter build web --release
+	cd flutter/streampulse && flutter build web --release
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 

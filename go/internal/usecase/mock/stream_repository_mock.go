@@ -10,10 +10,10 @@ import (
 var _ repository.StreamRepository = (*MockStreamRepository)(nil)
 
 type MockStreamRepository struct {
-	FindByIDFn          func(ctx context.Context, id string) (*entity.Stream, error)
-	ListActiveFn        func(ctx context.Context) ([]entity.Stream, error)
-	CreateFn            func(ctx context.Context, stream *entity.Stream) error
-	UpdateStatusFn      func(ctx context.Context, id string, status entity.StreamStatus) error
+	FindByIDFn           func(ctx context.Context, id string) (*entity.Stream, error)
+	ListActiveFn         func(ctx context.Context) ([]entity.Stream, error)
+	CreateFn             func(ctx context.Context, stream *entity.Stream) error
+	UpdateStatusFn       func(ctx context.Context, id string, status entity.StreamStatus) error
 	IncrementListenersFn func(ctx context.Context, id string, delta int) error
 }
 

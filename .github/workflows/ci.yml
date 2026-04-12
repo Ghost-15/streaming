@@ -16,13 +16,15 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: "go.mod"
+          go-version-file: "go/go.mod"
           cache: true
 
       - name: Install golangci-lint
+        working-directory: go
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
       - name: Run golangci-lint
+        working-directory: go
         run: golangci-lint run ./...
 
   go-test:
@@ -33,15 +35,17 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: "go.mod"
+          go-version-file: "go/go.mod"
           cache: true
 
       - name: Run tests
+        working-directory: go
         run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
 
       - name: Enforce coverage gate (entity + usecase)
-        # Gate Sprint 0 : 50% — sera relevé à 80% en Sprint 1 (US-016)
+        # Gate Sprint 0 : 20% — sera relevé à 80% en Sprint 1 (US-016)
         # quand les usecases seront implémentés (auth, stream, playlist)
+        working-directory: go
         run: |
           TOTAL=$(go tool cover -func=coverage.out \
             | grep -E "^github\.com/Ghost-15/streaming/internal/(entity|usecase)/" \
@@ -55,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage.out
+          path: go/coverage.out
 
   go-build:
     name: Go Build (distroless)
@@ -66,20 +70,21 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: "go.mod"
+          go-version-file: "go/go.mod"
           cache: true
 
       - name: Build binary
+        working-directory: go
         run: CGO_ENABLED=0 go build -ldflags='-w -s' -o bin/streampulse ./cmd/server
 
       - name: Docker build
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./go
           push: false
           tags: streampulse-api:${{ github.sha }}
 
-  # ── Flutter Mobile ──────────────────────────────────────────────────────────
+  # ── Flutter ─────────────────────────────────────────────────────────────────
   flutter-test:
     name: Flutter Test
     runs-on: ubuntu-latest
@@ -93,17 +98,17 @@ jobs:
           cache: true
 
       - name: Get dependencies
-        working-directory: mobile/streampulse
+        working-directory: flutter/streampulse
         run: flutter pub get
 
       - name: Analyze
-        working-directory: mobile/streampulse
+        working-directory: flutter/streampulse
         run: flutter analyze
 
       - name: Run tests
-        working-directory: mobile/streampulse
+        working-directory: flutter/streampulse
         run: flutter test
 
       - name: Build web (admin)
-        working-directory: mobile/streampulse
+        working-directory: flutter/streampulse
         run: flutter build web --release

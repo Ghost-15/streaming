@@ -3,7 +3,7 @@ version: "3.9"
 services:
   api:
     build:
-      context: .
+      context: ./go
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
@@ -17,7 +17,7 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     volumes:
-      - ./infra/otel-collector.yaml:/etc/otel/config.yaml
+      - ./go/infra/otel-collector.yaml:/etc/otel/config.yaml
     command: ["--config=/etc/otel/config.yaml"]
     ports:
       - "4317:4317"   # OTLP gRPC
