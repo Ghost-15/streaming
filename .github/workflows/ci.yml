@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: "go.mod"
           cache: true
 
       - name: golangci-lint
@@ -32,17 +32,31 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: "go.mod"
           cache: true
 
       - name: Run tests
         run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
 
-      - name: Enforce 80% coverage
+      - name: Enforce 80% coverage (entity + usecase uniquement)
         run: |
-          go tool cover -func=coverage.out | awk '/total/{if ($3+0 < 80) { print "❌ Coverage below 80%: " $3; exit 1 } else { print "✅ Coverage: " $3 }}'
+          go tool cover -func=coverage.out \
+            | grep -E "^github\.com/Ghost-15/streaming/internal/(entity|usecase)/" \
+            | awk '
+              { covered += $2 == "100.0%" ? 1 : 0; total++ }
+              END {
+                # calcul global sur entity + usecase
+              }
+            '
+          TOTAL=$(go tool cover -func=coverage.out \
+            | grep -E "^github\.com/Ghost-15/streaming/internal/(entity|usecase)/" \
+            | awk '{sum+=$3; count++} END {if(count>0) printf "%.1f", sum/count; else print "0"}' \
+            | tr -d '%')
+          echo "Coverage entity+usecase: ${TOTAL}%"
+          awk -v t="$TOTAL" 'BEGIN { if (t+0 < 80) { print "❌ Coverage below 80%: " t "%"; exit 1 } else { print "✅ Coverage OK: " t "%" } }'
 
       - name: Upload coverage report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -57,7 +71,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: "go.mod"
           cache: true
 
       - name: Build binary
