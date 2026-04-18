@@ -60,16 +60,16 @@ migrate:
 # ── Flutter ───────────────────────────────────────────────────────────────────
 
 flutter-run:
-	cd flutter/streampulse && flutter run
+	cd flutter && flutter run
 
 flutter-test:
-	cd flutter/streampulse && flutter test
+	cd flutter && flutter test
 
 flutter-build-apk:
-	cd flutter/streampulse && flutter build apk --release
+	cd flutter && flutter build apk --release
 
 flutter-build-web:
-	cd flutter/streampulse && flutter build web --release
+	cd flutter && flutter build web --release
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
