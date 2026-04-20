@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  # ── Go Backend ──────────────────────────────────────────────────────────────
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go/go.mod"
+          cache: true
+
+      - name: Install golangci-lint
+        working-directory: go
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+      - name: Run golangci-lint
+        working-directory: go
+        run: golangci-lint run ./...
+
+  go-test:
+    name: Go Test (race + coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go/go.mod"
+          cache: true
+
+      - name: Run tests
+        working-directory: go
+        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Enforce coverage gate (entity + usecase)
+        # Gate Sprint 0 : 20% — sera relevé à 80% en Sprint 1 (US-016)
+        # quand les usecases seront implémentés (auth, stream, playlist)
+        working-directory: go
+        run: |
+          TOTAL=$(go tool cover -func=coverage.out \
+            | grep -E "^github\.com/Ghost-15/streaming/internal/(entity|usecase)/" \
+            | awk '{sum+=$3; count++} END {if(count>0) printf "%.1f", sum/count; else print "0"}' \
+            | tr -d '%')
+          echo "Coverage entity+usecase: ${TOTAL}%"
+          awk -v t="$TOTAL" 'BEGIN { if (t+0 < 20) { print "❌ Coverage below 20%: " t "%"; exit 1 } else { print "✅ Coverage OK: " t "%" } }'
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: go/coverage.out
+
+  go-build:
+    name: Go Build (distroless)
+    runs-on: ubuntu-latest
+    needs: [go-lint, go-test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go/go.mod"
+          cache: true
+
+      - name: Build binary
+        working-directory: go
+        run: CGO_ENABLED=0 go build -ldflags='-w -s' -o bin/streampulse ./cmd/server
+
+      - name: Docker build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./go
+          push: false
+          tags: streampulse-api:${{ github.sha }}
+
+  # ── Flutter ─────────────────────────────────────────────────────────────────
+  flutter-test:
+    name: Flutter Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.x"
+          channel: "stable"
+          cache: true
+
+      - name: Get dependencies
+        working-directory: flutter
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: flutter
+        run: flutter analyze
+
+      - name: Run tests
+        working-directory: flutter
+        run: flutter test
+
+      - name: Build web (admin)
+        working-directory: flutter
+        run: flutter build web --release

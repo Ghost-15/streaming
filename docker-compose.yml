@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./go
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+
+  # OpenTelemetry Collector — receives traces from the API, exports to Tempo
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./go/infra/otel-collector.yaml:/etc/otel/config.yaml
+    command: ["--config=/etc/otel/config.yaml"]
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+
+  # Grafana — dashboards (US-010)
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  # Loki — log aggregation (US-006)
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+
+  # Tempo — distributed tracing (US-008)
+  tempo:
+    image: grafana/tempo:latest
+    ports:
+      - "3200:3200"
+      - "9411:9411"   # Zipkin compat
+
+volumes:
+  grafana-data:
