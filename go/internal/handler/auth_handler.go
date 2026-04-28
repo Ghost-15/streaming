@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -39,6 +40,7 @@ type LoginRequest struct {
 // @Param       body body RegisterRequest true "Register payload"
 // @Success     201 {object} map[string]string
 // @Failure     400 {object} map[string]string
+// @Failure     409 {object} map[string]string
 // @Router      /api/v1/auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -49,6 +51,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
+		// Check if email already exists (409 Conflict)
+		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
+			c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
+			return
+		}
+		// Other errors → 500
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

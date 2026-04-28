@@ -24,12 +24,12 @@ func TestAuthHandler_Register(t *testing.T) {
 		expectedError  string // substring check in response error
 	}{
 		{
-			name: "valid registration — usecase not implemented yet",
+			name: "valid registration",
 			body: map[string]interface{}{
 				"email":    "user@example.com",
 				"password": "ValidPassword123",
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusCreated,
 		},
 		{
 			name: "invalid email",
@@ -70,6 +70,15 @@ func TestAuthHandler_Register(t *testing.T) {
 			body: map[string]interface{}{},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "required",
+		},
+		{
+			name: "email already exists",
+			body: map[string]interface{}{
+				"email":    "existing@example.com",
+				"password": "ValidPassword123",
+			},
+			expectedStatus: http.StatusConflict,
+			expectedError:  "already",
 		},
 	}
 
@@ -126,14 +135,16 @@ func TestAuthHandler_Login(t *testing.T) {
 		body           map[string]interface{}
 		expectedStatus int
 		expectedError  string
+		checkToken     bool
 	}{
 		{
-			name: "valid login — usecase not implemented yet",
+			name: "valid login",
 			body: map[string]interface{}{
 				"email":    "test@example.com",
 				"password": "ValidPassword123",
 			},
-			expectedStatus: http.StatusUnauthorized,
+			expectedStatus: http.StatusOK,
+			checkToken:     true,
 		},
 		{
 			name: "invalid email format",
@@ -174,6 +185,15 @@ func TestAuthHandler_Login(t *testing.T) {
 			body: map[string]interface{}{},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "required",
+		},
+		{
+			name: "invalid credentials",
+			body: map[string]interface{}{
+				"email":    "wrong@example.com",
+				"password": "WrongPassword123",
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "invalid",
 		},
 	}
 
@@ -216,6 +236,19 @@ func TestAuthHandler_Login(t *testing.T) {
 					}
 				} else {
 					t.Errorf("Login() expected error field in response, got none")
+				}
+			}
+
+			// Assert token presence if expected
+			if tt.checkToken && w.Code == http.StatusOK {
+				var resp map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Errorf("Login() failed to parse response: %v", err)
+					return
+				}
+
+				if _, ok := resp["token"]; !ok {
+					t.Errorf("Login() expected token in response, got none")
 				}
 			}
 		})
