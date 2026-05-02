@@ -36,7 +36,7 @@ extensions:
   basicauth/grafana:
     client_auth:
       username: 1474936
-      password: "glc_eyJvIjoiMTYyMjc4MSIsIm4iOiJ0ZW1wbyIsImsiOiJ5WUUxcjkzdnQ4Z1hLM3RoNzMwQzMwb3UiLCJtIjp7InIiOiJwcm9kLWdiLXNvdXRoLTEifX0="
+      password: "${env:GRAFANA_CLOUD_TOKEN}"
 
 service:
   extensions: [basicauth/grafana]
