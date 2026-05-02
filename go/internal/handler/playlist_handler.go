@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/Ghost-15/streaming/internal/handler/middleware"
 	"github.com/gin-gonic/gin"
 
+	"github.com/Ghost-15/streaming/internal/handler/middleware"
 	"github.com/Ghost-15/streaming/internal/usecase"
 )
 
