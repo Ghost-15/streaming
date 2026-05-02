@@ -1,0 +1,39 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck       # vérifie que les erreurs sont toujours gérées
+    - gosimple       # simplifications idiomatiques Go
+    - govet          # suspicious constructs
+    - ineffassign    # affectations inutiles
+    - staticcheck    # analyses statiques avancées
+    - unused         # variables/fonctions non utilisées
+    - gofmt          # formatage standard
+    - goimports      # imports triés et groupés
+    - misspell       # fautes d'orthographe dans les commentaires
+    - godot          # points en fin de commentaires
+    - noctx          # HTTP sans context
+    - bodyclose      # HTTP response body non fermé
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/Ghost-15/streaming
+
+issues:
+  exclude-rules:
+    # Les fichiers _test.go ont moins de contraintes
+    - path: _test\.go
+      linters:
+        - errcheck
+    # Les mocks peuvent avoir des champs inutilisés
+    - path: internal/usecase/mock/
+      linters:
+        - unused
+    # Les handlers ont des annotations Swagger (@Router, @Summary…) sans point final
+    - path: internal/handler/
+      linters:
+        - godot
