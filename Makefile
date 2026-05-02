@@ -1,5 +1,7 @@
 .PHONY: dev build test lint vet clean docker-build migrate help
 
+.PHONY: install-tools
+
 ## ── Development ──────────────────────────────────────────────────────────────
 
 # Start the API server locally (loads .env automatically via godotenv)
@@ -32,6 +34,13 @@ vet:
 lint:
 	@which golangci-lint > /dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@export PATH=$$PATH:$$(go env GOPATH)/bin && cd go && golangci-lint run ./...
+
+# Install development tools used by the project (goimports, golangci-lint)
+install-tools: ## Install goimports and golangci-lint into GOPATH/bin
+	@echo "Installing goimports and golangci-lint..."
+	@go install golang.org/x/tools/cmd/goimports@latest
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "Installed: $$(go env GOPATH)/bin/goimports $$(go env GOPATH)/bin/golangci-lint"
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 
