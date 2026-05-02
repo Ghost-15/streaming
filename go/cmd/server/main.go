@@ -8,14 +8,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/handler"
 	"github.com/Ghost-15/streaming/internal/infrastructure/supabase"
 	"github.com/Ghost-15/streaming/internal/infrastructure/telemetry"
 	"github.com/Ghost-15/streaming/internal/router"
 	"github.com/Ghost-15/streaming/internal/usecase"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // main is the composition root: it wires all dependencies manually (no DI framework).

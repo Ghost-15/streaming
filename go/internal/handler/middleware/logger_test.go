@@ -8,11 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Ghost-15/streaming/internal/handler/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/Ghost-15/streaming/internal/handler/middleware"
 )
 
 func TestZerologMiddleware_IncludesTraceID(t *testing.T) {
