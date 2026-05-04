@@ -1,7 +1,11 @@
 package router
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	"github.com/Ghost-15/streaming/internal/config"
@@ -19,6 +23,17 @@ func NewRouter(
 	streamH *handler.StreamHandler,
 	playlistH *handler.PlaylistHandler,
 ) *gin.Engine {
+	// Load the RSA public key once at startup.
+	// If missing or malformed, the server must not start — fail fast.
+	pubKeyBytes, err := os.ReadFile(cfg.JWTPublicKeyPath)
+	if err != nil {
+		panic(fmt.Sprintf("router: read public key %q: %v", cfg.JWTPublicKeyPath, err))
+	}
+	publicKey, err := jwt.ParseRSAPublicKeyFromPEM(pubKeyBytes)
+	if err != nil {
+		panic(fmt.Sprintf("router: parse public key: %v", err))
+	}
+
 	r := gin.New()
 
 	// Global middlewares (order matters)
@@ -40,7 +55,7 @@ func NewRouter(
 
 	// Protected routes — JWT + RBAC required
 	protected := r.Group("/api/v1")
-	protected.Use(middleware.RBACMiddleware(
+	protected.Use(middleware.RBACMiddleware(publicKey,
 		entity.RoleUser,
 		entity.RoleDiffuseur,
 		entity.RoleAdmin,
@@ -50,7 +65,7 @@ func NewRouter(
 		protected.GET("/streams/:id/listen", streamH.Listen)
 
 		diffuseur := protected.Group("/")
-		diffuseur.Use(middleware.RBACMiddleware(entity.RoleDiffuseur, entity.RoleAdmin))
+		diffuseur.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
 		{
 			diffuseur.POST("/streams", streamH.Start)
 		}
@@ -62,7 +77,7 @@ func NewRouter(
 
 	// Admin routes
 	admin := r.Group("/api/v1/admin")
-	admin.Use(middleware.RBACMiddleware(entity.RoleAdmin))
+	admin.Use(middleware.RBACMiddleware(publicKey, entity.RoleAdmin))
 	admin.Use(middleware.RateLimitMiddleware(20, 10))
 	{
 		// TODO Sprint 3 — US-013: admin panel routes
