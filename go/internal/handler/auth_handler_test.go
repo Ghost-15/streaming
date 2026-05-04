@@ -2,13 +2,16 @@ package handler_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 
+	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/handler"
 	"github.com/Ghost-15/streaming/internal/usecase"
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
@@ -87,7 +90,23 @@ func TestAuthHandler_Register(t *testing.T) {
 			// Setup
 			gin.SetMode(gin.TestMode)
 			repo := &mock.MockUserRepository{}
-			uc := usecase.NewAuthUseCase(repo, "./testdata/private.pem")
+
+			// Configure mock based on test case
+			repo.FindByEmailFn = func(ctx context.Context, email string) (*entity.User, error) {
+				// For email_already_exists test case
+				if tt.body["email"] == "existing@example.com" {
+					return &entity.User{ID: "user123", Email: email}, nil // Email already exists
+				}
+				return nil, nil // Email doesn't exist yet
+			}
+
+			repo.CreateFn = func(ctx context.Context, user *entity.User) error {
+				return nil // Success for valid registration
+			}
+
+			// Use absolute path to secrets
+			keyPath := "/Users/alexis/Documents/Cours-Formations/Decode/PEC2/streaming/secrets/private.pem"
+			uc := usecase.NewAuthUseCase(repo, keyPath)
 			h := handler.NewAuthHandler(uc)
 
 			// Marshal body
@@ -202,7 +221,26 @@ func TestAuthHandler_Login(t *testing.T) {
 			// Setup
 			gin.SetMode(gin.TestMode)
 			repo := &mock.MockUserRepository{}
-			uc := usecase.NewAuthUseCase(repo, "./testdata/private.pem")
+
+			// Configure mock for Login test
+			repo.FindByEmailFn = func(ctx context.Context, email string) (*entity.User, error) {
+				// For valid_login test case
+				if email == "test@example.com" {
+					// Create a real bcrypt hash of "ValidPassword123"
+					hash, _ := bcrypt.GenerateFromPassword([]byte("ValidPassword123"), bcrypt.DefaultCost)
+					return &entity.User{
+						ID:           "user123",
+						Email:        email,
+						PasswordHash: string(hash),
+						Role:         entity.RoleUser,
+					}, nil
+				}
+				return nil, nil // User not found for other cases
+			}
+
+			// Try with an absolute path to secrets
+			keyPath := "/Users/alexis/Documents/Cours-Formations/Decode/PEC2/streaming/secrets/private.pem"
+			uc := usecase.NewAuthUseCase(repo, keyPath)
 			h := handler.NewAuthHandler(uc)
 
 			// Marshal body

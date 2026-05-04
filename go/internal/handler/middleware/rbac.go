@@ -69,13 +69,3 @@ func GetClaims(c *gin.Context) (*entity.JWTClaims, bool) {
 	claims, ok := v.(*entity.JWTClaims)
 	return claims, ok
 }
-
-// GetClaims retrieves the JWT claims set by RBACMiddleware from the context.
-func GetClaims(c *gin.Context) (*entity.JWTClaims, bool) {
-	v, exists := c.Get(claimsKey)
-	if !exists {
-		return nil, false
-	}
-	claims, ok := v.(*entity.JWTClaims)
-	return claims, ok
-}

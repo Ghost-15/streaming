@@ -52,7 +52,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		// Check if email already exists (409 Conflict)
-		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
+		if strings.Contains(err.Error(), "already in use") {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
 			return
 		}
