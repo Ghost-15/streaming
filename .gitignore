@@ -12,6 +12,9 @@ secrets/
 bin/
 coverage.out
 
+# Test RSA keys — generated in-memory at test runtime
+go/internal/usecase/testdata/
+
 # Flutter
 mobile/.dart_tool/
 mobile/.flutter-plugins

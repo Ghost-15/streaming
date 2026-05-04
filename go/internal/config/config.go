@@ -25,6 +25,7 @@ type Config struct {
 func Load() (*Config, error) {
 	// In development, load .env file (ignored if missing in production).
 	_ = godotenv.Load()
+	_ = godotenv.Load("../.env")
 
 	cfg := &Config{
 		Port:              getEnv("PORT", "8080"),
