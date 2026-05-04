@@ -2,7 +2,12 @@ package usecase_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -13,10 +18,35 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
 
-const (
-	testPrivateKey = "./testdata/private.pem"
-	testPublicKey  = "./testdata/public.pem" //nolint:unused // referenced in rbac tests
-)
+// testKeyPath holds the path to the temp RSA private key generated for this test run.
+var testKeyPath string
+
+// TestMain generates a throwaway RSA key pair in a temp file so tests never
+// depend on committed key material. The file is deleted after the suite runs.
+func TestMain(m *testing.M) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic("test setup: generate RSA key: " + err.Error())
+	}
+
+	f, err := os.CreateTemp("", "streampulse-test-private-*.pem")
+	if err != nil {
+		panic("test setup: create temp key file: " + err.Error())
+	}
+
+	if err := pem.Encode(f, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	}); err != nil {
+		panic("test setup: encode RSA key: " + err.Error())
+	}
+	f.Close()
+
+	testKeyPath = f.Name()
+	code := m.Run()
+	os.Remove(testKeyPath)
+	os.Exit(code)
+}
 
 // ─────────────────────────────────────────────────────────────
 // Register
@@ -24,12 +54,12 @@ const (
 
 func TestAuthUseCase_Register(t *testing.T) {
 	tests := []struct {
-		name        string
-		email       string
-		password    string
-		repoSetup   func(*mock.MockUserRepository)
-		wantErr     bool
-		wantErrMsg  string
+		name       string
+		email      string
+		password   string
+		repoSetup  func(*mock.MockUserRepository)
+		wantErr    bool
+		wantErrMsg string
 	}{
 		{
 			name:     "success",
@@ -37,10 +67,9 @@ func TestAuthUseCase_Register(t *testing.T) {
 			password: "password123",
 			repoSetup: func(r *mock.MockUserRepository) {
 				r.FindByEmailFn = func(_ context.Context, _ string) (*entity.User, error) {
-					return nil, nil // no existing user
+					return nil, nil
 				}
 				r.CreateFn = func(_ context.Context, u *entity.User) error {
-					// Simulate DB writing back the generated UUID.
 					u.ID = "generated-uuid"
 					return nil
 				}
@@ -90,7 +119,7 @@ func TestAuthUseCase_Register(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &mock.MockUserRepository{}
 			tt.repoSetup(repo)
-			uc := usecase.NewAuthUseCase(repo, testPrivateKey)
+			uc := usecase.NewAuthUseCase(repo, testKeyPath)
 
 			user, err := uc.Register(context.Background(), tt.email, tt.password)
 			if (err != nil) != tt.wantErr {
@@ -122,7 +151,6 @@ func TestAuthUseCase_Register(t *testing.T) {
 // ─────────────────────────────────────────────────────────────
 
 func TestAuthUseCase_Login(t *testing.T) {
-	// Pre-hash a known password for the success case.
 	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
 	if err != nil {
 		t.Fatalf("test setup: bcrypt: %v", err)
@@ -160,7 +188,7 @@ func TestAuthUseCase_Login(t *testing.T) {
 			password: "anything",
 			repoSetup: func(r *mock.MockUserRepository) {
 				r.FindByEmailFn = func(_ context.Context, _ string) (*entity.User, error) {
-					return nil, nil // user does not exist
+					return nil, nil
 				}
 			},
 			wantErr:    true,
@@ -195,7 +223,7 @@ func TestAuthUseCase_Login(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &mock.MockUserRepository{}
 			tt.repoSetup(repo)
-			uc := usecase.NewAuthUseCase(repo, testPrivateKey)
+			uc := usecase.NewAuthUseCase(repo, testKeyPath)
 
 			token, err := uc.Login(context.Background(), tt.email, tt.password)
 			if (err != nil) != tt.wantErr {
@@ -208,7 +236,6 @@ func TestAuthUseCase_Login(t *testing.T) {
 				if token == "" {
 					t.Error("Login() returned empty token on success")
 				}
-				// A JWT has exactly 3 base64url parts separated by dots.
 				if len(strings.Split(token, ".")) != 3 {
 					t.Errorf("Login() token %q does not look like a JWT", token)
 				}
