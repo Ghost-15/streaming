@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +18,26 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase"
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
+
+func getSecretsPath() string {
+	// Try relative paths first (most common)
+	paths := []string{
+		"../../../secrets/private.pem",  // from internal/handler/
+		"../../secrets/private.pem",     // fallback
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			if abs, err := filepath.Abs(p); err == nil {
+				return abs
+			}
+		}
+	}
+	// Last resort: environment variable
+	if env := os.Getenv("STREAMING_SECRETS_PATH"); env != "" {
+		return filepath.Join(env, "private.pem")
+	}
+	return ""
+}
 
 // TestAuthHandler_Register tests the POST /auth/register endpoint.
 // Sprint 1 — US-001 — STR-13.
@@ -104,8 +126,10 @@ func TestAuthHandler_Register(t *testing.T) {
 				return nil // Success for valid registration
 			}
 
-			// Use absolute path to secrets
-			keyPath := "/Users/alexis/Documents/Cours-Formations/Decode/PEC2/streaming/secrets/private.pem"
+			keyPath := getSecretsPath()
+			if keyPath == "" {
+				t.Fatal("secrets path not found - set STREAMING_SECRETS_PATH or run from /go directory")
+			}
 			uc := usecase.NewAuthUseCase(repo, keyPath)
 			h := handler.NewAuthHandler(uc)
 
@@ -238,8 +262,10 @@ func TestAuthHandler_Login(t *testing.T) {
 				return nil, nil // User not found for other cases
 			}
 
-			// Try with an absolute path to secrets
-			keyPath := "/Users/alexis/Documents/Cours-Formations/Decode/PEC2/streaming/secrets/private.pem"
+			keyPath := getSecretsPath()
+			if keyPath == "" {
+				t.Fatal("secrets path not found - set STREAMING_SECRETS_PATH or run from /go directory")
+			}
 			uc := usecase.NewAuthUseCase(repo, keyPath)
 			h := handler.NewAuthHandler(uc)
 

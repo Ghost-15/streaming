@@ -1,8 +1,8 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -51,8 +51,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
-		// Check if email already exists (409 Conflict)
-		if strings.Contains(err.Error(), "already in use") {
+		// Sentinel error check for email already registered
+		if errors.Is(err, usecase.ErrEmailAlreadyInUse) {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
 			return
 		}
