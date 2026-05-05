@@ -14,6 +14,9 @@ import (
 	"github.com/Ghost-15/streaming/internal/repository"
 )
 
+// ErrEmailAlreadyInUse is returned when registration email is already registered.
+var ErrEmailAlreadyInUse = errors.New("auth: email already in use")
+
 // AuthUseCase defines the business operations for authentication.
 type AuthUseCase interface {
 	Register(ctx context.Context, email, password string) (*entity.User, error)
@@ -43,7 +46,7 @@ func (uc *authUseCase) Register(ctx context.Context, email, password string) (*e
 		return nil, fmt.Errorf("auth: register: %w", err)
 	}
 	if existing != nil {
-		return nil, errors.New("auth: email already in use")
+		return nil, ErrEmailAlreadyInUse
 	}
 
 	// 2. Hash password with bcrypt (cost 12 — secure enough, fast enough for tests).
