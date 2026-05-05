@@ -10,13 +10,15 @@ import (
 // Config holds all runtime configuration loaded from environment variables.
 // 12-Factor App: no hardcoded values — everything is ENV.
 type Config struct {
-	Port              string
-	SupabaseDBURL     string
-	JWTPrivateKeyPath string
-	JWTPublicKeyPath  string
-	OTELEndpoint      string
-	CORSOrigins       string
-	Env               string // "development" | "production"
+	Port                 string
+	SupabaseDBURL        string
+	JWTPrivateKeyPath    string
+	JWTPublicKeyPath     string
+	OTELEndpoint         string
+	OTELServiceNamespace string
+	OTELDeploymentEnv    string
+	CORSOrigins          string
+	Env                  string // "development" | "production"
 }
 
 // Load reads configuration from environment variables.
@@ -28,13 +30,15 @@ func Load() (*Config, error) {
 	_ = godotenv.Load("../.env")
 
 	cfg := &Config{
-		Port:              getEnv("PORT", "8080"),
-		SupabaseDBURL:     os.Getenv("SUPABASE_DB_URL"),
-		JWTPrivateKeyPath: os.Getenv("JWT_PRIVATE_KEY_PATH"),
-		JWTPublicKeyPath:  os.Getenv("JWT_PUBLIC_KEY_PATH"),
-		OTELEndpoint:      getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"),
-		CORSOrigins:       os.Getenv("CORS_ALLOWED_ORIGINS"),
-		Env:               getEnv("APP_ENV", "development"),
+		Port:                 getEnv("PORT", "8080"),
+		SupabaseDBURL:        os.Getenv("SUPABASE_DB_URL"),
+		JWTPrivateKeyPath:    os.Getenv("JWT_PRIVATE_KEY_PATH"),
+		JWTPublicKeyPath:     os.Getenv("JWT_PUBLIC_KEY_PATH"),
+		OTELEndpoint:         getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+		OTELServiceNamespace: getEnv("OTEL_SERVICE_NAMESPACE", "my-application-group"),
+		OTELDeploymentEnv:    getEnv("OTEL_DEPLOYMENT_ENVIRONMENT", "production"),
+		CORSOrigins:          os.Getenv("CORS_ALLOWED_ORIGINS"),
+		Env:                  getEnv("APP_ENV", "development"),
 	}
 
 	if err := cfg.validate(); err != nil {

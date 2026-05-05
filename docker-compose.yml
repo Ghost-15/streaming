@@ -16,6 +16,8 @@ services:
   # OpenTelemetry Collector — receives traces from the API, exports to Tempo
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
+    env_file:
+      - .env
     volumes:
       - ./go/infra/otel-collector.yaml:/etc/otel/config.yaml
     command: ["--config=/etc/otel/config.yaml"]

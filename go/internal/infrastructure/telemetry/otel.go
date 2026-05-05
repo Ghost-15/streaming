@@ -5,9 +5,13 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -15,11 +19,30 @@ import (
 
 // InitTracer sets up the global OTEL TracerProvider.
 // Returns a shutdown function — call it on SIGTERM.
-func InitTracer(ctx context.Context, serviceName, endpoint string) (shutdown func(context.Context) error, err error) {
-	exporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(endpoint),
-		otlptracegrpc.WithInsecure(), // TLS en prod via Ingress K8s
-	)
+// Supports both gRPC (localhost collector) and HTTP/protobuf (Grafana Cloud direct).
+func InitTracer(ctx context.Context, serviceName, serviceNamespace, deploymentEnvironment, endpoint string) (shutdown func(context.Context) error, err error) {
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL") // "grpc" | "http/protobuf"
+
+	var exporter sdktrace.SpanExporter
+
+	if protocol == "http/protobuf" || strings.HasPrefix(endpoint, "https://") {
+		// HTTP mode — Grafana Cloud direct (TLS + Basic Auth via OTEL_EXPORTER_OTLP_HEADERS)
+		u, parseErr := url.Parse(endpoint)
+		if parseErr != nil {
+			return nil, fmt.Errorf("telemetry: invalid endpoint: %w", parseErr)
+		}
+		exporter, err = otlptracehttp.New(ctx,
+			otlptracehttp.WithEndpoint(u.Host),
+			otlptracehttp.WithURLPath(u.Path+"/v1/traces"),
+		)
+	} else {
+		// gRPC mode — local OTEL collector (no TLS in dev)
+		exporter, err = otlptracegrpc.New(ctx,
+			otlptracegrpc.WithEndpoint(endpoint),
+			otlptracegrpc.WithInsecure(),
+		)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: create exporter: %w", err)
 	}
@@ -27,6 +50,8 @@ func InitTracer(ctx context.Context, serviceName, endpoint string) (shutdown fun
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
+			semconv.ServiceNamespace(serviceNamespace),
+			semconv.DeploymentEnvironment(deploymentEnvironment),
 		),
 	)
 	if err != nil {

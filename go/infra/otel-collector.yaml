@@ -1,3 +1,5 @@
+file_format: yaml
+
 receivers:
   otlp:
     protocols:
@@ -9,30 +11,40 @@ receivers:
 processors:
   batch:
     timeout: 5s
-    send_batch_size: 512
+    send_batch_size: 100
+
+  # Log every trace for debugging
+  logging:
+    loglevel: debug
 
 exporters:
-  # Tempo — distributed tracing
-  otlp/tempo:
-    endpoint: tempo:4317
-    tls:
-      insecure: true
+  otlp/grafana:
+    endpoint: "otlp-gateway-prod-gb-south-1.grafana.net:443"
+    auth:
+      authenticator: basicauth/grafana
+    headers:
+      User-Agent: otel-collector/0.68.0
 
-  # Loki — logs
-  loki:
-    endpoint: http://loki:3100/loki/api/v1/push
+  # Note: Logs sent via Docker container stdout → Promtail/Loki should forward to Grafana Cloud
+  # See: https://grafana.com/docs/grafana-cloud/send-data/log-data/
+  loki/grafana:
+    endpoint: "https://logs-prod-gb-south-1.grafana.net/loki/api/v1/push"
+    auth:
+      authenticator: basicauth/grafana
 
-  # Debug (dev only)
-  debug:
-    verbosity: normal
+extensions:
+  basicauth/grafana:
+    client_auth:
+      username: 1474936
+      password: "${env:GRAFANA_CLOUD_TOKEN}"
 
 service:
+  extensions: [basicauth/grafana]
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp/tempo, debug]
-    logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [loki, debug]
+      processors: [batch, logging]
+      exporters: [otlp/grafana]
+    # logs pipeline not active yet — app sends JSON to stdout.
+    # To correlate logs with traces in Grafana Cloud, use Promtail:
+    # https://grafana.com/docs/loki/latest/clients/promtail/installation/
