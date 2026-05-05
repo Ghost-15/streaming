@@ -34,9 +34,25 @@ func main() {
 		log.Fatal().Err(err).Msg("config load failed")
 	}
 
+	// 2. Loki writer — multi-writer: stdout + Loki
+	lokiWriter, lokiErr := telemetry.NewLokiWriter(
+		os.Getenv("LOKI_URL"),
+		os.Getenv("LOKI_USERNAME"),
+		os.Getenv("LOKI_PASSWORD"),
+		"streampulse-api",
+		cfg.Env,
+	)
+	if lokiErr != nil {
+		log.Warn().Err(lokiErr).Msg("loki unavailable, logging to stdout only")
+	} else {
+		defer lokiWriter.Close()
+		multi := zerolog.MultiLevelWriter(os.Stdout, lokiWriter)
+		log.Logger = zerolog.New(multi).With().Timestamp().Logger()
+	}
+
 	ctx := context.Background()
 
-	// 2. OpenTelemetry — init provider (non-bloquant si collector indisponible)
+	// 3. OpenTelemetry — init provider (non-bloquant si collector indisponible)
 	otelShutdown, err := telemetry.InitTracer(ctx, "streampulse-api", cfg.OTELServiceNamespace, cfg.OTELDeploymentEnv, cfg.OTELEndpoint)
 	if err != nil {
 		log.Warn().Err(err).Msg("otel unavailable, traces disabled")
@@ -48,7 +64,7 @@ func main() {
 		}()
 	}
 
-	// 3. Infrastructure — database (non-bloquant si pas encore de BDD)
+	// 4. Infrastructure — database (non-bloquant si pas encore de BDD)
 	db, err := supabase.NewPool(ctx, cfg.SupabaseDBURL)
 	if err != nil {
 		log.Warn().Err(err).Msg("database unavailable, api starts without db")
@@ -58,25 +74,25 @@ func main() {
 		defer db.Close()
 	}
 
-	// 4. Repositories (infrastructure layer)
+	// 5. Repositories (infrastructure layer)
 	userRepo := supabase.NewUserRepo(db)
 	streamRepo := supabase.NewStreamRepo(db)
 	playlistRepo := supabase.NewPlaylistRepo(db)
 
-	// 5. Use Cases (business layer)
+	// 6. Use Cases (business layer)
 	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
 	streamUC := usecase.NewStreamUseCase(streamRepo)
 	playlistUC := usecase.NewPlaylistUseCase(playlistRepo)
 
-	// 6. Handlers (presentation layer)
+	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
 	streamH := handler.NewStreamHandler(streamUC)
 	playlistH := handler.NewPlaylistHandler(playlistUC)
 
-	// 7. Router
+	// 8. Router
 	engine := router.NewRouter(cfg, authH, streamH, playlistH)
 
-	// 8. HTTP server with graceful shutdown
+	// 9. HTTP server with graceful shutdown
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      engine,

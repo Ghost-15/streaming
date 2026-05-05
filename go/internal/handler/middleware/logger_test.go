@@ -132,3 +132,43 @@ func TestRequestScopedLogger_PropagatesTraceIDToHandlerLogs(t *testing.T) {
 		t.Fatal("expected a handler log line with message 'inside handler'")
 	}
 }
+
+// TestLokiWriter_UsesGlobalLogger verifies that the middleware uses the global
+// zerolog.Logger — meaning any MultiLevelWriter (stdout + Loki) set in main.go
+// is automatically used by all handler logs without extra configuration.
+func TestLokiWriter_UsesGlobalLogger(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var buf bytes.Buffer
+	previousLogger := log.Logger
+	// Simulate main.go wiring: replace global logger with a custom writer (here a buffer).
+	log.Logger = zerolog.New(&buf).With().Timestamp().Logger()
+	t.Cleanup(func() { log.Logger = previousLogger })
+
+	router := gin.New()
+	router.Use(middleware.ZerologMiddleware())
+	router.POST("/api/v1/auth/login", func(c *gin.Context) {
+		middleware.Logger(c).Info().Msg("user authenticated")
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	output := strings.TrimSpace(buf.String())
+	if output == "" {
+		t.Fatal("expected log output, got empty — global logger not used")
+	}
+
+	// Every line must be valid JSON and contain trace_id.
+	for _, line := range strings.Split(output, "\n") {
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(line), &payload); err != nil {
+			t.Fatalf("log line is not valid JSON: %v\n%s", err, line)
+		}
+		if _, ok := payload["trace_id"]; !ok {
+			t.Fatalf("missing trace_id in log line: %s", line)
+		}
+	}
+}

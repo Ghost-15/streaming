@@ -12,6 +12,8 @@ import (
 
 // ZerologMiddleware logs each request as a structured JSON line.
 // It also injects a request-scoped zerolog logger into the request context.
+// Logs are forwarded to Loki via the global zerolog.Logger MultiLevelWriter
+// configured in main.go — no extra setup needed here.
 func ZerologMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -21,6 +23,8 @@ func ZerologMiddleware() gin.HandlerFunc {
 			route = c.Request.URL.Path
 		}
 
+		// Enrich the request-scoped logger with fields useful for Loki queries:
+		// {service="streampulse-api", route="/api/v1/auth/login"}
 		requestLogger := log.Logger.With().
 			Str("trace_id", traceID).
 			Str("route", route).
@@ -55,6 +59,7 @@ func ZerologMiddleware() gin.HandlerFunc {
 }
 
 // Logger returns the request-scoped zerolog logger stored in the request context.
+// This logger inherits the global MultiLevelWriter (stdout + Loki).
 func Logger(c *gin.Context) *zerolog.Logger {
 	if logger := zerolog.Ctx(c.Request.Context()); logger != nil {
 		return logger
@@ -65,7 +70,7 @@ func Logger(c *gin.Context) *zerolog.Logger {
 func traceIDFromContext(ctx context.Context) string {
 	spanContext := trace.SpanFromContext(ctx).SpanContext()
 	if !spanContext.IsValid() {
-		return ""
+		return "no-trace"
 	}
 	return spanContext.TraceID().String()
 }
