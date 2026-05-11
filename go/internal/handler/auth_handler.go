@@ -53,16 +53,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
-<<<<<<< zerolog
 		middleware.Logger(c).Error().Err(err).Msg("register failed")
-=======
 		// Sentinel error check for email already registered
 		if errors.Is(err, usecase.ErrEmailAlreadyInUse) {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
 			return
 		}
 		// Other errors → 500
->>>>>>> develop
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
