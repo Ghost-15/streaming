@@ -113,7 +113,7 @@ func TestRBACMiddleware_RoleHierarchy(t *testing.T) {
 			_ = pubKey // pubKey would be used for actual token signing
 
 			// TODO: Implement full integration test once token signing is available
-			// This would require: 
+			// This would require:
 			// 1. Sign a token with the private key
 			// 2. Send it in Authorization header
 			// 3. Verify the middleware enforces role hierarchy

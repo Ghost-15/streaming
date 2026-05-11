@@ -3,11 +3,14 @@ package handler_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -19,24 +22,34 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
 
-func getSecretsPath() string {
-	// Try relative paths first (most common)
-	paths := []string{
-		"../../../secrets/private.pem",  // from internal/handler/
-		"../../secrets/private.pem",     // fallback
+// testKeyPath holds the path to the temp RSA private key generated for this test run.
+var testKeyPath string
+
+// TestMain generates a throwaway RSA key pair in a temp file so handler tests
+// never depend on committed key material or a specific filesystem layout.
+func TestMain(m *testing.M) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic("test setup: generate RSA key: " + err.Error())
 	}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			if abs, err := filepath.Abs(p); err == nil {
-				return abs
-			}
-		}
+
+	f, err := os.CreateTemp("", "streampulse-handler-test-private-*.pem")
+	if err != nil {
+		panic("test setup: create temp key file: " + err.Error())
 	}
-	// Last resort: environment variable
-	if env := os.Getenv("STREAMING_SECRETS_PATH"); env != "" {
-		return filepath.Join(env, "private.pem")
+
+	if err := pem.Encode(f, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	}); err != nil {
+		panic("test setup: encode RSA key: " + err.Error())
 	}
-	return ""
+	f.Close()
+
+	testKeyPath = f.Name()
+	code := m.Run()
+	os.Remove(testKeyPath)
+	os.Exit(code)
 }
 
 // TestAuthHandler_Register tests the POST /auth/register endpoint.
@@ -91,8 +104,8 @@ func TestAuthHandler_Register(t *testing.T) {
 			expectedError:  "required",
 		},
 		{
-			name: "empty body",
-			body: map[string]interface{}{},
+			name:           "empty body",
+			body:           map[string]interface{}{},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "required",
 		},
@@ -109,31 +122,22 @@ func TestAuthHandler_Register(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup
 			gin.SetMode(gin.TestMode)
 			repo := &mock.MockUserRepository{}
 
-			// Configure mock based on test case
-			repo.FindByEmailFn = func(ctx context.Context, email string) (*entity.User, error) {
-				// For email_already_exists test case
+			repo.FindByEmailFn = func(_ context.Context, email string) (*entity.User, error) {
 				if tt.body["email"] == "existing@example.com" {
-					return &entity.User{ID: "user123", Email: email}, nil // Email already exists
+					return &entity.User{ID: "user123", Email: email}, nil
 				}
-				return nil, nil // Email doesn't exist yet
+				return nil, nil
+			}
+			repo.CreateFn = func(_ context.Context, _ *entity.User) error {
+				return nil
 			}
 
-			repo.CreateFn = func(ctx context.Context, user *entity.User) error {
-				return nil // Success for valid registration
-			}
-
-			keyPath := getSecretsPath()
-			if keyPath == "" {
-				t.Fatal("secrets path not found - set STREAMING_SECRETS_PATH or run from /go directory")
-			}
-			uc := usecase.NewAuthUseCase(repo, keyPath)
+			uc := usecase.NewAuthUseCase(repo, testKeyPath)
 			h := handler.NewAuthHandler(uc)
 
-			// Marshal body
 			bodyBytes, _ := json.Marshal(tt.body)
 			req := httptest.NewRequest("POST", "/api/v1/auth/register", bytes.NewReader(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
@@ -141,23 +145,18 @@ func TestAuthHandler_Register(t *testing.T) {
 			w := httptest.NewRecorder()
 			engine := gin.New()
 			engine.POST("/api/v1/auth/register", h.Register)
-
-			// Execute
 			engine.ServeHTTP(w, req)
 
-			// Assert status
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Register() status = %d, want %d", w.Code, tt.expectedStatus)
 			}
 
-			// Assert error message in response if expected
 			if tt.expectedError != "" {
 				var resp map[string]interface{}
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					t.Errorf("Register() failed to parse response: %v", err)
 					return
 				}
-
 				if errMsg, ok := resp["error"]; ok {
 					if !contains(errMsg.(string), tt.expectedError) {
 						t.Errorf("Register() error = %q, expected to contain %q", errMsg, tt.expectedError)
@@ -224,8 +223,8 @@ func TestAuthHandler_Login(t *testing.T) {
 			expectedError:  "required",
 		},
 		{
-			name: "empty body",
-			body: map[string]interface{}{},
+			name:           "empty body",
+			body:           map[string]interface{}{},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "required",
 		},
@@ -242,15 +241,11 @@ func TestAuthHandler_Login(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup
 			gin.SetMode(gin.TestMode)
 			repo := &mock.MockUserRepository{}
 
-			// Configure mock for Login test
-			repo.FindByEmailFn = func(ctx context.Context, email string) (*entity.User, error) {
-				// For valid_login test case
+			repo.FindByEmailFn = func(_ context.Context, email string) (*entity.User, error) {
 				if email == "test@example.com" {
-					// Create a real bcrypt hash of "ValidPassword123"
 					hash, _ := bcrypt.GenerateFromPassword([]byte("ValidPassword123"), bcrypt.DefaultCost)
 					return &entity.User{
 						ID:           "user123",
@@ -259,17 +254,12 @@ func TestAuthHandler_Login(t *testing.T) {
 						Role:         entity.RoleUser,
 					}, nil
 				}
-				return nil, nil // User not found for other cases
+				return nil, nil
 			}
 
-			keyPath := getSecretsPath()
-			if keyPath == "" {
-				t.Fatal("secrets path not found - set STREAMING_SECRETS_PATH or run from /go directory")
-			}
-			uc := usecase.NewAuthUseCase(repo, keyPath)
+			uc := usecase.NewAuthUseCase(repo, testKeyPath)
 			h := handler.NewAuthHandler(uc)
 
-			// Marshal body
 			bodyBytes, _ := json.Marshal(tt.body)
 			req := httptest.NewRequest("POST", "/api/v1/auth/login", bytes.NewReader(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
@@ -277,23 +267,18 @@ func TestAuthHandler_Login(t *testing.T) {
 			w := httptest.NewRecorder()
 			engine := gin.New()
 			engine.POST("/api/v1/auth/login", h.Login)
-
-			// Execute
 			engine.ServeHTTP(w, req)
 
-			// Assert status
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Login() status = %d, want %d", w.Code, tt.expectedStatus)
 			}
 
-			// Assert error message in response if expected
 			if tt.expectedError != "" {
 				var resp map[string]interface{}
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					t.Errorf("Login() failed to parse response: %v", err)
 					return
 				}
-
 				if errMsg, ok := resp["error"]; ok {
 					if !contains(errMsg.(string), tt.expectedError) {
 						t.Errorf("Login() error = %q, expected to contain %q", errMsg, tt.expectedError)
@@ -303,14 +288,12 @@ func TestAuthHandler_Login(t *testing.T) {
 				}
 			}
 
-			// Assert token presence if expected
 			if tt.checkToken && w.Code == http.StatusOK {
 				var resp map[string]interface{}
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					t.Errorf("Login() failed to parse response: %v", err)
 					return
 				}
-
 				if _, ok := resp["token"]; !ok {
 					t.Errorf("Login() expected token in response, got none")
 				}
@@ -319,7 +302,7 @@ func TestAuthHandler_Login(t *testing.T) {
 	}
 }
 
-// Helper function
+// contains is a helper for substring checks in response bodies.
 func contains(s, substr string) bool {
 	return bytes.Contains([]byte(s), []byte(substr))
 }
