@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Ghost-15/streaming/internal/handler/middleware"
 	"github.com/Ghost-15/streaming/internal/usecase"
 )
 
@@ -33,9 +34,11 @@ type StartRequest struct {
 func (h *StreamHandler) ListActive(c *gin.Context) {
 	streams, err := h.useCase.ListActive(c.Request.Context())
 	if err != nil {
+		middleware.Logger(c).Error().Err(err).Msg("list active streams failed")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	middleware.Logger(c).Info().Int("count", len(streams)).Msg("listed active streams")
 	c.JSON(http.StatusOK, streams)
 }
 
@@ -50,6 +53,7 @@ func (h *StreamHandler) ListActive(c *gin.Context) {
 func (h *StreamHandler) Start(c *gin.Context) {
 	var req StartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		middleware.Logger(c).Warn().Err(err).Msg("invalid start stream payload")
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -57,9 +61,11 @@ func (h *StreamHandler) Start(c *gin.Context) {
 	// TODO Sprint 1 — US-003: extract broadcasterID from JWT claims
 	stream, err := h.useCase.Start(c.Request.Context(), "", req.Title)
 	if err != nil {
+		middleware.Logger(c).Error().Err(err).Msg("start stream failed")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	middleware.Logger(c).Info().Str("stream_id", stream.ID).Msg("stream started")
 
 	c.JSON(http.StatusCreated, stream)
 }

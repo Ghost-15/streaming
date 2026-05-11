@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/handler"
@@ -20,55 +22,77 @@ import (
 // main is the composition root: it wires all dependencies manually (no DI framework).
 // ADR-002: explicit wiring > magic DI — easier to read and defend in soutenance.
 func main() {
+	zerolog.TimestampFieldName = "timestamp"
+	zerolog.LevelFieldName = "level"
+	zerolog.MessageFieldName = "message"
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+
 	// 1. Config
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Fatal().Err(err).Msg("config load failed")
+	}
+
+	// 2. Loki writer — multi-writer: stdout + Loki
+	lokiWriter, lokiErr := telemetry.NewLokiWriter(
+		os.Getenv("LOKI_URL"),
+		os.Getenv("LOKI_USERNAME"),
+		os.Getenv("LOKI_PASSWORD"),
+		"streampulse-api",
+		cfg.Env,
+	)
+	if lokiErr != nil {
+		log.Warn().Err(lokiErr).Msg("loki unavailable, logging to stdout only")
+	} else {
+		defer lokiWriter.Close()
+		multi := zerolog.MultiLevelWriter(os.Stdout, lokiWriter)
+		log.Logger = zerolog.New(multi).With().Timestamp().Logger()
 	}
 
 	ctx := context.Background()
 
-	// 2. OpenTelemetry — init provider (non-bloquant si collector indisponible)
-	otelShutdown, err := telemetry.InitTracer(ctx, "streampulse-api", cfg.OTELEndpoint)
+	// 3. OpenTelemetry — init provider (non-bloquant si collector indisponible)
+	otelShutdown, err := telemetry.InitTracer(ctx, "streampulse-api", cfg.OTELServiceNamespace, cfg.OTELDeploymentEnv, cfg.OTELEndpoint)
 	if err != nil {
-		log.Printf("WARNING: OTEL unavailable (%v) — traces désactivées", err)
+		log.Warn().Err(err).Msg("otel unavailable, traces disabled")
 	} else {
 		defer func() {
 			if err := otelShutdown(ctx); err != nil {
-				log.Printf("otel shutdown: %v", err)
+				log.Error().Err(err).Msg("otel shutdown failed")
 			}
 		}()
 	}
 
-	// 3. Infrastructure — database (non-bloquant si pas encore de BDD)
+	// 4. Infrastructure — database (non-bloquant si pas encore de BDD)
 	db, err := supabase.NewPool(ctx, cfg.SupabaseDBURL)
 	if err != nil {
-		log.Printf("WARNING: database unavailable (%v) — API démarre sans BDD, les endpoints DB renverront 500", err)
+		log.Warn().Err(err).Msg("database unavailable, api starts without db")
 		db = nil
 	}
 	if db != nil {
 		defer db.Close()
 	}
 
-	// 4. Repositories (infrastructure layer)
+	// 5. Repositories (infrastructure layer)
 	userRepo := supabase.NewUserRepo(db)
 	streamRepo := supabase.NewStreamRepo(db)
 	playlistRepo := supabase.NewPlaylistRepo(db)
 
-	// 5. Use Cases (business layer)
+	// 6. Use Cases (business layer)
 	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
 	streamUC := usecase.NewStreamUseCase(streamRepo)
 	playlistUC := usecase.NewPlaylistUseCase(playlistRepo)
 
-	// 6. Handlers (presentation layer)
+	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
 	streamH := handler.NewStreamHandler(streamUC)
 	playlistH := handler.NewPlaylistHandler(playlistUC)
 
-	// 7. Router
+	// 8. Router
 	engine := router.NewRouter(cfg, authH, streamH, playlistH)
 
-	// 8. HTTP server with graceful shutdown
+	// 9. HTTP server with graceful shutdown
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      engine,
@@ -78,9 +102,9 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("streampulse-api listening on :%s (env=%s)", cfg.Port, cfg.Env)
+		log.Info().Str("port", cfg.Port).Str("env", cfg.Env).Msg("streampulse-api listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server: %v", err)
+			log.Fatal().Err(err).Msg("http server failed")
 		}
 	}()
 
@@ -89,12 +113,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("shutting down server...")
+	log.Info().Msg("shutting down server")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("server forced to shutdown: %v", err)
+		log.Fatal().Err(err).Msg("server forced to shutdown")
 	}
-	log.Println("server exited cleanly")
+	log.Info().Msg("server exited cleanly")
 }

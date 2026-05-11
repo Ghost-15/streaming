@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/rsa"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -12,42 +14,58 @@ import (
 
 const claimsKey = "claims"
 
-// JWTClaims holds the JWT payload fields used by StreamPulse.
-type JWTClaims struct {
-	UserID string          `json:"sub"`
-	Email  string          `json:"email"`
-	Role   entity.UserRole `json:"role"`
-	jwt.RegisteredClaims
-}
-
 // RBACMiddleware validates the JWT RS256 token and checks that the caller's
-// role is in the allowed set. Returns 401 if missing/invalid, 403 if forbidden.
+// role is in the allowed set.
+// Returns 401 if missing/invalid token, 403 if the role is not allowed.
 // Sprint 1 — US-002.
-func RBACMiddleware(allowedRoles ...entity.UserRole) gin.HandlerFunc {
+func RBACMiddleware(publicKey *rsa.PublicKey, allowedRoles ...entity.UserRole) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// TODO Sprint 1 — US-002:
-		// 1. Extract Bearer token from Authorization header
-		// 2. Parse and validate JWT RS256 with public key
-		// 3. Check role against allowedRoles
-		// 4. Set claims in context for downstream handlers
-
+		// 1. Extract Bearer token from Authorization header.
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-		// Placeholder — real implementation in Sprint 1
+		// 2. Parse and validate the JWT RS256 signature.
+		claims := &entity.JWTClaims{}
+		_, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
+			return publicKey, nil
+		})
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+
+		// 3. Check the role against the allowed set.
+		allowed := false
+		for _, r := range allowedRoles {
+			if claims.Role == r {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		// 4. Inject claims into the context for downstream handlers.
+		c.Set(claimsKey, claims)
 		c.Next()
 	}
 }
 
 // GetClaims retrieves the JWT claims set by RBACMiddleware from the context.
-func GetClaims(c *gin.Context) (*JWTClaims, bool) {
+func GetClaims(c *gin.Context) (*entity.JWTClaims, bool) {
 	v, exists := c.Get(claimsKey)
 	if !exists {
 		return nil, false
 	}
-	claims, ok := v.(*JWTClaims)
+	claims, ok := v.(*entity.JWTClaims)
 	return claims, ok
 }
