@@ -38,7 +38,7 @@ class AppTheme {
       ),
 
       // Bottom App Bar theme
-      bottomAppBarTheme: BottomAppBarTheme(
+      bottomAppBarThemeData: BottomAppBarThemeData(
         color: colorScheme.surface,
         elevation: 1,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -96,7 +96,7 @@ class AppTheme {
       ),
 
       // Card theme
-      cardTheme: CardTheme(
+      cardThemeData: CardThemeData(
         color: colorScheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -189,7 +189,7 @@ class AppTheme {
       ),
 
       // Bottom App Bar theme
-      bottomAppBarTheme: BottomAppBarTheme(
+      bottomAppBarThemeData: BottomAppBarThemeData(
         color: colorScheme.surface,
         elevation: 1,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -247,7 +247,7 @@ class AppTheme {
       ),
 
       // Card theme
-      cardTheme: CardTheme(
+      cardThemeData: CardThemeData(
         color: colorScheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -14,19 +14,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-// Redirects based on auth state + role:
-//   - Not logged in → /login
-//   - admin on web  → /admin/dashboard
-//   - others        → /streams
-// Sprint 1 — US-002.
-import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../presentation/mobile/login_page.dart';
-import '../../presentation/mobile/stream_page.dart';
-import '../../presentation/providers/auth_provider.dart';
-import '../../presentation/web/admin_dashboard_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final user = ref.watch(currentUserProvider);
