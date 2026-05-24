@@ -38,7 +38,7 @@ class AppTheme {
       ),
 
       // Bottom App Bar theme
-      bottomAppBarThemeData: BottomAppBarThemeData(
+      bottomAppBarTheme: BottomAppBarThemeData(
         color: colorScheme.surface,
         elevation: 1,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -96,7 +96,7 @@ class AppTheme {
       ),
 
       // Card theme
-      cardThemeData: CardThemeData(
+      cardTheme: CardThemeData(
         color: colorScheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -189,7 +189,7 @@ class AppTheme {
       ),
 
       // Bottom App Bar theme
-      bottomAppBarThemeData: BottomAppBarThemeData(
+      bottomAppBarTheme: BottomAppBarThemeData(
         color: colorScheme.surface,
         elevation: 1,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -247,7 +247,7 @@ class AppTheme {
       ),
 
       // Card theme
-      cardThemeData: CardThemeData(
+      cardTheme: CardThemeData(
         color: colorScheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -432,20 +432,5 @@ class AppTheme {
         height: 1.45,
         letterSpacing: 0.5,
         color: color,
-      );
-}
-import 'package:flutter/material.dart';
-
-class AppTheme {
-  static ThemeData get light => ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF6750A4),
-        brightness: Brightness.light,
-      );
-
-  static ThemeData get dark => ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF6750A4),
-        brightness: Brightness.dark,
       );
 }

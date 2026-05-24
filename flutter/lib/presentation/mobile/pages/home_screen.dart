@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../viewmodels/audio_view_model.dart';
 
 /// Home screen - audio player interface
@@ -37,6 +38,20 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 32),
 
+              // Main CTA Button
+              FilledButton.icon(
+                onPressed: () => context.push('/player'),
+                label: const Text('Open Audio Player'),
+                icon: const Icon(Icons.play_circle),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
               // Playback state display
               Card(
                 child: Padding(
@@ -49,35 +64,12 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        audioState.playbackState.toString(),
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      // Volume slider
-                      Slider(
-                        value: audioState.volume,
-                        min: 0,
-                        max: 1,
-                        onChanged: (value) {
-                          ref.read(audioViewModelProvider.notifier).setVolume(value);
-                        },
-                      ),
-                      Text(
-                        'Volume: ${(audioState.volume * 100).toStringAsFixed(0)}%',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        audioState.playbackState.name.toUpperCase(),
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 32),
-
-              // Theme toggle button
-              ElevatedButton(
-                onPressed: () {
-                  // Theme toggle will be implemented in app.dart with brightness provider
-                },
-                child: const Text('Toggle Dark Mode'),
               ),
             ],
           ),
