@@ -59,4 +59,30 @@ func TestUser_HasRole(t *testing.T) {
 	if u.HasRole(entity.RoleAdmin, entity.RoleDiffuseur) {
 		t.Error("expected HasRole to return false for non-matching roles")
 	}
+	if u.HasRole() {
+		t.Error("expected HasRole to return false when no roles are provided")
+	}
+}
+
+func TestUser_FullName(t *testing.T) {
+	tests := []struct {
+		name      string
+		firstName string
+		lastName  string
+		want      string
+	}{
+		{"both set", "Youri", "Emmanuel", "Youri Emmanuel"},
+		{"only first", "Youri", "", "Youri "},
+		{"only last", "", "Emmanuel", " Emmanuel"},
+		{"both empty", "", "", " "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u := &entity.User{FirstName: tt.firstName, LastName: tt.lastName}
+			if got := u.FullName(); got != tt.want {
+				t.Errorf("FullName() = %q, want %q", got, tt.want)
+			}
+		})
+	}
 }
