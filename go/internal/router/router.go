@@ -72,7 +72,11 @@ func NewRouter(
 
 		protected.GET("/playlists", playlistH.List)
 		protected.POST("/playlists", playlistH.Create)
+		protected.GET("/playlists/:id", playlistH.GetByID)
+		protected.PUT("/playlists/:id", playlistH.Update)
 		protected.DELETE("/playlists/:id", playlistH.Delete)
+		protected.POST("/playlists/:id/tracks", playlistH.AddTrack)
+		protected.DELETE("/playlists/:id/tracks/:trackID", playlistH.RemoveTrack)
 	}
 
 	// Admin routes
