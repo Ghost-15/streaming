@@ -22,7 +22,6 @@ mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 mobile/build/
 mobile/.packages
-flutter/lib/core/constants/app_constants.dart
 
 # Generated code - build_runner
 *.freezed.dart

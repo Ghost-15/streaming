@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../viewmodels/audio_view_model.dart';
+import 'package:provider/provider.dart';
 
-/// Home screen - audio player interface
-class HomeScreen extends ConsumerWidget {
+import '../notifiers/audio_notifier.dart';
+
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final audioState = ref.watch(audioViewModelProvider);
+  Widget build(BuildContext context) {
+    final audio = context.watch<AudioNotifier>();
 
     return Scaffold(
       appBar: AppBar(
@@ -22,37 +22,27 @@ class HomeScreen extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // App title
               Text(
                 'StreamPulse',
                 style: Theme.of(context).textTheme.displaySmall,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-
-              // Subtitle
               Text(
                 'Live Audio Streaming',
                 style: Theme.of(context).textTheme.bodyLarge,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
-
-              // Main CTA Button
               FilledButton.icon(
                 onPressed: () => context.push('/player'),
                 label: const Text('Open Audio Player'),
                 icon: const Icon(Icons.play_circle),
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 ),
               ),
               const SizedBox(height: 32),
-
-              // Playback state display
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -64,7 +54,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        audioState.playbackState.name.toUpperCase(),
+                        audio.playbackState.name.toUpperCase(),
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                     ],

@@ -1,13 +1,40 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:provider/provider.dart';
 
-import 'app.dart';
+import 'api/repositories/stream_repository.dart';
+import 'config/router.dart';
+import 'config/theme.dart';
+import 'notifiers/audio_notifier.dart';
+import 'notifiers/session_notifier.dart';
+import 'notifiers/stream_notifier.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(
-    // ProviderScope is required at the root for Riverpod.
-    const ProviderScope(
-      child: StreamPulseApp(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SessionNotifier()),
+        ChangeNotifierProvider(create: (_) => AudioNotifier()),
+        ChangeNotifierProvider(
+          create: (_) => StreamNotifier(const StreamRepository()),
+        ),
+      ],
+      child: const StreamPulseApp(),
     ),
   );
+}
+
+class StreamPulseApp extends StatelessWidget {
+  const StreamPulseApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      title: 'StreamPulse',
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      routerConfig: router,
+      debugShowCheckedModeBanner: false,
+    );
+  }
 }

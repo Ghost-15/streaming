@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../domain/entities/stream.dart';
 
-/// Reusable stream card widget
-/// Displays stream information with Material 3 design
+import '../api/models/stream_model.dart';
+
 class StreamCard extends StatelessWidget {
-  final StreamEntity stream;
+  final StreamModel stream;
   final VoidCallback? onTap;
   final VoidCallback? onPlay;
 
@@ -24,7 +23,7 @@ class StreamCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
+        side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.2)),
       ),
       child: InkWell(
         onTap: onTap,
@@ -34,7 +33,6 @@ class StreamCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Stream title
               Text(
                 stream.title,
                 style: textTheme.titleMedium,
@@ -43,18 +41,12 @@ class StreamCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-
-              // Broadcaster name
               Text(
-                'by ${stream.title}',
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                semanticsLabel: 'Broadcaster: ${stream.title}',
+                'by ${stream.broadcasterName}',
+                style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                semanticsLabel: 'Broadcaster: ${stream.broadcasterName}',
               ),
               const SizedBox(height: 12),
-
-              // Listener count
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -62,25 +54,15 @@ class StreamCard extends StatelessWidget {
                     label: '${stream.listenerCount} listeners',
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.person,
-                          size: 16,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                        Icon(Icons.person, size: 16, color: colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
-                        Text(
-                          '${stream.listenerCount}',
-                          style: textTheme.bodySmall,
-                        ),
+                        Text('${stream.listenerCount}', style: textTheme.bodySmall),
                       ],
                     ),
                   ),
-
-                  // Play button
                   Semantics(
                     button: true,
                     enabled: true,
-                    onTap: onPlay,
                     label: 'Play stream ${stream.title}',
                     child: SizedBox(
                       width: 48,
@@ -91,18 +73,13 @@ class StreamCard extends StatelessWidget {
                         child: InkWell(
                           onTap: onPlay,
                           borderRadius: BorderRadius.circular(24),
-                          child: Icon(
-                            Icons.play_arrow,
-                            color: colorScheme.onPrimary,
-                          ),
+                          child: Icon(Icons.play_arrow, color: colorScheme.onPrimary),
                         ),
                       ),
                     ),
                   ),
                 ],
               ),
-
-              // Live indicator
               if (stream.isLive)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

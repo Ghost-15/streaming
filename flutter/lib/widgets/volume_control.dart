@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Volume control slider with accessibility
 class VolumeControl extends StatefulWidget {
   final double volume;
   final ValueChanged<double> onVolumeChanged;
@@ -41,20 +40,16 @@ class _VolumeControlState extends State<VolumeControl> {
       slider: true,
       label: 'Volume control',
       onIncrease: _currentVolume < 1.0
-          ? () {
-              setState(() {
+          ? () => setState(() {
                 _currentVolume = (_currentVolume + 0.1).clamp(0.0, 1.0);
                 widget.onVolumeChanged(_currentVolume);
-              });
-            }
+              })
           : null,
       onDecrease: _currentVolume > 0.0
-          ? () {
-              setState(() {
+          ? () => setState(() {
                 _currentVolume = (_currentVolume - 0.1).clamp(0.0, 1.0);
                 widget.onVolumeChanged(_currentVolume);
-              });
-            }
+              })
           : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,12 +57,8 @@ class _VolumeControlState extends State<VolumeControl> {
           Semantics(
             label: 'Volume: $volumePercent percent',
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(
-                  Icons.volume_down,
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                Icon(Icons.volume_down, color: colorScheme.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Slider(
@@ -77,27 +68,19 @@ class _VolumeControlState extends State<VolumeControl> {
                     divisions: 10,
                     label: '$volumePercent%',
                     onChanged: (value) {
-                      setState(() {
-                        _currentVolume = value;
-                      });
+                      setState(() => _currentVolume = value);
                       widget.onVolumeChanged(value);
                     },
                   ),
                 ),
                 const SizedBox(width: 8),
-                Icon(
-                  Icons.volume_up,
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                Icon(Icons.volume_up, color: colorScheme.onSurfaceVariant),
               ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(left: 8, top: 4),
-            child: Text(
-              'Volume: $volumePercent%',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            child: Text('Volume: $volumePercent%', style: Theme.of(context).textTheme.bodySmall),
           ),
         ],
       ),
