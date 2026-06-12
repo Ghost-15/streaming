@@ -1,32 +1,11 @@
-enum UserRole {
-  anon('ROLE_ANON'),
-  user('ROLE_USER'),
-  diffuseur('ROLE_DIFFUSEUR'),
-  admin('ROLE_ADMIN');
-
-  final String value;
-  const UserRole(this.value);
-
-  static UserRole fromValue(String value) {
-    switch (value) {
-      case 'ROLE_ADMIN':
-        return UserRole.admin;
-      case 'ROLE_DIFFUSEUR':
-        return UserRole.diffuseur;
-      case 'ROLE_USER':
-        return UserRole.user;
-      default:
-        return UserRole.anon;
-    }
-  }
-}
+import 'role.dart';
 
 class UserModel {
   final String id;
   final String email;
   final String firstName;
   final String lastName;
-  final UserRole role;
+  final Role role;
 
   const UserModel({
     required this.id,
@@ -42,7 +21,7 @@ class UserModel {
       email: json['email'],
       firstName: json['firstName'] ?? json['first_name'] ?? '',
       lastName: json['lastName'] ?? json['last_name'] ?? '',
-      role: UserRole.fromValue(json['role'] ?? 'ROLE_USER'),
+      role: Role.fromValue(json['role'] ?? 'ROLE_USER'),
     );
   }
 
@@ -57,6 +36,6 @@ class UserModel {
   }
 
   String get fullName => '$firstName $lastName';
-  bool get isAdmin => role == UserRole.admin;
-  bool get isDiffuseur => role == UserRole.diffuseur || role == UserRole.admin;
+  bool get isAdmin => role == Role.admin;
+  bool get isDiffuseur => role == Role.diffuseur || role == Role.admin;
 }
