@@ -23,6 +23,12 @@ mobile/.flutter-plugins-dependencies
 mobile/build/
 mobile/.packages
 
+# Generated code - build_runner
+*.freezed.dart
+*.g.dart
+.dart_tool/
+build/
+
 # IDE
 .idea/
 .vscode/
