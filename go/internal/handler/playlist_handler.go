@@ -86,7 +86,8 @@ func (h *PlaylistHandler) List(c *gin.Context) {
 // @Failure     401 {object} map[string]string
 // @Router      /api/v1/playlists [post]
 func (h *PlaylistHandler) Create(c *gin.Context) {
-	uid, ok := ownerID(c)
+	// _ discards ownerID until Sprint 2 — US-007 implements usecase.Create(ctx, ownerID, title).
+	_, ok := ownerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
 		return
