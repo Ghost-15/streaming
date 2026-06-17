@@ -76,7 +76,7 @@ func (h *PlaylistHandler) List(c *gin.Context) {
 		return
 	}
 
-	playlists, err := h.useCase.ListByOwner(c.Request.Context(), uid)
+	playlists, err := h.useCase.List(c.Request.Context(), uid)
 	if err != nil {
 		middleware.Logger(c).Error().Err(err).Msg("list playlists failed")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
