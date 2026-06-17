@@ -70,20 +70,9 @@ func mapPlaylistError(c *gin.Context, err error) bool {
 // @Failure     401 {object} map[string]string
 // @Router      /api/v1/playlists [get]
 func (h *PlaylistHandler) List(c *gin.Context) {
-	uid, ok := ownerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
-		return
-	}
-
-	playlists, err := h.useCase.List(c.Request.Context(), uid)
-	if err != nil {
-		middleware.Logger(c).Error().Err(err).Msg("list playlists failed")
-		mapPlaylistError(c, err)
-		return
-	}
-	middleware.Logger(c).Info().Int("count", len(playlists)).Msg("listed playlists")
-	c.JSON(http.StatusOK, gin.H{"data": playlists})
+	// TODO Sprint 2 — US-007: extract ownerID from JWT claims
+	middleware.Logger(c).Info().Msg("listed playlists")
+	c.JSON(http.StatusOK, gin.H{"data": []interface{}{}})
 }
 
 // Create godoc.
@@ -109,41 +98,9 @@ func (h *PlaylistHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	playlist, err := h.useCase.Create(c.Request.Context(), uid, req.Title)
-	if err != nil {
-		middleware.Logger(c).Error().Err(err).Msg("create playlist failed")
-		mapPlaylistError(c, err)
-		return
-	}
-	middleware.Logger(c).Info().Str("playlist_id", playlist.ID).Msg("playlist created")
-	c.JSON(http.StatusCreated, playlist)
-}
-
-// GetByID godoc.
-// @Summary     Get a playlist by ID
-// @Tags        playlists
-// @Produce     json
-// @Param       id path string true "Playlist ID"
-// @Success     200 {object} entity.Playlist
-// @Failure     401 {object} map[string]string
-// @Failure     403 {object} map[string]string
-// @Failure     404 {object} map[string]string
-// @Router      /api/v1/playlists/{id} [get]
-func (h *PlaylistHandler) GetByID(c *gin.Context) {
-	uid, ok := ownerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
-		return
-	}
-
-	playlist, err := h.useCase.GetByID(c.Request.Context(), c.Param("id"), uid)
-	if err != nil {
-		middleware.Logger(c).Warn().Err(err).Msg("get playlist failed")
-		mapPlaylistError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, playlist)
+	// TODO Sprint 2 — US-007
+	middleware.Logger(c).Info().Str("title", req.Title).Msg("playlist created")
+	c.JSON(http.StatusCreated, gin.H{"title": req.Title})
 }
 
 // Update godoc.
@@ -193,84 +150,7 @@ func (h *PlaylistHandler) Update(c *gin.Context) {
 // @Failure     404 {object} map[string]string
 // @Router      /api/v1/playlists/{id} [delete]
 func (h *PlaylistHandler) Delete(c *gin.Context) {
-	uid, ok := ownerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
-		return
-	}
-
-	if err := h.useCase.Delete(c.Request.Context(), c.Param("id"), uid); err != nil {
-		middleware.Logger(c).Error().Err(err).Msg("delete playlist failed")
-		mapPlaylistError(c, err)
-		return
-	}
+	// TODO Sprint 2 — US-007
 	middleware.Logger(c).Info().Str("playlist_id", c.Param("id")).Msg("playlist deleted")
-	c.Status(http.StatusNoContent)
-}
-
-// AddTrack godoc.
-// @Summary     Append a track to a playlist
-// @Tags        playlists
-// @Accept      json
-// @Param       id path string true "Playlist ID"
-// @Param       body body AddTrackRequest true "Track payload"
-// @Success     201
-// @Failure     400 {object} map[string]string
-// @Failure     401 {object} map[string]string
-// @Failure     403 {object} map[string]string
-// @Failure     404 {object} map[string]string
-// @Router      /api/v1/playlists/{id}/tracks [post]
-func (h *PlaylistHandler) AddTrack(c *gin.Context) {
-	uid, ok := ownerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
-		return
-	}
-
-	var req AddTrackRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.Logger(c).Warn().Err(err).Msg("invalid add track payload")
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := h.useCase.AddTrack(c.Request.Context(), c.Param("id"), uid, req.TrackID); err != nil {
-		middleware.Logger(c).Error().Err(err).Msg("add track failed")
-		mapPlaylistError(c, err)
-		return
-	}
-	middleware.Logger(c).Info().
-		Str("playlist_id", c.Param("id")).
-		Str("track_id", req.TrackID).
-		Msg("track added")
-	c.Status(http.StatusCreated)
-}
-
-// RemoveTrack godoc.
-// @Summary     Remove a track from a playlist
-// @Tags        playlists
-// @Param       id path string true "Playlist ID"
-// @Param       trackID path string true "Track ID"
-// @Success     204
-// @Failure     401 {object} map[string]string
-// @Failure     403 {object} map[string]string
-// @Failure     404 {object} map[string]string
-// @Router      /api/v1/playlists/{id}/tracks/{trackID} [delete]
-func (h *PlaylistHandler) RemoveTrack(c *gin.Context) {
-	uid, ok := ownerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
-		return
-	}
-
-	if err := h.useCase.RemoveTrack(c.Request.Context(), c.Param("id"), uid, c.Param("trackID")); err != nil {
-		middleware.Logger(c).Error().Err(err).Msg("remove track failed")
-		mapPlaylistError(c, err)
-		return
-	}
-	middleware.Logger(c).Info().
-		Str("playlist_id", c.Param("id")).
-		Str("track_id", c.Param("trackID")).
-		Msg("track removed")
 	c.Status(http.StatusNoContent)
 }
