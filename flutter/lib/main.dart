@@ -5,6 +5,7 @@ import 'api/repositories/stream_repository.dart';
 import 'config/router.dart';
 import 'config/theme.dart';
 import 'notifiers/audio_notifier.dart';
+import 'notifiers/broadcaster_notifier.dart';
 import 'notifiers/session_notifier.dart';
 import 'notifiers/stream_notifier.dart';
 
@@ -17,6 +18,9 @@ void main() {
         ChangeNotifierProvider(create: (_) => AudioNotifier()),
         ChangeNotifierProvider(
           create: (_) => StreamNotifier(const StreamRepository()),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => BroadcasterNotifier(const StreamRepository()),
         ),
       ],
       child: const StreamPulseApp(),
