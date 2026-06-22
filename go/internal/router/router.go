@@ -22,6 +22,7 @@ func NewRouter(
 	authH *handler.AuthHandler,
 	streamH *handler.StreamHandler,
 	playlistH *handler.PlaylistHandler,
+	adminH *handler.AdminHandler,
 ) *gin.Engine {
 	// Load the RSA public key once at startup.
 	// If missing or malformed, the server must not start — fail fast.
@@ -84,7 +85,11 @@ func NewRouter(
 	admin.Use(middleware.RBACMiddleware(publicKey, entity.RoleAdmin))
 	admin.Use(middleware.RateLimitMiddleware(20, 10))
 	{
-		// TODO Sprint 3 — US-013: admin panel routes
+		admin.GET("/users", adminH.ListUsers)
+		admin.GET("/users/:id", adminH.GetUser)
+		admin.PUT("/users/:id/role", adminH.UpdateUserRole)
+		admin.POST("/users/:id/suspend", adminH.SuspendUser)
+		admin.GET("/stats", adminH.GetStats)
 	}
 
 	// Health check (no auth)
