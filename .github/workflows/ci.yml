@@ -2,15 +2,13 @@ name: CI
 
 env:
   GO_VERSION: "1.25"
+  GOTOOLCHAIN: local
 
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
-
-env:
-  GOTOOLCHAIN: local  # empêche Go de télécharger une toolchain différente
 
 jobs:
   # ── Go Backend ──────────────────────────────────────────────────────────────
