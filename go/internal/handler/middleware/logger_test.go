@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +41,7 @@ func TestZerologMiddleware_IncludesTraceID(t *testing.T) {
 		TraceFlags: trace.FlagsSampled,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ping", nil)
 	req = req.WithContext(trace.ContextWithSpanContext(req.Context(), spanContext))
 
 	rec := httptest.NewRecorder()
@@ -99,7 +100,7 @@ func TestRequestScopedLogger_PropagatesTraceIDToHandlerLogs(t *testing.T) {
 		TraceFlags: trace.FlagsSampled,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ping", nil)
 	req = req.WithContext(trace.ContextWithSpanContext(req.Context(), spanContext))
 
 	rec := httptest.NewRecorder()
@@ -152,7 +153,7 @@ func TestLokiWriter_UsesGlobalLogger(t *testing.T) {
 		c.Status(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/login", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

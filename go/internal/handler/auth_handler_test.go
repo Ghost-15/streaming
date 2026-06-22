@@ -139,7 +139,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			h := handler.NewAuthHandler(uc)
 
 			bodyBytes, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest("POST", "/api/v1/auth/register", bytes.NewReader(bodyBytes))
+			req := httptest.NewRequestWithContext(context.Background(), "POST", "/api/v1/auth/register", bytes.NewReader(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			h := handler.NewAuthHandler(uc)
 
 			bodyBytes, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest("POST", "/api/v1/auth/login", bytes.NewReader(bodyBytes))
+			req := httptest.NewRequestWithContext(context.Background(), "POST", "/api/v1/auth/login", bytes.NewReader(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()

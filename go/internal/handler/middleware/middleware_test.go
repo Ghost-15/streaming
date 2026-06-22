@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"net/http"
@@ -21,7 +22,7 @@ func TestRBACMiddleware_MissingToken(t *testing.T) {
 	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	pubKey := &privKey.PublicKey
 
-	req := httptest.NewRequest("GET", "/api/v1/streams", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/streams", nil)
 	// No Authorization header
 
 	w := httptest.NewRecorder()
@@ -44,7 +45,7 @@ func TestRBACMiddleware_InvalidBearerFormat(t *testing.T) {
 	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	pubKey := &privKey.PublicKey
 
-	req := httptest.NewRequest("GET", "/api/v1/streams", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/streams", nil)
 	req.Header.Set("Authorization", "InvalidBearerFormat")
 
 	w := httptest.NewRecorder()
@@ -67,7 +68,7 @@ func TestRBACMiddleware_InvalidToken(t *testing.T) {
 	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	pubKey := &privKey.PublicKey
 
-	req := httptest.NewRequest("GET", "/api/v1/streams", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/streams", nil)
 	req.Header.Set("Authorization", "Bearer invalid.token.here")
 
 	w := httptest.NewRecorder()

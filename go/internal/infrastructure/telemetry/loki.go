@@ -96,10 +96,13 @@ func (w *LokiWriter) push(level string, p []byte) (int, error) {
 		// Non-blocking — log to stderr but don't crash the app
 		return len(p), nil
 	}
-	defer resp.Body.Close()
+	statusCode := resp.StatusCode
+	if err := resp.Body.Close(); err != nil {
+		return len(p), fmt.Errorf("loki: close response body: %w", err)
+	}
 
-	if resp.StatusCode/100 != 2 {
-		return len(p), fmt.Errorf("loki: unexpected status %d", resp.StatusCode)
+	if statusCode/100 != 2 {
+		return len(p), fmt.Errorf("loki: unexpected status %d", statusCode)
 	}
 
 	return len(p), nil
