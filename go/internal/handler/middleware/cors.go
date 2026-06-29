@@ -18,7 +18,7 @@ func CORSMiddleware(origins string) gin.HandlerFunc {
 	parsed := parseOrigins(origins)
 	cfg := cors.Config{
 		AllowOrigins:     parsed,
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}
