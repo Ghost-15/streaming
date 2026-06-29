@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	"github.com/Ghost-15/streaming/internal/config"
@@ -35,6 +36,7 @@ func NewRouter(
 	r.Use(otelgin.Middleware("streampulse-api"))
 	r.Use(middleware.ZerologMiddleware())
 	r.Use(middleware.SecurityHeadersMiddleware())
+  r.Use(middleware.MetricsMiddleware()) 
 	r.Use(middleware.CORSMiddleware(cfg.CORSOrigins))
 	r.Use(gin.Recovery())
 
@@ -85,6 +87,9 @@ func NewRouter(
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "streampulse-api"})
 	})
+
+	// Prometheus metrics endpoint (Sprint 3 — US-010, scraped by Prometheus).
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	return r
 }

@@ -1,0 +1,155 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "title": "StreamPulse — Backend Observability",
+  "tags": ["streampulse", "us-010", "rncp"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "API Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(streampulse_api_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(streampulse_api_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(streampulse_api_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "alert": {
+        "name": "API p95 latency > 500ms (5m)",
+        "frequency": "1m",
+        "for": "5m",
+        "conditions": [
+          {
+            "type": "query",
+            "evaluator": { "type": "gt", "params": [0.5] },
+            "operator": { "type": "and" },
+            "query": { "params": ["B", "5m", "now"] },
+            "reducer": { "type": "avg", "params": [] }
+          }
+        ],
+        "noDataState": "no_data",
+        "executionErrorState": "alerting"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Request rate by status",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(streampulse_api_request_duration_seconds_count[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Active streams & total listeners",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "targets": [
+        {
+          "expr": "streampulse_active_streams",
+          "legendFormat": "Active streams",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(streampulse_listeners_per_stream)",
+          "legendFormat": "Total listeners",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Error rate %",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(streampulse_api_request_duration_seconds_count{status=~\"5..\"}[5m])) / sum(rate(streampulse_api_request_duration_seconds_count[5m]))",
+          "legendFormat": "5xx rate",
+          "refId": "A"
+        }
+      ],
+      "alert": {
+        "name": "Error rate > 5% (5m)",
+        "frequency": "1m",
+        "for": "5m",
+        "conditions": [
+          {
+            "type": "query",
+            "evaluator": { "type": "gt", "params": [0.05] },
+            "operator": { "type": "and" },
+            "query": { "params": ["A", "5m", "now"] },
+            "reducer": { "type": "avg", "params": [] }
+          }
+        ],
+        "noDataState": "no_data",
+        "executionErrorState": "alerting"
+      }
+    }
+  ]
+}

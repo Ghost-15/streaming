@@ -25,6 +25,16 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
 
+  # Prometheus — scrapes /metrics from the API (US-010)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./go/infra/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - api
+
   # Grafana — dashboards (US-010)
   grafana:
     image: grafana/grafana:latest
@@ -35,6 +45,10 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./go/infra/grafana/provisioning:/etc/grafana/provisioning
+      - ./go/infra/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
 
   # Loki — log aggregation (US-006)
   loki:
