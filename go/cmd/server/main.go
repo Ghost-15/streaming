@@ -78,19 +78,22 @@ func main() {
 	userRepo := supabase.NewUserRepo(db)
 	streamRepo := supabase.NewStreamRepo(db)
 	playlistRepo := supabase.NewPlaylistRepo(db)
+	adminRepo := supabase.NewAdminRepo(db)
 
 	// 6. Use Cases (business layer)
 	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
 	streamUC := usecase.NewStreamUseCase(streamRepo)
 	playlistUC := usecase.NewPlaylistUseCase(playlistRepo)
+	adminUC := usecase.NewAdminUseCase(adminRepo)
 
 	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
 	streamH := handler.NewStreamHandler(streamUC)
 	playlistH := handler.NewPlaylistHandler(playlistUC)
+	adminH := handler.NewAdminHandler(adminUC)
 
 	// 8. Router
-	engine := router.NewRouter(cfg, authH, streamH, playlistH)
+	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH)
 
 	// 9. HTTP server with graceful shutdown
 	srv := &http.Server{

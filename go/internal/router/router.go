@@ -21,6 +21,7 @@ func NewRouter(
 	authH *handler.AuthHandler,
 	streamH *handler.StreamHandler,
 	playlistH *handler.PlaylistHandler,
+	adminH *handler.AdminHandler,
 ) *gin.Engine {
 	pubKeyBytes, err := os.ReadFile(cfg.JWTPublicKeyPath)
 	if err != nil {
@@ -81,7 +82,11 @@ func NewRouter(
 	admin.Use(middleware.UserRateLimitMiddleware(100, 100))
 	admin.Use(middleware.RateLimitMiddleware(20, 10))
 	{
-		// TODO Sprint 3: admin panel routes
+		admin.GET("/users", adminH.ListUsers)
+		admin.GET("/users/:id", adminH.GetUser)
+		admin.PUT("/users/:id/role", adminH.UpdateUserRole)
+		admin.POST("/users/:id/suspend", adminH.SuspendUser)
+		admin.GET("/stats", adminH.GetStats)
 	}
 
 	r.GET("/health", func(c *gin.Context) {

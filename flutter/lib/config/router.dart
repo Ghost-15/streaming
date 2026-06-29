@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../screens/audio_player_screen.dart';
+import '../screens/broadcaster_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/login_screen.dart';
 
@@ -22,6 +23,11 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/login',
       pageBuilder: (context, state) => buildPage(context, state, const LoginScreen()),
+    ),
+    GoRoute(
+      path: '/broadcaster',
+      pageBuilder: (context, state) =>
+          buildPage(context, state, const BroadcasterScreen()),
     ),
     GoRoute(
       path: '/player',

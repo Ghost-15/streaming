@@ -28,4 +28,20 @@ class StreamRepository extends ModelRepository<StreamModel> {
       parser: (res) => StreamModel.fromJson(res),
     );
   }
+
+  Future<StreamModel> startStream(String title) {
+    return ApiService().request(
+      httpMethod: HttpMethod.post,
+      uri: 'streams',
+      data: {'title': title},
+      parser: (res) => StreamModel.fromJson(res),
+    );
+  }
+
+  Future<void> stopStream(String id) async {
+    await ApiService().request<void>(
+      httpMethod: HttpMethod.put,
+      uri: 'streams/$id/stop',
+    );
+  }
 }
