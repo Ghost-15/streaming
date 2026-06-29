@@ -17,7 +17,8 @@ class ApiService {
   ApiService._internal();
 
   final client = http.Client();
-  final baseUrl = 'http://localhost:8080/api';
+  // Backend serves under /api/v1 (versioned). Must match Gin router groups.
+  final baseUrl = 'http://localhost:8080/api/v1';
 
   Future<T> request<T>({
     required String uri,
