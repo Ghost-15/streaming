@@ -88,13 +88,27 @@ func (r *supabaseUserRepo) Create(ctx context.Context, user *entity.User) error 
 // Update updates mutable user fields (role, first_name, last_name).
 // Sprint 3 — US-013.
 func (r *supabaseUserRepo) Update(ctx context.Context, user *entity.User) error {
-	// TODO Sprint 3 — US-013: UPDATE users SET role=$1, first_name=$2, last_name=$3 WHERE id=$4
-	return errors.New("not implemented")
+	const q = `UPDATE users SET role = $1, first_name = $2, last_name = $3 WHERE id = $4`
+	tag, err := r.db.Exec(ctx, q, user.Role, user.FirstName, user.LastName, user.ID)
+	if err != nil {
+		return fmt.Errorf("user_repo: update: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user_repo: user %s not found", user.ID)
+	}
+	return nil
 }
 
 // Delete removes a user by UUID.
 // Sprint 3 — US-013.
 func (r *supabaseUserRepo) Delete(ctx context.Context, id string) error {
-	// TODO Sprint 3 — US-013: DELETE FROM users WHERE id = $1
-	return errors.New("not implemented")
+	const q = `DELETE FROM users WHERE id = $1`
+	tag, err := r.db.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("user_repo: delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user_repo: user %s not found", id)
+	}
+	return nil
 }
