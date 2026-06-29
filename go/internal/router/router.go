@@ -37,7 +37,7 @@ func NewRouter(
 	r.Use(otelgin.Middleware("streampulse-api"))
 	r.Use(middleware.ZerologMiddleware())
 	r.Use(middleware.SecurityHeadersMiddleware())
-  r.Use(middleware.MetricsMiddleware()) 
+	r.Use(middleware.MetricsMiddleware())
 	r.Use(middleware.CORSMiddleware(cfg.CORSOrigins))
 	r.Use(gin.Recovery())
 
