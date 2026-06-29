@@ -15,6 +15,7 @@ type Stream struct {
 	ID            string       `json:"id"`
 	Title         string       `json:"title"`
 	BroadcasterID string       `json:"broadcaster_id"`
+	StreamURL     string       `json:"stream_url"`
 	Status        StreamStatus `json:"status"`
 	StartedAt     time.Time    `json:"started_at"`
 	EndedAt       *time.Time   `json:"ended_at,omitempty"`
