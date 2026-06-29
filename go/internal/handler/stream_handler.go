@@ -26,10 +26,16 @@ func NewStreamHandler(uc usecase.StreamUseCase, hub *streaming.Hub) *StreamHandl
 }
 
 // StartRequest is the JSON body for POST /streams.
+// stream_url is optional: if omitted, a demo audio source is used so the stream is
+// immediately playable end-to-end (real broadcaster ingestion is out of scope — ADR-007).
 type StartRequest struct {
 	Title     string `json:"title"      binding:"required,min=3,max=100"`
-	StreamURL string `json:"stream_url" binding:"required,url"`
+	StreamURL string `json:"stream_url" binding:"omitempty,url"`
 }
+
+// defaultStreamURL is a royalty-free audio source used when a broadcaster
+// does not provide a stream_url (keeps the demo playable end-to-end).
+const defaultStreamURL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
 
 // mapStreamError converts sentinel usecase errors to HTTP responses.
 func mapStreamError(c *gin.Context, err error) {
@@ -86,7 +92,11 @@ func (h *StreamHandler) Start(c *gin.Context) {
 		return
 	}
 
-	stream, err := h.useCase.Start(c.Request.Context(), claims.UserID, req.Title, req.StreamURL)
+	streamURL := req.StreamURL
+	if streamURL == "" {
+		streamURL = defaultStreamURL
+	}
+	stream, err := h.useCase.Start(c.Request.Context(), claims.UserID, req.Title, streamURL)
 	if err != nil {
 		middleware.Logger(c).Error().Err(err).Msg("start stream failed")
 		mapStreamError(c, err)
