@@ -13,6 +13,7 @@ import (
 
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/handler"
+	"github.com/Ghost-15/streaming/internal/infrastructure/streaming"
 	"github.com/Ghost-15/streaming/internal/infrastructure/supabase"
 	"github.com/Ghost-15/streaming/internal/infrastructure/telemetry"
 	"github.com/Ghost-15/streaming/internal/router"
@@ -80,6 +81,9 @@ func main() {
 	playlistRepo := supabase.NewPlaylistRepo(db)
 	adminRepo := supabase.NewAdminRepo(db)
 
+	// 5b. Streaming Hub (goroutines + channels) — US-003, shared across listeners.
+	hub := streaming.NewHub()
+
 	// 6. Use Cases (business layer)
 	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
 	streamUC := usecase.NewStreamUseCase(streamRepo)
@@ -88,7 +92,7 @@ func main() {
 
 	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
-	streamH := handler.NewStreamHandler(streamUC)
+	streamH := handler.NewStreamHandler(streamUC, hub)
 	playlistH := handler.NewPlaylistHandler(playlistUC)
 	adminH := handler.NewAdminHandler(adminUC)
 

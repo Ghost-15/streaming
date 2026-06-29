@@ -60,12 +60,15 @@ func NewRouter(
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
 		protected.GET("/streams", streamH.ListActive)
-		protected.GET("/streams/:id/listen", streamH.Listen)
+		protected.GET("/streams/:id/listen", streamH.Listen) // SSE real-time events
+		protected.POST("/streams/:id/join", streamH.Join)
+		protected.POST("/streams/:id/leave", streamH.Leave)
 
 		diffuseur := protected.Group("/")
 		diffuseur.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
 		{
 			diffuseur.POST("/streams", streamH.Start)
+			diffuseur.PUT("/streams/:id/stop", streamH.Stop)
 		}
 
 		protected.GET("/playlists", playlistH.List)
