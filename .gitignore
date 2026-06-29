@@ -11,6 +11,9 @@ secrets/
 # Go build artifacts
 bin/
 go/server
+go/.gocache/
+go/.gomodcache/
+go/.gotmp/
 coverage.out
 
 # Test RSA keys — generated in-memory at test runtime

@@ -79,11 +79,11 @@ func (h *PlaylistHandler) List(c *gin.Context) {
 	playlists, err := h.useCase.List(c.Request.Context(), uid)
 	if err != nil {
 		middleware.Logger(c).Error().Err(err).Msg("list playlists failed")
-		mapPlaylistError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	middleware.Logger(c).Info().Int("count", len(playlists)).Msg("listed playlists")
-	c.JSON(http.StatusOK, gin.H{"data": playlists})
+	c.JSON(http.StatusOK, playlists)
 }
 
 // Create godoc.
@@ -139,10 +139,11 @@ func (h *PlaylistHandler) GetByID(c *gin.Context) {
 
 	playlist, err := h.useCase.GetByID(c.Request.Context(), c.Param("id"), uid)
 	if err != nil {
-		middleware.Logger(c).Warn().Err(err).Msg("get playlist failed")
+		middleware.Logger(c).Error().Err(err).Msg("get playlist failed")
 		mapPlaylistError(c, err)
 		return
 	}
+	middleware.Logger(c).Info().Str("playlist_id", playlist.ID).Msg("playlist fetched")
 	c.JSON(http.StatusOK, playlist)
 }
 
@@ -209,10 +210,11 @@ func (h *PlaylistHandler) Delete(c *gin.Context) {
 }
 
 // AddTrack godoc.
-// @Summary     Append a track to a playlist
+// @Summary     Add a track to a playlist
 // @Tags        playlists
 // @Accept      json
-// @Param       id path string true "Playlist ID"
+// @Produce     json
+// @Param       id   path string true "Playlist ID"
 // @Param       body body AddTrackRequest true "Track payload"
 // @Success     201
 // @Failure     400 {object} map[string]string
@@ -239,17 +241,14 @@ func (h *PlaylistHandler) AddTrack(c *gin.Context) {
 		mapPlaylistError(c, err)
 		return
 	}
-	middleware.Logger(c).Info().
-		Str("playlist_id", c.Param("id")).
-		Str("track_id", req.TrackID).
-		Msg("track added")
+	middleware.Logger(c).Info().Str("playlist_id", c.Param("id")).Str("track_id", req.TrackID).Msg("track added")
 	c.Status(http.StatusCreated)
 }
 
 // RemoveTrack godoc.
 // @Summary     Remove a track from a playlist
 // @Tags        playlists
-// @Param       id path string true "Playlist ID"
+// @Param       id      path string true "Playlist ID"
 // @Param       trackID path string true "Track ID"
 // @Success     204
 // @Failure     401 {object} map[string]string
@@ -268,9 +267,6 @@ func (h *PlaylistHandler) RemoveTrack(c *gin.Context) {
 		mapPlaylistError(c, err)
 		return
 	}
-	middleware.Logger(c).Info().
-		Str("playlist_id", c.Param("id")).
-		Str("track_id", c.Param("trackID")).
-		Msg("track removed")
+	middleware.Logger(c).Info().Str("playlist_id", c.Param("id")).Str("track_id", c.Param("trackID")).Msg("track removed")
 	c.Status(http.StatusNoContent)
 }
