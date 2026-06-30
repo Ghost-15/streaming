@@ -11,7 +11,7 @@ class StreamRepository extends ModelRepository<StreamModel> {
 
   Future<List<StreamModel>> getActive() {
     return ApiService().request(
-      uri: 'streams/active',
+      uri: 'streams',
       parser: (res) {
         final list = res is List ? res : (res['data'] as List);
         return list
@@ -29,11 +29,16 @@ class StreamRepository extends ModelRepository<StreamModel> {
     );
   }
 
-  Future<StreamModel> startStream(String title) {
+  /// Starts a stream. stream_url is optional — the backend falls back to a demo
+  /// audio source when omitted, so the stream is immediately playable.
+  Future<StreamModel> startStream(String title, {String? streamUrl}) {
     return ApiService().request(
       httpMethod: HttpMethod.post,
       uri: 'streams',
-      data: {'title': title},
+      data: {
+        'title': title,
+        if (streamUrl != null && streamUrl.isNotEmpty) 'stream_url': streamUrl,
+      },
       parser: (res) => StreamModel.fromJson(res),
     );
   }

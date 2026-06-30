@@ -30,7 +30,11 @@ class StreamModel {
       listenerCount: json['listenerCount'] ?? json['listener_count'] ?? 0,
       description: json['description'] ?? '',
       streamUrl: json['streamUrl'] ?? json['stream_url'] ?? '',
-      isLive: json['isLive'] ?? json['is_live'] ?? false,
+      // Backend exposes a `status` enum ("live"/"ended"); derive isLive from it,
+      // with a fallback to the legacy isLive/is_live boolean.
+      isLive: json['status'] != null
+          ? json['status'] == 'live'
+          : (json['isLive'] ?? json['is_live'] ?? false),
       createdAt: DateTime.tryParse(
             json['createdAt'] ?? json['created_at'] ?? '',
           ) ??
