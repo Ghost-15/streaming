@@ -17,6 +17,8 @@ import (
 // ErrEmailAlreadyInUse is returned when registration email is already registered.
 var ErrEmailAlreadyInUse = errors.New("auth: email already in use")
 
+var ErrAccountSuspended = errors.New("auth: account suspended")
+
 // AuthUseCase defines the business operations for authentication.
 type AuthUseCase interface {
 	Register(ctx context.Context, email, password string) (*entity.User, error)
@@ -85,6 +87,10 @@ func (uc *authUseCase) Login(ctx context.Context, email, password string) (strin
 	// 2. Constant-time password check.
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return "", errors.New(errInvalid)
+	}
+
+	if user.IsSuspended() {
+		return "", ErrAccountSuspended
 	}
 
 	// 3. Load the RSA private key from disk.

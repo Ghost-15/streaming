@@ -25,16 +25,15 @@ func NewUserRepo(db *pgxpool.Pool) repository.UserRepository {
 
 // FindByEmail looks up a user by email address.
 // Returns nil, nil if no user exists with that email (not found ≠ error).
+const userColumns = `id, email, password_hash, first_name, last_name, role, created_at, suspended_at`
+
 func (r *supabaseUserRepo) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
-	const q = `
-		SELECT id, email, password_hash, first_name, last_name, role, created_at
-		FROM users
-		WHERE email = $1`
+	const q = `SELECT ` + userColumns + ` FROM users WHERE email = $1`
 
 	u := &entity.User{}
 	err := r.db.QueryRow(ctx, q, email).Scan(
 		&u.ID, &u.Email, &u.PasswordHash,
-		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt,
+		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.SuspendedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -48,15 +47,12 @@ func (r *supabaseUserRepo) FindByEmail(ctx context.Context, email string) (*enti
 // FindByID looks up a user by UUID.
 // Returns nil, nil if no user exists with that ID.
 func (r *supabaseUserRepo) FindByID(ctx context.Context, id string) (*entity.User, error) {
-	const q = `
-		SELECT id, email, password_hash, first_name, last_name, role, created_at
-		FROM users
-		WHERE id = $1`
+	const q = `SELECT ` + userColumns + ` FROM users WHERE id = $1`
 
 	u := &entity.User{}
 	err := r.db.QueryRow(ctx, q, id).Scan(
 		&u.ID, &u.Email, &u.PasswordHash,
-		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt,
+		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.SuspendedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -86,15 +82,27 @@ func (r *supabaseUserRepo) Create(ctx context.Context, user *entity.User) error 
 }
 
 // Update updates mutable user fields (role, first_name, last_name).
-// Sprint 3 — US-013.
 func (r *supabaseUserRepo) Update(ctx context.Context, user *entity.User) error {
-	// TODO Sprint 3 — US-013: UPDATE users SET role=$1, first_name=$2, last_name=$3 WHERE id=$4
-	return errors.New("not implemented")
+	const q = `UPDATE users SET role = $1, first_name = $2, last_name = $3 WHERE id = $4`
+	tag, err := r.db.Exec(ctx, q, user.Role, user.FirstName, user.LastName, user.ID)
+	if err != nil {
+		return fmt.Errorf("user_repo: update: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user_repo: user %s not found", user.ID)
+	}
+	return nil
 }
 
 // Delete removes a user by UUID.
-// Sprint 3 — US-013.
 func (r *supabaseUserRepo) Delete(ctx context.Context, id string) error {
-	// TODO Sprint 3 — US-013: DELETE FROM users WHERE id = $1
-	return errors.New("not implemented")
+	const q = `DELETE FROM users WHERE id = $1`
+	tag, err := r.db.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("user_repo: delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user_repo: user %s not found", id)
+	}
+	return nil
 }
