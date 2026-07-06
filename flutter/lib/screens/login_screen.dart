@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../api/models/role.dart';
 import '../api/repositories/auth_repository.dart';
 import '../notifiers/session_notifier.dart';
 
@@ -40,12 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
       context.read<SessionNotifier>().onAuthentication(response);
-      final role = response.user.role;
-      if (role == Role.diffuseur || role == Role.admin) {
-        context.go('/broadcaster');
-      } else {
-        context.go('/');
-      }
+      // GoRouter redirect handles navigation based on role via refreshListenable.
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
