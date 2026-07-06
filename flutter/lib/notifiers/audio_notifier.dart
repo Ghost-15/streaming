@@ -3,7 +3,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../api/models/stream_model.dart';
 
-enum AudioPlaybackState { idle, loading, playing, paused, stopped, error }
+enum AudioPlaybackState { idle, loading, buffering, playing, paused, stopped, error }
 
 class AudioNotifier extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -29,6 +29,7 @@ class AudioNotifier extends ChangeNotifier {
   bool get isPlaying => _playbackState == AudioPlaybackState.playing;
   bool get isPaused => _playbackState == AudioPlaybackState.paused;
   bool get isLoading => _playbackState == AudioPlaybackState.loading;
+  bool get isBuffering => _playbackState == AudioPlaybackState.buffering;
   bool get hasError => _playbackState == AudioPlaybackState.error;
 
   double get progress {
@@ -47,8 +48,10 @@ class AudioNotifier extends ChangeNotifier {
           _playbackState = AudioPlaybackState.idle;
           break;
         case ProcessingState.loading:
-        case ProcessingState.buffering:
           _playbackState = AudioPlaybackState.loading;
+          break;
+        case ProcessingState.buffering:
+          _playbackState = AudioPlaybackState.buffering;
           break;
         case ProcessingState.ready:
           _playbackState =
@@ -139,8 +142,14 @@ class AudioNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> retry() async {
+    if (_currentStream == null) return;
+    await playStream(_currentStream!);
+  }
+
   void clearError() {
     _errorMessage = '';
+    _playbackState = AudioPlaybackState.idle;
     notifyListeners();
   }
 
