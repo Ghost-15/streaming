@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     build:
@@ -9,6 +7,10 @@ services:
       - "8080:8080"
     env_file:
       - .env
+    environment:
+      - METRICS_BEARER_TOKEN_FILE=/run/secrets/metrics_bearer_token
+    secrets:
+      - metrics_bearer_token
     depends_on:
       - otel-collector
     restart: unless-stopped
@@ -32,6 +34,8 @@ services:
       - "9090:9090"
     volumes:
       - ./go/infra/prometheus.yml:/etc/prometheus/prometheus.yml
+    secrets:
+      - metrics_bearer_token
     depends_on:
       - api
 
@@ -65,3 +69,7 @@ services:
 
 volumes:
   grafana-data:
+
+secrets:
+  metrics_bearer_token:
+    file: ./secrets/metrics_bearer_token
