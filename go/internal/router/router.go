@@ -94,7 +94,7 @@ func NewRouter(
 	})
 
 	// Prometheus metrics endpoint (Sprint 3 — US-010, scraped by Prometheus).
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	r.GET("/metrics", middleware.MetricsAuthMiddleware(cfg.MetricsBearerToken), gin.WrapH(promhttp.Handler()))
 
 	return r
 }

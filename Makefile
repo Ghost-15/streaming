@@ -1,5 +1,7 @@
 .PHONY: dev build test lint vet clean docker-build migrate help
 
+COVERAGE_THRESHOLD ?= 80
+
 ## ── Development ──────────────────────────────────────────────────────────────
 
 # Start the API server locally (loads .env automatically via godotenv)
@@ -20,7 +22,7 @@ test:
 # Run tests and enforce 80% coverage threshold (CI gate)
 test-ci:
 	cd go && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
-	go tool cover -func=coverage.out | awk '/total/{if ($$3+0 < 80) { print "Coverage below 80%: " $$3; exit 1 }}'
+	go tool cover -func=coverage.out | awk -v min="$(COVERAGE_THRESHOLD)" '/total/{if ($$3+0 < min) { print "Coverage below " min "%: " $$3; exit 1 } else { print "Coverage OK: " $$3 " >= " min "%" }}'
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 
