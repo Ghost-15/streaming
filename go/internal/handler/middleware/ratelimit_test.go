@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,7 +21,7 @@ func TestRateLimitMiddleware_Returns429ByIP(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/login", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/login", nil)
 		req.RemoteAddr = "203.0.113.10:1234"
 		engine.ServeHTTP(rec, req)
 
@@ -30,7 +31,7 @@ func TestRateLimitMiddleware_Returns429ByIP(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/login", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/login", nil)
 	req.RemoteAddr = "203.0.113.10:1234"
 	engine.ServeHTTP(rec, req)
 
@@ -59,7 +60,7 @@ func TestUserRateLimitMiddleware_Returns429ByUser(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/streams", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/streams", nil)
 		req.Header.Set("X-Test-User", "user-1")
 		engine.ServeHTTP(rec, req)
 
@@ -69,7 +70,7 @@ func TestUserRateLimitMiddleware_Returns429ByUser(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/streams", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/streams", nil)
 	req.Header.Set("X-Test-User", "user-1")
 	engine.ServeHTTP(rec, req)
 
@@ -78,7 +79,7 @@ func TestUserRateLimitMiddleware_Returns429ByUser(t *testing.T) {
 	}
 
 	otherUser := httptest.NewRecorder()
-	otherReq := httptest.NewRequest(http.MethodGet, "/api/v1/streams", nil)
+	otherReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/streams", nil)
 	otherReq.Header.Set("X-Test-User", "user-2")
 	engine.ServeHTTP(otherUser, otherReq)
 

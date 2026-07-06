@@ -13,11 +13,11 @@ var _ repository.PlaylistRepository = (*MockPlaylistRepository)(nil)
 // MockPlaylistRepository is a hand-rolled mock for usecase tests.
 // Set the function fields to control behavior per test case.
 type MockPlaylistRepository struct {
-	FindByIDFn    func(ctx context.Context, id string) (*entity.Playlist, error)
-	ListByOwnerFn func(ctx context.Context, ownerID string) ([]entity.Playlist, error)
-	CreateFn      func(ctx context.Context, playlist *entity.Playlist) error
-	UpdateFn      func(ctx context.Context, playlist *entity.Playlist) error
-	DeleteFn      func(ctx context.Context, id string) error
+	FindByIDFn      func(ctx context.Context, id string) (*entity.Playlist, error)
+	ListByOwnerFn   func(ctx context.Context, ownerID string) ([]entity.Playlist, error)
+	CreateFn        func(ctx context.Context, playlist *entity.Playlist) error
+	UpdateFn        func(ctx context.Context, playlist *entity.Playlist) error
+	DeleteFn        func(ctx context.Context, id string) error
 	AddTrackFn      func(ctx context.Context, track *entity.Track) error
 	RemoveTrackFn   func(ctx context.Context, playlistID, trackID string) error
 	ReorderTracksFn func(ctx context.Context, playlistID string, orderedTrackIDs []string) error

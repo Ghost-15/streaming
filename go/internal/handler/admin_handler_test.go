@@ -49,7 +49,7 @@ func TestAdminHandler_ListUsers(t *testing.T) {
 	h := handler.NewAdminHandler(usecase.NewAdminUseCase(repo))
 	r := newAdminEngine(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users?page=1&limit=20", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/users?page=1&limit=20", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -75,7 +75,7 @@ func TestAdminHandler_GetUser_Found(t *testing.T) {
 	h := handler.NewAdminHandler(usecase.NewAdminUseCase(repo))
 	r := newAdminEngine(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users/u-123", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/users/u-123", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -93,7 +93,7 @@ func TestAdminHandler_GetUser_NotFound(t *testing.T) {
 	h := handler.NewAdminHandler(usecase.NewAdminUseCase(repo))
 	r := newAdminEngine(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users/unknown", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/users/unknown", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -112,7 +112,7 @@ func TestAdminHandler_UpdateUserRole(t *testing.T) {
 	r := newAdminEngine(h)
 
 	body, _ := json.Marshal(map[string]string{"role": "diffuseur"})
-	req := httptest.NewRequest(http.MethodPut, "/admin/users/u-123/role", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/admin/users/u-123/role", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -128,7 +128,7 @@ func TestAdminHandler_UpdateUserRole_InvalidRole(t *testing.T) {
 	r := newAdminEngine(h)
 
 	body, _ := json.Marshal(map[string]string{"role": "superuser"})
-	req := httptest.NewRequest(http.MethodPut, "/admin/users/u-123/role", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/admin/users/u-123/role", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -150,7 +150,7 @@ func TestAdminHandler_GetStats(t *testing.T) {
 	h := handler.NewAdminHandler(usecase.NewAdminUseCase(repo))
 	r := newAdminEngine(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/stats", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/admin/stats", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
