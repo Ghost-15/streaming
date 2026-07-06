@@ -270,3 +270,51 @@ func (h *PlaylistHandler) RemoveTrack(c *gin.Context) {
 	middleware.Logger(c).Info().Str("playlist_id", c.Param("id")).Str("track_id", c.Param("trackID")).Msg("track removed")
 	c.Status(http.StatusNoContent)
 }
+
+type ReorderRequest struct {
+	TrackIDs []string `json:"track_ids" binding:"required,min=1"`
+}
+
+func (h *PlaylistHandler) ReorderTracks(c *gin.Context) {
+	uid, ok := ownerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
+	var req ReorderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		middleware.Logger(c).Warn().Err(err).Msg("invalid reorder payload")
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.useCase.ReorderTracks(c.Request.Context(), c.Param("id"), uid, req.TrackIDs); err != nil {
+		middleware.Logger(c).Error().Err(err).Msg("reorder tracks failed")
+		mapPlaylistError(c, err)
+		return
+	}
+	middleware.Logger(c).Info().Str("playlist_id", c.Param("id")).Msg("tracks reordered")
+	c.Status(http.StatusNoContent)
+}
+
+func (h *PlaylistHandler) NextTrack(c *gin.Context) {
+	uid, ok := ownerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
+	track, err := h.useCase.NextTrack(c.Request.Context(), c.Param("id"), uid)
+	if err != nil {
+		if errors.Is(err, usecase.ErrPlaylistEmpty) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "queue empty"})
+			return
+		}
+		middleware.Logger(c).Warn().Err(err).Msg("next track failed")
+		mapPlaylistError(c, err)
+		return
+	}
+	middleware.Logger(c).Info().Str("playlist_id", c.Param("id")).Str("track_id", track.ID).Msg("next track served")
+	c.JSON(http.StatusOK, track)
+}

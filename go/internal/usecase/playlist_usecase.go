@@ -28,6 +28,8 @@ type PlaylistUseCase interface {
 	Delete(ctx context.Context, id, ownerID string) error
 	AddTrack(ctx context.Context, playlistID, ownerID, trackID string) error
 	RemoveTrack(ctx context.Context, playlistID, ownerID, trackID string) error
+	ReorderTracks(ctx context.Context, playlistID, ownerID string, orderedTrackIDs []string) error
+	NextTrack(ctx context.Context, playlistID, ownerID string) (*entity.Track, error)
 }
 
 type playlistUseCase struct {
@@ -138,8 +140,51 @@ func (uc *playlistUseCase) RemoveTrack(ctx context.Context, playlistID, ownerID,
 	return nil
 }
 
-// fetchOwned loads a playlist and verifies that ownerID is the owner.
-// Returns ErrPlaylistNotFound if missing, ErrPlaylistForbidden on ownership mismatch.
+var ErrPlaylistEmpty = errors.New("playlist: empty queue")
+
+func (uc *playlistUseCase) ReorderTracks(ctx context.Context, playlistID, ownerID string, orderedTrackIDs []string) error {
+	if len(orderedTrackIDs) == 0 {
+		return ErrPlaylistInvalid
+	}
+	playlist, err := uc.fetchOwned(ctx, playlistID, ownerID)
+	if err != nil {
+		return err
+	}
+	if len(orderedTrackIDs) != len(playlist.Tracks) {
+		return ErrPlaylistInvalid
+	}
+	existing := make(map[string]bool, len(playlist.Tracks))
+	for _, t := range playlist.Tracks {
+		existing[t.ID] = true
+	}
+	for _, id := range orderedTrackIDs {
+		if !existing[id] {
+			return ErrPlaylistInvalid
+		}
+	}
+
+	if err := uc.playlistRepo.ReorderTracks(ctx, playlistID, orderedTrackIDs); err != nil {
+		return fmt.Errorf("playlist: reorder: %w", err)
+	}
+	return nil
+}
+
+func (uc *playlistUseCase) NextTrack(ctx context.Context, playlistID, ownerID string) (*entity.Track, error) {
+	playlist, err := uc.fetchOwned(ctx, playlistID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	if len(playlist.Tracks) == 0 {
+		return nil, ErrPlaylistEmpty
+	}
+
+	head := playlist.Tracks[0]
+	if err := uc.playlistRepo.RemoveTrack(ctx, playlistID, head.ID); err != nil {
+		return nil, fmt.Errorf("playlist: next: %w", err)
+	}
+	return &head, nil
+}
+
 func (uc *playlistUseCase) fetchOwned(ctx context.Context, id, ownerID string) (*entity.Playlist, error) {
 	if id == "" || ownerID == "" {
 		return nil, ErrPlaylistInvalid

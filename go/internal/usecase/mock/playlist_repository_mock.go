@@ -18,8 +18,9 @@ type MockPlaylistRepository struct {
 	CreateFn      func(ctx context.Context, playlist *entity.Playlist) error
 	UpdateFn      func(ctx context.Context, playlist *entity.Playlist) error
 	DeleteFn      func(ctx context.Context, id string) error
-	AddTrackFn    func(ctx context.Context, track *entity.Track) error
-	RemoveTrackFn func(ctx context.Context, playlistID, trackID string) error
+	AddTrackFn      func(ctx context.Context, track *entity.Track) error
+	RemoveTrackFn   func(ctx context.Context, playlistID, trackID string) error
+	ReorderTracksFn func(ctx context.Context, playlistID string, orderedTrackIDs []string) error
 }
 
 func (m *MockPlaylistRepository) FindByID(ctx context.Context, id string) (*entity.Playlist, error) {
@@ -48,4 +49,8 @@ func (m *MockPlaylistRepository) AddTrack(ctx context.Context, track *entity.Tra
 
 func (m *MockPlaylistRepository) RemoveTrack(ctx context.Context, playlistID, trackID string) error {
 	return m.RemoveTrackFn(ctx, playlistID, trackID)
+}
+
+func (m *MockPlaylistRepository) ReorderTracks(ctx context.Context, playlistID string, orderedTrackIDs []string) error {
+	return m.ReorderTracksFn(ctx, playlistID, orderedTrackIDs)
 }
