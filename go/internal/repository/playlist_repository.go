@@ -16,4 +16,5 @@ type PlaylistRepository interface {
 	Delete(ctx context.Context, id string) error
 	AddTrack(ctx context.Context, track *entity.Track) error
 	RemoveTrack(ctx context.Context, playlistID, trackID string) error
+	ReorderTracks(ctx context.Context, playlistID string, orderedTrackIDs []string) error
 }
