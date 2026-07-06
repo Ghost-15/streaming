@@ -42,8 +42,13 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
             children: [
               if (audio.isLoading)
                 const LoadingIndicator(message: 'Loading stream...')
+              else if (audio.isBuffering)
+                const LoadingIndicator(message: 'Buffering...')
               else if (audio.hasError)
-                _ErrorCard(message: audio.errorMessage)
+                _ErrorCard(
+                  message: audio.errorMessage,
+                  onRetry: () => context.read<AudioNotifier>().retry(),
+                )
               else if (currentStream != null)
                 _NowPlayingCard(stream: currentStream)
               else
@@ -195,7 +200,9 @@ class _EmptyStateCard extends StatelessWidget {
 
 class _ErrorCard extends StatelessWidget {
   final String? message;
-  const _ErrorCard({this.message});
+  final VoidCallback? onRetry;
+
+  const _ErrorCard({this.message, this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +223,18 @@ class _ErrorCard extends StatelessWidget {
                   ),
               textAlign: TextAlign.center,
             ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colorScheme.error,
+                  foregroundColor: colorScheme.onError,
+                ),
+              ),
+            ],
           ],
         ),
       ),

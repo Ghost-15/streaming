@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -18,6 +19,8 @@ type Config struct {
 	OTELServiceNamespace string
 	OTELDeploymentEnv    string
 	CORSOrigins          string
+	MetricsBearerToken   string
+	MetricsBearerFile    string
 	Env                  string // "development" | "production"
 }
 
@@ -29,6 +32,12 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 	_ = godotenv.Load("../.env")
 
+	metricsBearerFile := os.Getenv("METRICS_BEARER_TOKEN_FILE")
+	metricsBearerToken, err := readSecretValue(metricsBearerFile, os.Getenv("METRICS_BEARER_TOKEN"))
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		Port:                 getEnv("PORT", "8080"),
 		SupabaseDBURL:        os.Getenv("SUPABASE_DB_URL"),
@@ -38,6 +47,8 @@ func Load() (*Config, error) {
 		OTELServiceNamespace: getEnv("OTEL_SERVICE_NAMESPACE", "my-application-group"),
 		OTELDeploymentEnv:    getEnv("OTEL_DEPLOYMENT_ENVIRONMENT", "production"),
 		CORSOrigins:          os.Getenv("CORS_ALLOWED_ORIGINS"),
+		MetricsBearerToken:   metricsBearerToken,
+		MetricsBearerFile:    metricsBearerFile,
 		Env:                  getEnv("APP_ENV", "development"),
 	}
 
@@ -60,6 +71,9 @@ func (c *Config) validate() error {
 			return fmt.Errorf("config: missing required env var %s", key)
 		}
 	}
+	if c.Env == "production" && c.MetricsBearerToken == "" {
+		return fmt.Errorf("config: missing METRICS_BEARER_TOKEN or METRICS_BEARER_TOKEN_FILE in production")
+	}
 	return nil
 }
 
@@ -68,4 +82,15 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func readSecretValue(filePath, fallback string) (string, error) {
+	if filePath == "" {
+		return strings.TrimSpace(fallback), nil
+	}
+	value, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("config: read %s: %w", filePath, err)
+	}
+	return strings.TrimSpace(string(value)), nil
 }

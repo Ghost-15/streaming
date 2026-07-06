@@ -1,6 +1,10 @@
 package streaming
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/Ghost-15/streaming/internal/infrastructure/telemetry"
+)
 
 // Client represents a connected listener on a stream.
 type Client struct {
@@ -32,6 +36,7 @@ func (h *Hub) Register(client *Client) {
 		h.streams[client.StreamID] = make(map[string]*Client)
 	}
 	h.streams[client.StreamID][client.UserID] = client
+	telemetry.ListenersPerStream.WithLabelValues(client.StreamID).Inc()
 }
 
 // Unregister removes a listener from a stream.
@@ -41,6 +46,7 @@ func (h *Hub) Unregister(client *Client) {
 	if listeners, ok := h.streams[client.StreamID]; ok {
 		delete(listeners, client.UserID)
 		close(client.Send)
+		telemetry.ListenersPerStream.WithLabelValues(client.StreamID).Dec()
 	}
 }
 

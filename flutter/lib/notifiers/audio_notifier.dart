@@ -2,8 +2,18 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../api/models/stream_model.dart';
+import '../api/repositories/stream_repository.dart';
+import '../services/storage_service.dart';
 
-enum AudioPlaybackState { idle, loading, playing, paused, stopped, error }
+enum AudioPlaybackState {
+  idle,
+  loading,
+  buffering,
+  playing,
+  paused,
+  stopped,
+  error,
+}
 
 class AudioNotifier extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -29,6 +39,7 @@ class AudioNotifier extends ChangeNotifier {
   bool get isPlaying => _playbackState == AudioPlaybackState.playing;
   bool get isPaused => _playbackState == AudioPlaybackState.paused;
   bool get isLoading => _playbackState == AudioPlaybackState.loading;
+  bool get isBuffering => _playbackState == AudioPlaybackState.buffering;
   bool get hasError => _playbackState == AudioPlaybackState.error;
 
   double get progress {
@@ -47,12 +58,15 @@ class AudioNotifier extends ChangeNotifier {
           _playbackState = AudioPlaybackState.idle;
           break;
         case ProcessingState.loading:
-        case ProcessingState.buffering:
           _playbackState = AudioPlaybackState.loading;
           break;
+        case ProcessingState.buffering:
+          _playbackState = AudioPlaybackState.buffering;
+          break;
         case ProcessingState.ready:
-          _playbackState =
-              state.playing ? AudioPlaybackState.playing : AudioPlaybackState.paused;
+          _playbackState = state.playing
+              ? AudioPlaybackState.playing
+              : AudioPlaybackState.paused;
           break;
         case ProcessingState.completed:
           _playbackState = AudioPlaybackState.stopped;
@@ -83,7 +97,18 @@ class AudioNotifier extends ChangeNotifier {
       _currentStream = stream;
       notifyListeners();
 
-      await _audioPlayer.setUrl(stream.streamUrl);
+      if (stream.streamUrl.endsWith('/listen')) {
+        await const StreamRepository().joinStream(stream.id);
+        _playbackState = AudioPlaybackState.playing;
+        notifyListeners();
+        return;
+      }
+
+      final token = await StorageService.get(StorageKey.token);
+      await _audioPlayer.setUrl(
+        stream.streamUrl,
+        headers: {if (token != null) 'Authorization': 'Bearer $token'},
+      );
       await _audioPlayer.play();
     } catch (e) {
       _playbackState = AudioPlaybackState.error;
@@ -139,8 +164,14 @@ class AudioNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> retry() async {
+    if (_currentStream == null) return;
+    await playStream(_currentStream!);
+  }
+
   void clearError() {
     _errorMessage = '';
+    _playbackState = AudioPlaybackState.idle;
     notifyListeners();
   }
 

@@ -51,7 +51,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password)
+	token, user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		middleware.Logger(c).Error().Err(err).Msg("register failed")
 		// Sentinel error check for email already registered
@@ -65,7 +65,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	middleware.Logger(c).Info().Str("user_id", user.ID).Msg("user registered")
 
-	c.JSON(http.StatusCreated, gin.H{"id": user.ID, "email": user.Email})
+	c.JSON(http.StatusCreated, gin.H{"token": token, "user": user})
 }
 
 // Login godoc.
@@ -86,13 +86,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.useCase.Login(c.Request.Context(), req.Email, req.Password)
+	token, user, err := h.useCase.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		middleware.Logger(c).Warn().Err(err).Msg("login rejected")
+		if errors.Is(err, usecase.ErrAccountSuspended) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "account suspended"})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 	middleware.Logger(c).Info().Msg("user authenticated")
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../api/repositories/auth_repository.dart';
@@ -39,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
       context.read<SessionNotifier>().onAuthentication(response);
-      context.go('/');
+      // GoRouter redirect handles navigation based on role via refreshListenable.
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

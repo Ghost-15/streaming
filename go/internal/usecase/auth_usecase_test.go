@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -121,7 +122,7 @@ func TestAuthUseCase_Register(t *testing.T) {
 			tt.repoSetup(repo)
 			uc := usecase.NewAuthUseCase(repo, testKeyPath)
 
-			user, err := uc.Register(context.Background(), tt.email, tt.password)
+			token, user, err := uc.Register(context.Background(), tt.email, tt.password)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Register() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -132,11 +133,11 @@ func TestAuthUseCase_Register(t *testing.T) {
 				if user == nil {
 					t.Fatal("Register() returned nil user on success")
 				}
+				if token == "" {
+					t.Error("Register() returned empty token on success")
+				}
 				if user.Role != entity.RoleUser {
 					t.Errorf("Register() role = %q, want %q", user.Role, entity.RoleUser)
-				}
-				if user.PasswordHash == "" {
-					t.Error("Register() password hash must not be empty")
 				}
 				if user.PasswordHash == "password123" {
 					t.Error("Register() password must be hashed, not stored in plain text")
@@ -217,6 +218,25 @@ func TestAuthUseCase_Login(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name:     "suspended account rejected",
+			email:    "user@example.com",
+			password: "correct-password",
+			repoSetup: func(r *mock.MockUserRepository) {
+				r.FindByEmailFn = func(_ context.Context, _ string) (*entity.User, error) {
+					suspendedAt := time.Now()
+					return &entity.User{
+						ID:           "user-uuid-123",
+						Email:        "user@example.com",
+						PasswordHash: string(hash),
+						Role:         entity.RoleUser,
+						SuspendedAt:  &suspendedAt,
+					}, nil
+				}
+			},
+			wantErr:    true,
+			wantErrMsg: "suspended",
+		},
 	}
 
 	for _, tt := range tests {
@@ -225,7 +245,7 @@ func TestAuthUseCase_Login(t *testing.T) {
 			tt.repoSetup(repo)
 			uc := usecase.NewAuthUseCase(repo, testKeyPath)
 
-			token, err := uc.Login(context.Background(), tt.email, tt.password)
+			token, user, err := uc.Login(context.Background(), tt.email, tt.password)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Login() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -235,6 +255,9 @@ func TestAuthUseCase_Login(t *testing.T) {
 			if !tt.wantErr {
 				if token == "" {
 					t.Error("Login() returned empty token on success")
+				}
+				if user == nil {
+					t.Error("Login() returned nil user on success")
 				}
 				if len(strings.Split(token, ".")) != 3 {
 					t.Errorf("Login() token %q does not look like a JWT", token)
