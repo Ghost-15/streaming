@@ -100,26 +100,73 @@ func (r *supabaseStreamRepo) Create(ctx context.Context, stream *entity.Stream) 
 	if stream != nil {
 		attrs = append(attrs, attribute.String("stream.status", string(stream.Status)))
 	}
-	_, span := startRepoSpan(ctx, "streams", "StreamRepository", "Create", "streams", "INSERT", attrs...)
+	ctx, span := startRepoSpan(ctx, "streams", "StreamRepository", "Create", "streams", "INSERT", attrs...)
 	defer finishRepoSpan(span, &err)
 
-	return errors.New("not implemented")
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+	if stream == nil {
+		return errors.New("stream_repo: nil stream")
+	}
+
+	const q = `
+		INSERT INTO streams (title, broadcaster_id, status)
+		VALUES ($1, $2, $3)
+		RETURNING id, started_at, ended_at, listener_count`
+	err = r.db.QueryRow(ctx, q, stream.Title, stream.BroadcasterID, stream.Status).
+		Scan(&stream.ID, &stream.StartedAt, &stream.EndedAt, &stream.ListenerCount)
+	if err != nil {
+		return fmt.Errorf("stream_repo: create: %w", err)
+	}
+	return nil
 }
 
 func (r *supabaseStreamRepo) UpdateStatus(ctx context.Context, id string, status entity.StreamStatus) (err error) {
-	_, span := startRepoSpan(ctx, "streams", "StreamRepository", "UpdateStatus", "streams", "UPDATE",
+	ctx, span := startRepoSpan(ctx, "streams", "StreamRepository", "UpdateStatus", "streams", "UPDATE",
 		attribute.String("stream.status", string(status)),
 	)
 	defer finishRepoSpan(span, &err)
 
-	return errors.New("not implemented")
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+
+	const q = `
+		UPDATE streams
+		SET status = $2,
+		    ended_at = CASE WHEN $2 = 'ended' THEN NOW() ELSE NULL END
+		WHERE id = $1`
+	tag, execErr := r.db.Exec(ctx, q, id, status)
+	if execErr != nil {
+		return fmt.Errorf("stream_repo: update status: %w", execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("stream_repo: stream %s not found", id)
+	}
+	return nil
 }
 
 func (r *supabaseStreamRepo) IncrementListeners(ctx context.Context, id string, delta int) (err error) {
-	_, span := startRepoSpan(ctx, "streams", "StreamRepository", "IncrementListeners", "streams", "UPDATE",
+	ctx, span := startRepoSpan(ctx, "streams", "StreamRepository", "IncrementListeners", "streams", "UPDATE",
 		attribute.Int("stream.listener_delta", delta),
 	)
 	defer finishRepoSpan(span, &err)
 
-	return errors.New("not implemented")
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+
+	const q = `
+		UPDATE streams
+		SET listener_count = GREATEST(listener_count + $2, 0)
+		WHERE id = $1`
+	tag, execErr := r.db.Exec(ctx, q, id, delta)
+	if execErr != nil {
+		return fmt.Errorf("stream_repo: increment listeners: %w", execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("stream_repo: stream %s not found", id)
+	}
+	return nil
 }

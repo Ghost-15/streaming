@@ -4,9 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/repository"
+)
+
+var (
+	ErrStreamInvalid   = errors.New("stream: invalid input")
+	ErrStreamNotFound  = errors.New("stream: not found")
+	ErrStreamForbidden = errors.New("stream: access forbidden")
 )
 
 // StreamUseCase defines the business operations for live streams.
@@ -28,13 +36,31 @@ func NewStreamUseCase(streamRepo repository.StreamRepository) StreamUseCase {
 }
 
 func (uc *streamUseCase) Start(ctx context.Context, broadcasterID, title string) (*entity.Stream, error) {
-	// TODO Sprint 1 — US-003: Create stream, publish to Hub
-	return nil, errors.New("not implemented")
+	if broadcasterID == "" || strings.TrimSpace(title) == "" {
+		return nil, ErrStreamInvalid
+	}
+
+	stream := &entity.Stream{
+		Title:         strings.TrimSpace(title),
+		BroadcasterID: broadcasterID,
+		Status:        entity.StreamStatusLive,
+		StartedAt:     time.Now(),
+	}
+	if err := uc.streamRepo.Create(ctx, stream); err != nil {
+		return nil, fmt.Errorf("stream: start: %w", err)
+	}
+	return stream, nil
 }
 
 func (uc *streamUseCase) End(ctx context.Context, streamID, broadcasterID string) error {
-	// TODO Sprint 1 — US-003: Update status to ended, close Hub channel
-	return errors.New("not implemented")
+	stream, err := uc.fetchOwned(ctx, streamID, broadcasterID)
+	if err != nil {
+		return err
+	}
+	if err := uc.streamRepo.UpdateStatus(ctx, stream.ID, entity.StreamStatusEnded); err != nil {
+		return fmt.Errorf("stream: end: %w", err)
+	}
+	return nil
 }
 
 func (uc *streamUseCase) ListActive(ctx context.Context) ([]entity.Stream, error) {
@@ -46,11 +72,45 @@ func (uc *streamUseCase) ListActive(ctx context.Context) ([]entity.Stream, error
 }
 
 func (uc *streamUseCase) Join(ctx context.Context, streamID, userID string) error {
-	// TODO Sprint 1 — US-003: Register listener in Hub, increment counter
-	return errors.New("not implemented")
+	if streamID == "" || userID == "" {
+		return ErrStreamInvalid
+	}
+	stream, err := uc.streamRepo.FindByID(ctx, streamID)
+	if err != nil {
+		return fmt.Errorf("stream: join lookup: %w", err)
+	}
+	if stream == nil || !stream.IsLive() {
+		return ErrStreamNotFound
+	}
+	if err := uc.streamRepo.IncrementListeners(ctx, streamID, 1); err != nil {
+		return fmt.Errorf("stream: join: %w", err)
+	}
+	return nil
 }
 
 func (uc *streamUseCase) Leave(ctx context.Context, streamID, userID string) error {
-	// TODO Sprint 1 — US-003: Unregister listener, decrement counter
-	return errors.New("not implemented")
+	if streamID == "" || userID == "" {
+		return ErrStreamInvalid
+	}
+	if err := uc.streamRepo.IncrementListeners(ctx, streamID, -1); err != nil {
+		return fmt.Errorf("stream: leave: %w", err)
+	}
+	return nil
+}
+
+func (uc *streamUseCase) fetchOwned(ctx context.Context, streamID, broadcasterID string) (*entity.Stream, error) {
+	if streamID == "" || broadcasterID == "" {
+		return nil, ErrStreamInvalid
+	}
+	stream, err := uc.streamRepo.FindByID(ctx, streamID)
+	if err != nil {
+		return nil, fmt.Errorf("stream: lookup: %w", err)
+	}
+	if stream == nil {
+		return nil, ErrStreamNotFound
+	}
+	if stream.BroadcasterID != broadcasterID {
+		return nil, ErrStreamForbidden
+	}
+	return stream, nil
 }

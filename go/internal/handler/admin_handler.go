@@ -26,6 +26,10 @@ type UpdateRoleRequest struct {
 	Role entity.UserRole `json:"role" binding:"required"`
 }
 
+type SuspendUserRequest struct {
+	Suspend *bool `json:"suspend"`
+}
+
 // ListUsers godoc
 // @Summary     List all users (paginated)
 // @Tags        admin
@@ -126,6 +130,12 @@ func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 func (h *AdminHandler) SuspendUser(c *gin.Context) {
 	id := c.Param("id")
 	suspend := c.Query("suspend") != "false"
+	if c.GetHeader("Content-Type") != "" {
+		var req SuspendUserRequest
+		if err := c.ShouldBindJSON(&req); err == nil && req.Suspend != nil {
+			suspend = *req.Suspend
+		}
+	}
 
 	if err := h.useCase.SuspendUser(c.Request.Context(), id, suspend); err != nil {
 		middleware.Logger(c).Error().Err(err).Str("user_id", id).Msg("admin: suspend user failed")

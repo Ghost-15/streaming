@@ -21,8 +21,8 @@ var ErrAccountSuspended = errors.New("auth: account suspended")
 
 // AuthUseCase defines the business operations for authentication.
 type AuthUseCase interface {
-	Register(ctx context.Context, email, password string) (*entity.User, error)
-	Login(ctx context.Context, email, password string) (token string, err error)
+	Register(ctx context.Context, email, password string) (token string, user *entity.User, err error)
+	Login(ctx context.Context, email, password string) (token string, user *entity.User, err error)
 }
 
 // authUseCase is the concrete implementation injected with its dependencies.
@@ -41,20 +41,20 @@ func NewAuthUseCase(userRepo repository.UserRepository, jwtPrivateKey string) Au
 
 // Register creates a new user account with role "user".
 // Returns an error if the email is already in use.
-func (uc *authUseCase) Register(ctx context.Context, email, password string) (*entity.User, error) {
+func (uc *authUseCase) Register(ctx context.Context, email, password string) (string, *entity.User, error) {
 	// 1. Check email uniqueness.
 	existing, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		return nil, fmt.Errorf("auth: register: %w", err)
+		return "", nil, fmt.Errorf("auth: register: %w", err)
 	}
 	if existing != nil {
-		return nil, ErrEmailAlreadyInUse
+		return "", nil, ErrEmailAlreadyInUse
 	}
 
 	// 2. Hash password with bcrypt (cost 12 — secure enough, fast enough for tests).
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("auth: register: hash password: %w", err)
+		return "", nil, fmt.Errorf("auth: register: hash password: %w", err)
 	}
 
 	// 3. Persist the new user; DB generates UUID and created_at.
@@ -64,46 +64,60 @@ func (uc *authUseCase) Register(ctx context.Context, email, password string) (*e
 		Role:         entity.RoleUser,
 	}
 	if err := uc.userRepo.Create(ctx, user); err != nil {
-		return nil, fmt.Errorf("auth: register: %w", err)
+		return "", nil, fmt.Errorf("auth: register: %w", err)
 	}
-	return user, nil
+	token, err := uc.signToken(user)
+	if err != nil {
+		return "", nil, err
+	}
+	user.PasswordHash = ""
+	return token, user, nil
 }
 
 // Login verifies credentials and returns a signed JWT RS256 token (TTL 1 h).
 // Always returns the same generic error for wrong email or wrong password to avoid
 // user enumeration (RFC 6749 §5.2 best practice).
-func (uc *authUseCase) Login(ctx context.Context, email, password string) (string, error) {
+func (uc *authUseCase) Login(ctx context.Context, email, password string) (string, *entity.User, error) {
 	const errInvalid = "auth: invalid credentials"
 
 	// 1. Look up user.
 	user, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		return "", fmt.Errorf("auth: login: %w", err)
+		return "", nil, fmt.Errorf("auth: login: %w", err)
 	}
 	if user == nil {
-		return "", errors.New(errInvalid)
+		return "", nil, errors.New(errInvalid)
 	}
 
 	// 2. Constant-time password check.
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", errors.New(errInvalid)
+		return "", nil, errors.New(errInvalid)
 	}
 
 	if user.IsSuspended() {
-		return "", ErrAccountSuspended
+		return "", nil, ErrAccountSuspended
 	}
 
-	// 3. Load the RSA private key from disk.
+	token, err := uc.signToken(user)
+	if err != nil {
+		return "", nil, err
+	}
+	user.PasswordHash = ""
+	return token, user, nil
+}
+
+func (uc *authUseCase) signToken(user *entity.User) (string, error) {
+	// Load the RSA private key from disk.
 	keyBytes, err := os.ReadFile(uc.jwtPrivateKey)
 	if err != nil {
-		return "", fmt.Errorf("auth: login: read private key: %w", err)
+		return "", fmt.Errorf("auth: sign token: read private key: %w", err)
 	}
 	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyBytes)
 	if err != nil {
-		return "", fmt.Errorf("auth: login: parse private key: %w", err)
+		return "", fmt.Errorf("auth: sign token: parse private key: %w", err)
 	}
 
-	// 4. Build and sign the JWT (RS256, exp 1 h).
+	// Build and sign the JWT (RS256, exp 1 h).
 	claims := entity.JWTClaims{
 		UserID: user.ID,
 		Email:  user.Email,
@@ -115,7 +129,7 @@ func (uc *authUseCase) Login(ctx context.Context, email, password string) (strin
 	}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(privateKey)
 	if err != nil {
-		return "", fmt.Errorf("auth: login: sign token: %w", err)
+		return "", fmt.Errorf("auth: sign token: %w", err)
 	}
 	return token, nil
 }

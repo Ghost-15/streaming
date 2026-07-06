@@ -26,15 +26,31 @@ class StreamModel {
       id: json['id'],
       title: json['title'],
       broadcasterId: json['broadcasterId'] ?? json['broadcaster_id'] ?? '',
-      broadcasterName: json['broadcasterName'] ?? json['broadcaster_name'] ?? '',
+      broadcasterName:
+          json['broadcasterName'] ?? json['broadcaster_name'] ?? '',
       listenerCount: json['listenerCount'] ?? json['listener_count'] ?? 0,
       description: json['description'] ?? '',
       streamUrl: json['streamUrl'] ?? json['stream_url'] ?? '',
-      isLive: json['isLive'] ?? json['is_live'] ?? false,
-      createdAt: DateTime.tryParse(
-            json['createdAt'] ?? json['created_at'] ?? '',
+      isLive: json['isLive'] ?? json['is_live'] ?? json['status'] == 'live',
+      createdAt:
+          DateTime.tryParse(
+            json['createdAt'] ?? json['created_at'] ?? json['started_at'] ?? '',
           ) ??
           DateTime.now(),
+    );
+  }
+
+  StreamModel copyWith({String? streamUrl}) {
+    return StreamModel(
+      id: id,
+      title: title,
+      broadcasterId: broadcasterId,
+      broadcasterName: broadcasterName,
+      listenerCount: listenerCount,
+      description: description,
+      streamUrl: streamUrl ?? this.streamUrl,
+      isLive: isLive,
+      createdAt: createdAt,
     );
   }
 }

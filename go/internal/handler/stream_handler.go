@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,7 +11,6 @@ import (
 )
 
 // StreamHandler handles HTTP requests for live streams.
-// Sprint 1 — US-003, US-007.
 type StreamHandler struct {
 	useCase usecase.StreamUseCase
 }
@@ -25,12 +25,21 @@ type StartRequest struct {
 	Title string `json:"title" binding:"required,min=3,max=100"`
 }
 
-// ListActive godoc
-// @Summary     List all live streams
-// @Tags        streams
-// @Produce     json
-// @Success     200 {array} entity.Stream
-// @Router      /api/v1/streams [get]
+func mapStreamError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, usecase.ErrStreamInvalid):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+	case errors.Is(err, usecase.ErrStreamNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+	case errors.Is(err, usecase.ErrStreamForbidden):
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+}
+
+// ListActive lists all currently live streams. This route is intentionally
+// public so anonymous users can browse public live streams.
 func (h *StreamHandler) ListActive(c *gin.Context) {
 	streams, err := h.useCase.ListActive(c.Request.Context())
 	if err != nil {
@@ -42,15 +51,14 @@ func (h *StreamHandler) ListActive(c *gin.Context) {
 	c.JSON(http.StatusOK, streams)
 }
 
-// Start godoc
-// @Summary     Start a new live stream (diffuseur role required)
-// @Tags        streams
-// @Accept      json
-// @Produce     json
-// @Param       body body StartRequest true "Stream payload"
-// @Success     201 {object} entity.Stream
-// @Router      /api/v1/streams [post]
+// Start creates a new live stream for the authenticated broadcaster.
 func (h *StreamHandler) Start(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
 	var req StartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		middleware.Logger(c).Warn().Err(err).Msg("invalid start stream payload")
@@ -58,31 +66,46 @@ func (h *StreamHandler) Start(c *gin.Context) {
 		return
 	}
 
-	// TODO Sprint 1 — US-003: extract broadcasterID from JWT claims
-	stream, err := h.useCase.Start(c.Request.Context(), "", req.Title)
+	stream, err := h.useCase.Start(c.Request.Context(), claims.UserID, req.Title)
 	if err != nil {
 		middleware.Logger(c).Error().Err(err).Msg("start stream failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		mapStreamError(c, err)
 		return
 	}
 	middleware.Logger(c).Info().Str("stream_id", stream.ID).Msg("stream started")
-
 	c.JSON(http.StatusCreated, stream)
 }
 
-// Listen serves a Server-Sent Events stream for a listener.
-// Sprint 1 — US-003.
+// Stop ends a live stream owned by the authenticated broadcaster.
+func (h *StreamHandler) Stop(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
+	if err := h.useCase.End(c.Request.Context(), c.Param("id"), claims.UserID); err != nil {
+		middleware.Logger(c).Warn().Err(err).Str("stream_id", c.Param("id")).Msg("stop stream failed")
+		mapStreamError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// Listen records that the authenticated listener joined a stream.
 func (h *StreamHandler) Listen(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
 	streamID := c.Param("id")
+	if err := h.useCase.Join(c.Request.Context(), streamID, claims.UserID); err != nil {
+		middleware.Logger(c).Warn().Err(err).Str("stream_id", streamID).Msg("listen stream failed")
+		mapStreamError(c, err)
+		return
+	}
 
-	// TODO Sprint 1 — US-003:
-	// 1. Register client in Hub
-	// 2. Set SSE headers
-	// 3. Stream audio chunks until disconnect
-
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-
-	c.JSON(http.StatusOK, gin.H{"stream_id": streamID, "status": "TODO"})
+	c.JSON(http.StatusOK, gin.H{"stream_id": streamID, "status": "listening"})
 }

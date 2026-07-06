@@ -57,10 +57,7 @@ class _AdminScreenState extends State<AdminScreen>
       ),
       body: TabBarView(
         controller: _tabs,
-        children: const [
-          _UsersTab(),
-          _StatsTab(),
-        ],
+        children: const [_UsersTab(), _StatsTab()],
       ),
     );
   }
@@ -120,7 +117,11 @@ class _UserTile extends StatelessWidget {
           ),
         ),
         title: Text(user.email),
-        subtitle: Text(user.fullName.trim().isEmpty ? '—' : user.fullName),
+        subtitle: Text(
+          user.isSuspended
+              ? 'Suspendu'
+              : (user.fullName.trim().isEmpty ? '-' : user.fullName),
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -187,10 +188,7 @@ class _UserTile extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [Role.user, Role.diffuseur, Role.admin].map((r) {
-                return RadioListTile<Role>(
-                  title: Text(r.apiValue),
-                  value: r,
-                );
+                return RadioListTile<Role>(title: Text(r.apiValue), value: r);
               }).toList(),
             ),
           ),
@@ -289,10 +287,10 @@ class _StatsTab extends StatelessWidget {
   }
 
   IconData _iconForRole(String role) => switch (role) {
-        'admin' => Icons.admin_panel_settings,
-        'diffuseur' => Icons.mic,
-        _ => Icons.person,
-      };
+    'admin' => Icons.admin_panel_settings,
+    'diffuseur' => Icons.mic,
+    _ => Icons.person,
+  };
 }
 
 class _StatCard extends StatelessWidget {
@@ -325,8 +323,8 @@ class _StatCard extends StatelessWidget {
                   Text(
                     value,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -354,8 +352,11 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline,
-                size: 48, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: 16),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),

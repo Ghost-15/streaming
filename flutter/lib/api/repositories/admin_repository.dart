@@ -13,7 +13,7 @@ class AdminRepository {
       uri: 'admin/users',
       queryParams: {'page': '$page', 'limit': '$limit'},
       parser: (res) {
-        final list = res['users'] as List;
+        final list = (res['data'] ?? res['users']) as List;
         return (
           users: list
               .map((e) => UserModel.fromJson(e as Map<String, dynamic>))
@@ -36,7 +36,7 @@ class AdminRepository {
     return ApiService().request(
       httpMethod: HttpMethod.post,
       uri: 'admin/users/$userId/suspend',
-      data: {'suspend': suspend},
+      queryParams: {'suspend': '$suspend'},
     );
   }
 

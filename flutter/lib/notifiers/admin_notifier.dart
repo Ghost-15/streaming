@@ -66,6 +66,7 @@ class AdminNotifier extends ChangeNotifier {
                 firstName: u.firstName,
                 lastName: u.lastName,
                 role: role,
+                suspendedAt: u.suspendedAt,
               )
             : u;
       }).toList();
@@ -79,6 +80,7 @@ class AdminNotifier extends ChangeNotifier {
   Future<void> suspendUser(String userId, {required bool suspend}) async {
     try {
       await _repo.suspendUser(userId, suspend: suspend);
+      await loadUsers();
     } catch (e) {
       _error = e.toString();
       notifyListeners();

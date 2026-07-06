@@ -49,7 +49,7 @@ func (r *adminRepo) ListUsers(ctx context.Context, page, limit int) (users []ent
 	}
 
 	const q = `
-		SELECT id, email, password_hash, first_name, last_name, role, created_at
+		SELECT id, email, password_hash, first_name, last_name, role, created_at, suspended_at
 		FROM users
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2`
@@ -65,7 +65,7 @@ func (r *adminRepo) ListUsers(ctx context.Context, page, limit int) (users []ent
 		var u entity.User
 		if scanErr := rows.Scan(
 			&u.ID, &u.Email, &u.PasswordHash,
-			&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt,
+			&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.SuspendedAt,
 		); scanErr != nil {
 			err = fmt.Errorf("admin_repo: scan user: %w", scanErr)
 			return nil, 0, err
@@ -96,14 +96,14 @@ func (r *adminRepo) GetUser(ctx context.Context, id string) (user *entity.User, 
 	}
 
 	const q = `
-		SELECT id, email, password_hash, first_name, last_name, role, created_at
+		SELECT id, email, password_hash, first_name, last_name, role, created_at, suspended_at
 		FROM users
 		WHERE id = $1`
 
 	u := &entity.User{}
 	err = r.db.QueryRow(ctx, q, id).Scan(
 		&u.ID, &u.Email, &u.PasswordHash,
-		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt,
+		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.SuspendedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		span.SetAttributes(attribute.Bool("db.result.found", false))

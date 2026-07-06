@@ -65,8 +65,8 @@ class HomeScreen extends StatelessWidget {
                 Text(
                   'Connectez-vous pour diffuser ou accéder au panel admin.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -86,23 +86,23 @@ class _DashboardButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (role) {
       Role.admin => FilledButton.tonalIcon(
-          onPressed: () => context.push('/admin'),
-          icon: const Icon(Icons.admin_panel_settings),
-          label: const Text('Panel admin'),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-        ),
+        onPressed: () => context.push('/admin'),
+        icon: const Icon(Icons.admin_panel_settings),
+        label: const Text('Panel admin'),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+      ),
       Role.diffuseur => FilledButton.tonalIcon(
-          onPressed: () => context.push('/broadcaster'),
-          icon: const Icon(Icons.mic),
-          label: const Text('Espace diffuseur'),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-        ),
+        onPressed: () => context.push('/broadcaster'),
+        icon: const Icon(Icons.mic),
+        label: const Text('Espace diffuseur'),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+      ),
       _ => FilledButton.tonalIcon(
-          onPressed: () => context.push('/profile'),
-          icon: const Icon(Icons.person),
-          label: const Text('Mon profil'),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-        ),
+        onPressed: () => context.push('/library'),
+        icon: const Icon(Icons.library_music),
+        label: const Text('Ma bibliotheque'),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+      ),
     };
   }
 }

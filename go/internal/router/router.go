@@ -68,6 +68,7 @@ func NewRouter(
 		diffuseur.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
 		{
 			diffuseur.POST("/streams", streamH.Start)
+			diffuseur.PUT("/streams/:id/stop", streamH.Stop)
 		}
 
 		protected.GET("/playlists", playlistH.List)
