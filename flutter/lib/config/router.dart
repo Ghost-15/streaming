@@ -26,8 +26,7 @@ final GoRouter router = GoRouter(
     ),
     GoRoute(
       path: '/broadcaster',
-      pageBuilder: (context, state) =>
-          buildPage(context, state, const BroadcasterScreen()),
+      pageBuilder: (context, state) => buildPage(context, state, const BroadcasterScreen()),
     ),
     GoRoute(
       path: '/player',
