@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/repository"
@@ -37,8 +38,11 @@ func (uc *streamUseCase) End(ctx context.Context, streamID, broadcasterID string
 }
 
 func (uc *streamUseCase) ListActive(ctx context.Context) ([]entity.Stream, error) {
-	// TODO Sprint 1 — US-007: Return active streams from repo
-	return nil, errors.New("not implemented")
+	streams, err := uc.streamRepo.ListActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("stream: list active: %w", err)
+	}
+	return streams, nil
 }
 
 func (uc *streamUseCase) Join(ctx context.Context, streamID, userID string) error {

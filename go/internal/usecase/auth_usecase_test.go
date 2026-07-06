@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -216,6 +217,25 @@ func TestAuthUseCase_Login(t *testing.T) {
 				}
 			},
 			wantErr: true,
+		},
+		{
+			name:     "suspended account rejected",
+			email:    "user@example.com",
+			password: "correct-password",
+			repoSetup: func(r *mock.MockUserRepository) {
+				r.FindByEmailFn = func(_ context.Context, _ string) (*entity.User, error) {
+					suspendedAt := time.Now()
+					return &entity.User{
+						ID:           "user-uuid-123",
+						Email:        "user@example.com",
+						PasswordHash: string(hash),
+						Role:         entity.RoleUser,
+						SuspendedAt:  &suspendedAt,
+					}, nil
+				}
+			},
+			wantErr:    true,
+			wantErrMsg: "suspended",
 		},
 	}
 

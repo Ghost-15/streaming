@@ -23,6 +23,8 @@ func NewUserRepo(db *pgxpool.Pool) repository.UserRepository {
 	return &supabaseUserRepo{db: db}
 }
 
+const userColumns = `id, email, password_hash, first_name, last_name, role, created_at, suspended_at`
+
 // FindByEmail looks up a user by email address.
 func (r *supabaseUserRepo) FindByEmail(ctx context.Context, email string) (user *entity.User, err error) {
 	ctx, span := startRepoSpan(ctx, "auth", "UserRepository", "FindByEmail", "users", "SELECT",
@@ -34,15 +36,12 @@ func (r *supabaseUserRepo) FindByEmail(ctx context.Context, email string) (user 
 		return nil, errDatabaseUnavailable
 	}
 
-	const q = `
-		SELECT id, email, password_hash, first_name, last_name, role, created_at
-		FROM users
-		WHERE email = $1`
+	const q = `SELECT ` + userColumns + ` FROM users WHERE email = $1`
 
 	u := &entity.User{}
 	err = r.db.QueryRow(ctx, q, email).Scan(
 		&u.ID, &u.Email, &u.PasswordHash,
-		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt,
+		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.SuspendedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		span.SetAttributes(attribute.Bool("db.result.found", false))
@@ -69,15 +68,12 @@ func (r *supabaseUserRepo) FindByID(ctx context.Context, id string) (user *entit
 		return nil, errDatabaseUnavailable
 	}
 
-	const q = `
-		SELECT id, email, password_hash, first_name, last_name, role, created_at
-		FROM users
-		WHERE id = $1`
+	const q = `SELECT ` + userColumns + ` FROM users WHERE id = $1`
 
 	u := &entity.User{}
 	err = r.db.QueryRow(ctx, q, id).Scan(
 		&u.ID, &u.Email, &u.PasswordHash,
-		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt,
+		&u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.SuspendedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		span.SetAttributes(attribute.Bool("db.result.found", false))
@@ -122,18 +118,42 @@ func (r *supabaseUserRepo) Create(ctx context.Context, user *entity.User) (err e
 
 // Update updates mutable user fields (role, first_name, last_name).
 func (r *supabaseUserRepo) Update(ctx context.Context, user *entity.User) (err error) {
-	_, span := startRepoSpan(ctx, "auth", "UserRepository", "Update", "users", "UPDATE",
+	ctx, span := startRepoSpan(ctx, "auth", "UserRepository", "Update", "users", "UPDATE",
 		attribute.String("user.role", string(user.Role)),
 	)
 	defer finishRepoSpan(span, &err)
 
-	return errors.New("not implemented")
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+
+	const q = `UPDATE users SET role = $1, first_name = $2, last_name = $3 WHERE id = $4`
+	tag, execErr := r.db.Exec(ctx, q, user.Role, user.FirstName, user.LastName, user.ID)
+	if execErr != nil {
+		return fmt.Errorf("user_repo: update: %w", execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user_repo: user %s not found", user.ID)
+	}
+	return nil
 }
 
 // Delete removes a user by UUID.
 func (r *supabaseUserRepo) Delete(ctx context.Context, id string) (err error) {
-	_, span := startRepoSpan(ctx, "auth", "UserRepository", "Delete", "users", "DELETE")
+	ctx, span := startRepoSpan(ctx, "auth", "UserRepository", "Delete", "users", "DELETE")
 	defer finishRepoSpan(span, &err)
 
-	return errors.New("not implemented")
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+
+	const q = `DELETE FROM users WHERE id = $1`
+	tag, execErr := r.db.Exec(ctx, q, id)
+	if execErr != nil {
+		return fmt.Errorf("user_repo: delete: %w", execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user_repo: user %s not found", id)
+	}
+	return nil
 }

@@ -12,13 +12,18 @@ const (
 )
 
 type User struct {
-	ID           string    `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	Role         UserRole  `json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           string     `json:"id"`
+	Email        string     `json:"email"`
+	PasswordHash string     `json:"-"`
+	FirstName    string     `json:"first_name"`
+	LastName     string     `json:"last_name"`
+	Role         UserRole   `json:"role"`
+	CreatedAt    time.Time  `json:"created_at"`
+	SuspendedAt  *time.Time `json:"suspended_at,omitempty"`
+}
+
+func (u *User) IsSuspended() bool {
+	return u.SuspendedAt != nil
 }
 
 func (u *User) FullName() string {

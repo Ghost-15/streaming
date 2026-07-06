@@ -145,14 +145,28 @@ func (r *adminRepo) UpdateUserRole(ctx context.Context, id string, role entity.U
 }
 
 // SuspendUser suspends or reactivates a user account.
-// Requires a DB migration to add the suspended_at column.
 func (r *adminRepo) SuspendUser(ctx context.Context, id string, suspend bool) (err error) {
-	_, span := startRepoSpan(ctx, "admin", "AdminRepository", "SuspendUser", "users", "UPDATE",
+	ctx, span := startRepoSpan(ctx, "admin", "AdminRepository", "SuspendUser", "users", "UPDATE",
 		attribute.Bool("user.suspend", suspend),
 	)
 	defer finishRepoSpan(span, &err)
 
-	return errors.New("admin_repo: suspend requires DB migration (add suspended_at column)")
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+
+	const q = `
+		UPDATE users
+		SET suspended_at = CASE WHEN $2 THEN NOW() ELSE NULL END
+		WHERE id = $1`
+	tag, execErr := r.db.Exec(ctx, q, id, suspend)
+	if execErr != nil {
+		return fmt.Errorf("admin_repo: suspend user: %w", execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("admin_repo: user %s not found", id)
+	}
+	return nil
 }
 
 // GetStats returns aggregate user statistics.

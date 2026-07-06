@@ -89,6 +89,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, err := h.useCase.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		middleware.Logger(c).Warn().Err(err).Msg("login rejected")
+		if errors.Is(err, usecase.ErrAccountSuspended) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "account suspended"})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
