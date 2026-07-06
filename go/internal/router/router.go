@@ -22,6 +22,7 @@ func NewRouter(
 	streamH *handler.StreamHandler,
 	playlistH *handler.PlaylistHandler,
 	adminH *handler.AdminHandler,
+	favoriteH *handler.FavoriteHandler,
 ) *gin.Engine {
 	pubKeyBytes, err := os.ReadFile(cfg.JWTPublicKeyPath)
 	if err != nil {
@@ -49,6 +50,8 @@ func NewRouter(
 			auth.POST("/register", authH.Register)
 			auth.POST("/login", authH.Login)
 		}
+
+		v1.GET("/streams", streamH.ListActive)
 	}
 
 	protected := r.Group("/api/v1")
@@ -59,7 +62,6 @@ func NewRouter(
 	))
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
-		protected.GET("/streams", streamH.ListActive)
 		protected.GET("/streams/:id/listen", streamH.Listen)
 
 		diffuseur := protected.Group("/")
@@ -75,6 +77,12 @@ func NewRouter(
 		protected.DELETE("/playlists/:id", playlistH.Delete)
 		protected.POST("/playlists/:id/tracks", playlistH.AddTrack)
 		protected.DELETE("/playlists/:id/tracks/:trackID", playlistH.RemoveTrack)
+		protected.PUT("/playlists/:id/tracks/reorder", playlistH.ReorderTracks)
+		protected.POST("/playlists/:id/next", playlistH.NextTrack)
+
+		protected.GET("/favorites", favoriteH.List)
+		protected.POST("/favorites", favoriteH.Add)
+		protected.DELETE("/favorites/:trackID", favoriteH.Remove)
 	}
 
 	admin := r.Group("/api/v1/admin")
