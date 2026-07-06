@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:provider/provider.dart';
 
+import 'api/repositories/admin_repository.dart';
 import 'api/repositories/stream_repository.dart';
 import 'config/router.dart';
 import 'config/theme.dart';
+import 'notifiers/admin_notifier.dart';
 import 'notifiers/audio_notifier.dart';
 import 'notifiers/broadcaster_notifier.dart';
 import 'notifiers/session_notifier.dart';
@@ -11,10 +14,15 @@ import 'notifiers/stream_notifier.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
+
+  final sessionNotifier = SessionNotifier();
+  final router = buildRouter(sessionNotifier);
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SessionNotifier()),
+        ChangeNotifierProvider.value(value: sessionNotifier),
         ChangeNotifierProvider(create: (_) => AudioNotifier()),
         ChangeNotifierProvider(
           create: (_) => StreamNotifier(const StreamRepository()),
@@ -22,14 +30,18 @@ void main() {
         ChangeNotifierProvider(
           create: (_) => BroadcasterNotifier(const StreamRepository()),
         ),
+        ChangeNotifierProvider(
+          create: (_) => AdminNotifier(const AdminRepository()),
+        ),
       ],
-      child: const StreamPulseApp(),
+      child: StreamPulseApp(router: router),
     ),
   );
 }
 
 class StreamPulseApp extends StatelessWidget {
-  const StreamPulseApp({super.key});
+  final dynamic router;
+  const StreamPulseApp({super.key, required this.router});
 
   @override
   Widget build(BuildContext context) {

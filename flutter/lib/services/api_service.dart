@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../config/app_config.dart';
 import '../helpers/exceptions.dart';
 import 'storage_service.dart';
 
@@ -17,7 +18,7 @@ class ApiService {
   ApiService._internal();
 
   final client = http.Client();
-  final baseUrl = 'http://localhost:8080/api';
+  final baseUrl = AppConfig.apiBaseUrl;
 
   Future<T> request<T>({
     required String uri,

@@ -38,8 +38,8 @@ class StreamRepository extends ModelRepository<StreamModel> {
     );
   }
 
-  Future<void> stopStream(String id) async {
-    await ApiService().request<void>(
+  Future<void> stopStream(String id) {
+    return ApiService().request(
       httpMethod: HttpMethod.put,
       uri: 'streams/$id/stop',
     );
