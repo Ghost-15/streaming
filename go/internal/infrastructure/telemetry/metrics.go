@@ -17,6 +17,12 @@ var (
 		Help: "Number of currently live streams.",
 	})
 
+	// OnlineUsers tracks the number of unique users currently connected to streams.
+	OnlineUsers = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "streampulse_online_users",
+		Help: "Number of unique users currently connected to a stream.",
+	})
+
 	// ListenersPerStream tracks the number of listeners attached to each stream (gauge).
 	// Incremented on Hub.Register, decremented on Hub.Unregister.
 	ListenersPerStream = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -28,6 +34,12 @@ var (
 	StreamStartTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "streampulse_stream_start_total",
 		Help: "Total number of streams started since process boot.",
+	})
+
+	// ListenerDisconnectTotal counts listener disconnects from live streams.
+	ListenerDisconnectTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "streampulse_listener_disconnect_total",
+		Help: "Total number of listener disconnects since process boot.",
 	})
 
 	// APIRequestDuration measures the duration of HTTP requests (histogram).

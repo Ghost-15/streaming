@@ -85,6 +85,11 @@ Services:
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000
 
+Grafana provisions the RNCP dashboard automatically from
+`go/infra/grafana/dashboards/streampulse.json`. See
+`docs/observability-rncp.md` for the dashboard panels, PromQL queries, alert
+rules, and Grafana Cloud import guidance.
+
 ## Health And Metrics
 
 Windows PowerShell:

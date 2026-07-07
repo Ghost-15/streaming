@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Ghost-15/streaming/internal/entity"
+	"github.com/Ghost-15/streaming/internal/infrastructure/telemetry"
 	"github.com/Ghost-15/streaming/internal/repository"
 )
 
@@ -49,6 +50,8 @@ func (uc *streamUseCase) Start(ctx context.Context, broadcasterID, title string)
 	if err := uc.streamRepo.Create(ctx, stream); err != nil {
 		return nil, fmt.Errorf("stream: start: %w", err)
 	}
+	telemetry.ActiveStreams.Inc()
+	telemetry.StreamStartTotal.Inc()
 	return stream, nil
 }
 
@@ -60,6 +63,7 @@ func (uc *streamUseCase) End(ctx context.Context, streamID, broadcasterID string
 	if err := uc.streamRepo.UpdateStatus(ctx, stream.ID, entity.StreamStatusEnded); err != nil {
 		return fmt.Errorf("stream: end: %w", err)
 	}
+	telemetry.ActiveStreams.Dec()
 	return nil
 }
 

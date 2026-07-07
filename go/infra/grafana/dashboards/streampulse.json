@@ -4,10 +4,16 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
-  "title": "StreamPulse — Backend Observability",
-  "tags": ["streampulse", "us-010", "rncp"],
+  "uid": "streampulse-rncp",
+  "title": "StreamPulse - RNCP Observability",
+  "tags": [
+    "streampulse",
+    "rncp",
+    "business",
+    "technical"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "10s",
@@ -18,21 +24,400 @@
   "panels": [
     {
       "id": 1,
-      "title": "API Latency (p50 / p95 / p99)",
+      "title": "Business metrics",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "title": "Online users",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "gray",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "streampulse_online_users",
+          "legendFormat": "online users",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Active streams",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "gray",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "streampulse_active_streams",
+          "legendFormat": "active streams",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Total listeners",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "gray",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(streampulse_listeners_per_stream)",
+          "legendFormat": "listeners",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Stream starts - last hour",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "gray",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "increase(streampulse_stream_start_total[1h])",
+          "legendFormat": "starts",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Listeners by stream",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(streampulse_api_request_duration_seconds_bucket[5m])))",
+          "expr": "streampulse_listeners_per_stream",
+          "legendFormat": "stream {{stream_id}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Audience and active streams over time",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "streampulse_online_users",
+          "legendFormat": "online users",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(streampulse_listeners_per_stream)",
+          "legendFormat": "listeners",
+          "refId": "B"
+        },
+        {
+          "expr": "streampulse_active_streams",
+          "legendFormat": "active streams",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Technical metrics",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 9,
+      "title": "API latency p50 / p95 / p99",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(streampulse_api_request_duration_seconds_bucket[5m])))",
           "legendFormat": "p50",
           "refId": "A"
         },
@@ -46,36 +431,99 @@
           "legendFormat": "p99",
           "refId": "C"
         }
-      ],
-      "alert": {
-        "name": "API p95 latency > 500ms (5m)",
-        "frequency": "1m",
-        "for": "5m",
-        "conditions": [
-          {
-            "type": "query",
-            "evaluator": { "type": "gt", "params": [0.5] },
-            "operator": { "type": "and" },
-            "query": { "params": ["B", "5m", "now"] },
-            "reducer": { "type": "avg", "params": [] }
-          }
-        ],
-        "noDataState": "no_data",
-        "executionErrorState": "alerting"
-      }
+      ]
     },
     {
-      "id": 2,
-      "title": "Request rate by status",
+      "id": 10,
+      "title": "5xx error rate",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 15
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(streampulse_api_request_duration_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum(rate(streampulse_api_request_duration_seconds_count[5m])), 0.001)",
+          "legendFormat": "5xx rate",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Requests per second by status",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 15
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -87,69 +535,90 @@
       ]
     },
     {
-      "id": 3,
-      "title": "Active streams & total listeners",
-      "type": "stat",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "options": {
-        "reduceOptions": {
-          "calcs": ["lastNotNull"]
-        }
-      },
-      "targets": [
-        {
-          "expr": "streampulse_active_streams",
-          "legendFormat": "Active streams",
-          "refId": "A"
-        },
-        {
-          "expr": "sum(streampulse_listeners_per_stream)",
-          "legendFormat": "Total listeners",
-          "refId": "B"
-        }
-      ]
-    },
-    {
-      "id": 4,
-      "title": "Error rate %",
+      "id": 12,
+      "title": "5xx errors and disconnects per minute",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit"
+          "unit": "opm"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
-          "expr": "sum(rate(streampulse_api_request_duration_seconds_count{status=~\"5..\"}[5m])) / sum(rate(streampulse_api_request_duration_seconds_count[5m]))",
-          "legendFormat": "5xx rate",
+          "expr": "sum(rate(streampulse_api_request_duration_seconds_count{status=~\"5..\"}[5m])) * 60",
+          "legendFormat": "5xx / min",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(streampulse_listener_disconnect_total[5m]) * 60",
+          "legendFormat": "disconnects / min",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Slowest API routes p95",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.95, sum by (le, route, method) (rate(streampulse_api_request_duration_seconds_bucket[5m]))))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{method}} {{route}}",
           "refId": "A"
         }
-      ],
-      "alert": {
-        "name": "Error rate > 5% (5m)",
-        "frequency": "1m",
-        "for": "5m",
-        "conditions": [
-          {
-            "type": "query",
-            "evaluator": { "type": "gt", "params": [0.05] },
-            "operator": { "type": "and" },
-            "query": { "params": ["A", "5m", "now"] },
-            "reducer": { "type": "avg", "params": [] }
-          }
-        ],
-        "noDataState": "no_data",
-        "executionErrorState": "alerting"
-      }
+      ]
     }
-  ]
+  ],
+  "templating": {
+    "list": []
+  },
+  "version": 2,
+  "weekStart": ""
 }

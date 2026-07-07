@@ -21,6 +21,19 @@ func TestActiveStreams_IncDec(t *testing.T) {
 	}
 }
 
+func TestOnlineUsers_IncDec(t *testing.T) {
+	telemetry.OnlineUsers.Set(0)
+	telemetry.OnlineUsers.Inc()
+	telemetry.OnlineUsers.Inc()
+	if got := testutil.ToFloat64(telemetry.OnlineUsers); got != 2 {
+		t.Errorf("OnlineUsers after 2 Inc = %v, want 2", got)
+	}
+	telemetry.OnlineUsers.Dec()
+	if got := testutil.ToFloat64(telemetry.OnlineUsers); got != 1 {
+		t.Errorf("OnlineUsers after Dec = %v, want 1", got)
+	}
+}
+
 func TestStreamStartTotal_Inc(t *testing.T) {
 	before := testutil.ToFloat64(telemetry.StreamStartTotal)
 	telemetry.StreamStartTotal.Inc()
@@ -28,6 +41,16 @@ func TestStreamStartTotal_Inc(t *testing.T) {
 	after := testutil.ToFloat64(telemetry.StreamStartTotal)
 	if after-before != 2 {
 		t.Errorf("StreamStartTotal delta = %v, want 2", after-before)
+	}
+}
+
+func TestListenerDisconnectTotal_Inc(t *testing.T) {
+	before := testutil.ToFloat64(telemetry.ListenerDisconnectTotal)
+	telemetry.ListenerDisconnectTotal.Inc()
+	telemetry.ListenerDisconnectTotal.Inc()
+	after := testutil.ToFloat64(telemetry.ListenerDisconnectTotal)
+	if after-before != 2 {
+		t.Errorf("ListenerDisconnectTotal delta = %v, want 2", after-before)
 	}
 }
 
