@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models/role.dart';
 import '../notifiers/session_notifier.dart';
+import 'mini_player.dart';
 
 class ScaffoldWithNavBar extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
@@ -23,7 +24,11 @@ class ScaffoldWithNavBar extends StatelessWidget {
 
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const MiniPlayer(),
+          NavigationBar(
         selectedIndex: tabIndex,
         onDestinationSelected: (i) => navigationShell.goBranch(
           branchMap[i],
@@ -69,6 +74,8 @@ class ScaffoldWithNavBar extends StatelessWidget {
                   label: 'Bibliothèque',
                 ),
               ],
+      ),
+        ],
       ),
     );
   }
