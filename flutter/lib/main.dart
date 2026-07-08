@@ -16,11 +16,12 @@ import 'notifiers/playlist_notifier.dart';
 import 'notifiers/session_notifier.dart';
 import 'notifiers/stream_notifier.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
 
   final sessionNotifier = SessionNotifier();
+  await sessionNotifier.init();
   final router = buildRouter(sessionNotifier);
 
   runApp(
@@ -59,6 +60,7 @@ class StreamPulseApp extends StatelessWidget {
       title: 'StreamPulse',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.dark,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );
