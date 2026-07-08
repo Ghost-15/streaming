@@ -122,7 +122,7 @@ func TestAuthUseCase_Register(t *testing.T) {
 			tt.repoSetup(repo)
 			uc := usecase.NewAuthUseCase(repo, testKeyPath)
 
-			token, user, err := uc.Register(context.Background(), tt.email, tt.password)
+			token, user, err := uc.Register(context.Background(), tt.email, tt.password, "", "", "user")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Register() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -136,8 +136,8 @@ func TestAuthUseCase_Register(t *testing.T) {
 				if token == "" {
 					t.Error("Register() returned empty token on success")
 				}
-				if user.Role != entity.RoleUser {
-					t.Errorf("Register() role = %q, want %q", user.Role, entity.RoleUser)
+				if user.Role != entity.RoleUser && user.Role != entity.RoleDiffuseur {
+					t.Errorf("Register() role = %q, must be user or diffuseur", user.Role)
 				}
 				if user.PasswordHash == "password123" {
 					t.Error("Register() password must be hashed, not stored in plain text")

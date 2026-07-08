@@ -21,7 +21,7 @@ var ErrAccountSuspended = errors.New("auth: account suspended")
 
 // AuthUseCase defines the business operations for authentication.
 type AuthUseCase interface {
-	Register(ctx context.Context, email, password string) (token string, user *entity.User, err error)
+	Register(ctx context.Context, email, password, firstName, lastName, role string) (token string, user *entity.User, err error)
 	Login(ctx context.Context, email, password string) (token string, user *entity.User, err error)
 }
 
@@ -39,9 +39,9 @@ func NewAuthUseCase(userRepo repository.UserRepository, jwtPrivateKey string) Au
 	}
 }
 
-// Register creates a new user account with role "user".
+// Register creates a new user account with the given role (user or diffuseur).
 // Returns an error if the email is already in use.
-func (uc *authUseCase) Register(ctx context.Context, email, password string) (string, *entity.User, error) {
+func (uc *authUseCase) Register(ctx context.Context, email, password, firstName, lastName, role string) (string, *entity.User, error) {
 	// 1. Check email uniqueness.
 	existing, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil {
@@ -58,10 +58,16 @@ func (uc *authUseCase) Register(ctx context.Context, email, password string) (st
 	}
 
 	// 3. Persist the new user; DB generates UUID and created_at.
+	userRole := entity.RoleUser
+	if role == string(entity.RoleDiffuseur) {
+		userRole = entity.RoleDiffuseur
+	}
 	user := &entity.User{
 		Email:        email,
 		PasswordHash: string(hash),
-		Role:         entity.RoleUser,
+		FirstName:    firstName,
+		LastName:     lastName,
+		Role:         userRole,
 	}
 	if err := uc.userRepo.Create(ctx, user); err != nil {
 		return "", nil, fmt.Errorf("auth: register: %w", err)
