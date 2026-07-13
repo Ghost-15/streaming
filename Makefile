@@ -58,7 +58,8 @@ migrate:
 		psql $$SUPABASE_DB_URL -f migrations/004_alter_users_and_playlist_tracks.sql && \
 		psql $$SUPABASE_DB_URL -f migrations/005_playlist_track_count.sql && \
 		psql $$SUPABASE_DB_URL -f migrations/006_user_suspend.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/007_favorites.sql
+		psql $$SUPABASE_DB_URL -f migrations/007_favorites.sql && \
+		psql $$SUPABASE_DB_URL -f migrations/008_listen_history_stream.sql
 	@echo "Done."
 
 # ── Flutter ───────────────────────────────────────────────────────────────────
