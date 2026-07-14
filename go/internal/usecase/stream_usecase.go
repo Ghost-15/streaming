@@ -28,12 +28,14 @@ type StreamUseCase interface {
 }
 
 type streamUseCase struct {
-	streamRepo repository.StreamRepository
+	streamRepo  repository.StreamRepository
+	historyRepo repository.ListenHistoryRepository
 }
 
 // NewStreamUseCase creates a new StreamUseCase.
-func NewStreamUseCase(streamRepo repository.StreamRepository) StreamUseCase {
-	return &streamUseCase{streamRepo: streamRepo}
+// historyRepo may be nil: listen history recording is best-effort.
+func NewStreamUseCase(streamRepo repository.StreamRepository, historyRepo repository.ListenHistoryRepository) StreamUseCase {
+	return &streamUseCase{streamRepo: streamRepo, historyRepo: historyRepo}
 }
 
 func (uc *streamUseCase) Start(ctx context.Context, broadcasterID, title string) (*entity.Stream, error) {
@@ -89,7 +91,21 @@ func (uc *streamUseCase) Join(ctx context.Context, streamID, userID string) erro
 	if err := uc.streamRepo.IncrementListeners(ctx, streamID, 1); err != nil {
 		return fmt.Errorf("stream: join: %w", err)
 	}
+	uc.recordListen(ctx, streamID, userID)
 	return nil
+}
+
+// recordListen persists a listen-history entry for a stream join (best-effort).
+func (uc *streamUseCase) recordListen(ctx context.Context, streamID, userID string) {
+	if uc.historyRepo == nil {
+		return
+	}
+	sID := streamID
+	_ = uc.historyRepo.Record(ctx, &entity.ListenHistory{
+		UserID:    userID,
+		StreamID:  &sID,
+		ListenedAt: time.Now(),
+	})
 }
 
 func (uc *streamUseCase) Leave(ctx context.Context, streamID, userID string) error {
