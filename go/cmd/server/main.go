@@ -80,10 +80,11 @@ func main() {
 	playlistRepo := supabase.NewPlaylistRepo(db)
 	adminRepo := supabase.NewAdminRepo(db)
 	favoriteRepo := supabase.NewFavoriteRepo(db)
+	historyRepo := supabase.NewListenHistoryRepo(db)
 
 	// 6. Use Cases (business layer)
 	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
-	streamUC := usecase.NewStreamUseCase(streamRepo)
+	streamUC := usecase.NewStreamUseCase(streamRepo, historyRepo)
 	playlistUC := usecase.NewPlaylistUseCase(playlistRepo)
 	adminUC := usecase.NewAdminUseCase(adminRepo)
 	favoriteUC := usecase.NewFavoriteUseCase(favoriteRepo)
