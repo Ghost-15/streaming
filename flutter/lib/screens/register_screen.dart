@@ -20,8 +20,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   String? _error;
-
-  // 'user' or 'diffuseur'
   String _selectedRole = 'user';
 
   @override
@@ -34,8 +32,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    final firstName = _firstNameController.text.trim();
-    final lastName = _lastNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -44,7 +40,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     if (password.length < 8) {
-      setState(() => _error = 'Le mot de passe doit contenir au moins 8 caractères.');
+      setState(
+        () => _error = 'Le mot de passe doit contenir au moins 8 caractères.',
+      );
       return;
     }
 
@@ -57,22 +55,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final response = await AuthRepository().register({
         'email': email,
         'password': password,
-        'first_name': firstName,
-        'last_name': lastName,
+        'first_name': _firstNameController.text.trim(),
+        'last_name': _lastNameController.text.trim(),
         'role': _selectedRole,
       });
-
       if (!mounted) return;
       context.read<SessionNotifier>().onAuthentication(response);
-      // GoRouter redirect handles navigation based on role.
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
-      if (msg.contains('409') || msg.contains('already')) {
-        setState(() => _error = 'Cet email est déjà utilisé.');
-      } else {
-        setState(() => _error = 'Une erreur est survenue. Réessaie.');
-      }
+      setState(() {
+        _error = (msg.contains('409') || msg.contains('already'))
+            ? 'Cet email est déjà utilisé.'
+            : 'Une erreur est survenue. Réessaie.';
+      });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -82,169 +78,206 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/login'),
-        ),
-        backgroundColor: cs.surfaceContainerLowest,
-        elevation: 0,
-      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Text(
-              'Rejoins StreamPulse',
-              style: tt.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Crée ton compte gratuitement',
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Role picker
-            Text(
-              'Je suis...',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _RoleCard(
-                    icon: Icons.headphones_rounded,
-                    title: 'Auditeur',
-                    description: 'Écoute des streams en direct',
-                    selected: _selectedRole == 'user',
-                    onTap: () => setState(() => _selectedRole = 'user'),
-                  ),
+            // ── Hero zone ──────────────────────────────────────────────────
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(24, topPadding + 16, 24, 40),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF3D1F9A),
+                    cs.surfaceContainerLowest,
+                  ],
+                  stops: const [0.0, 1.0],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _RoleCard(
-                    icon: Icons.mic_rounded,
-                    title: 'Diffuseur',
-                    description: 'Crée et diffuse tes propres streams',
-                    selected: _selectedRole == 'diffuseur',
-                    onTap: () => setState(() => _selectedRole = 'diffuseur'),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 28),
-
-            // Name fields
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _firstNameController,
-                    decoration: const InputDecoration(labelText: 'Prénom'),
-                    textCapitalization: TextCapitalization.words,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _lastNameController,
-                    decoration: const InputDecoration(labelText: 'Nom'),
-                    textCapitalization: TextCapitalization.words,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.email_outlined),
               ),
-              keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-            ),
-
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _passwordController,
-              decoration: InputDecoration(
-                labelText: 'Mot de passe',
-                prefixIcon: const Icon(Icons.lock_outline_rounded),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: Colors.white70,
+                    onPressed: () => context.canPop()
+                        ? context.pop()
+                        : context.go('/login'),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
                   ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-                helperText: 'Minimum 8 caractères',
+                  const SizedBox(height: 24),
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.radio_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Rejoins StreamPulse',
+                    style: tt.headlineMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Crée ton compte gratuitement.',
+                    style: tt.bodyMedium?.copyWith(color: Colors.white60),
+                  ),
+                ],
               ),
-              obscureText: _obscurePassword,
             ),
 
-            // Error
-            if (_error != null) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: tt.bodySmall?.copyWith(color: cs.onErrorContainer),
+            // ── Form ───────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Role picker
+                  Text(
+                    'Je suis...',
+                    style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _RoleCard(
+                          icon: Icons.headphones_rounded,
+                          title: 'Auditeur',
+                          description: 'Écoute des streams en direct',
+                          selected: _selectedRole == 'user',
+                          onTap: () => setState(() => _selectedRole = 'user'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _RoleCard(
+                          icon: Icons.mic_rounded,
+                          title: 'Diffuseur',
+                          description: 'Diffuse tes propres streams',
+                          selected: _selectedRole == 'diffuseur',
+                          onTap: () =>
+                              setState(() => _selectedRole = 'diffuseur'),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Name row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _firstNameController,
+                          decoration:
+                              const InputDecoration(labelText: 'Prénom'),
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.next,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _lastNameController,
+                          decoration: const InputDecoration(labelText: 'Nom'),
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.next,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  TextField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.next,
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  TextField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(
+                      labelText: 'Mot de passe',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      helperText: 'Minimum 8 caractères',
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                     ),
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _isLoading ? null : _register(),
+                  ),
+
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    _ErrorBanner(message: _error!),
                   ],
-                ),
-              ),
-            ],
 
-            const SizedBox(height: 28),
+                  const SizedBox(height: 28),
 
-            // Submit button
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _isLoading ? null : _register,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Créer mon compte'),
-              ),
-            ),
+                  FilledButton(
+                    onPressed: _isLoading ? null : _register,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Créer mon compte'),
+                  ),
 
-            const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-            // Login link
-            Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Déjà un compte ?', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
-                  TextButton(
-                    onPressed: () => context.go('/login'),
-                    child: const Text('Se connecter'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Déjà un compte ?',
+                        style: tt.bodyMedium
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                      TextButton(
+                        onPressed: () => context.go('/login'),
+                        child: const Text('Se connecter'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -281,14 +314,17 @@ class _RoleCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? cs.primaryContainer.withValues(alpha: 0.3) : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(16),
+          color: selected
+              ? cs.primaryContainer.withValues(alpha: 0.25)
+              : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? cs.primary : cs.outlineVariant,
-            width: selected ? 2 : 1,
+            color: selected ? cs.primary : Colors.transparent,
+            width: 2,
           ),
         ),
         child: Column(
@@ -301,17 +337,28 @@ class _RoleCard extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: selected ? cs.primary : cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(10),
+                    color: selected
+                        ? cs.primary
+                        : cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     icon,
                     color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-                    size: 22,
+                    size: 20,
                   ),
                 ),
-                if (selected)
-                  Icon(Icons.check_circle_rounded, color: cs.primary, size: 20),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: selected
+                      ? Icon(
+                          Icons.check_circle_rounded,
+                          key: const ValueKey('check'),
+                          color: cs.primary,
+                          size: 18,
+                        )
+                      : const SizedBox(key: ValueKey('empty'), width: 18),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -322,7 +369,7 @@ class _RoleCard extends StatelessWidget {
                 color: selected ? cs.primary : cs.onSurface,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               description,
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -330,6 +377,39 @@ class _RoleCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Shared error banner ───────────────────────────────────────────────────────
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.errorContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onErrorContainer,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../api/models/playlist_model.dart';
 import '../api/models/role.dart';
 import '../api/models/stream_model.dart';
+import '../api/models/track_model.dart';
 import '../notifiers/audio_notifier.dart';
+import '../notifiers/favorite_notifier.dart';
+import '../notifiers/playlist_notifier.dart';
 import '../notifiers/session_notifier.dart';
 import '../notifiers/stream_notifier.dart';
 import '../widgets/stream_card.dart';
@@ -22,6 +26,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StreamNotifier>().loadActive();
+      if (context.read<SessionNotifier>().isAuthenticated) {
+        context.read<PlaylistNotifier>().load();
+        context.read<FavoriteNotifier>().load();
+      }
     });
   }
 
@@ -37,55 +45,90 @@ class _HomeScreenState extends State<HomeScreen> {
     context.go('/player');
   }
 
+  Future<void> _refresh() async {
+    final isAuth = context.read<SessionNotifier>().isAuthenticated;
+    await context.read<StreamNotifier>().loadActive();
+    if (!mounted) return;
+    if (isAuth) {
+      context.read<PlaylistNotifier>().load();
+      context.read<FavoriteNotifier>().load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionNotifier>();
     final streams = context.watch<StreamNotifier>();
+    final playlists = context.watch<PlaylistNotifier>();
+    final favorites = context.watch<FavoriteNotifier>();
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () => context.read<StreamNotifier>().loadActive(),
+        onRefresh: _refresh,
         child: CustomScrollView(
           slivers: [
-            _AppBar(session: session),
-            _GreetingSliver(
-              greeting: _greeting(),
-              session: session,
-            ),
+            _HomeHeader(session: session, greeting: _greeting()),
+
+            // ── Playlists (connecté) ─────────────────────────────────────
+            if (session.isAuthenticated &&
+                playlists.playlists.isNotEmpty) ...[
+              const _SectionHeader('Mes playlists'),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverGrid.builder(
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.25,
+                  ),
+                  itemCount: playlists.playlists.length.clamp(0, 4),
+                  itemBuilder: (_, i) =>
+                      _PlaylistCard(playlist: playlists.playlists[i]),
+                ),
+              ),
+            ],
+
+            // ── Streams ──────────────────────────────────────────────────
             if (streams.isLoading)
               const _LoadingSliver()
             else if (streams.streams.isEmpty)
               const SliverFillRemaining(child: _EmptyState())
             else ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: _FeaturedCard(
-                    stream: streams.streams.first,
-                    onPlay: () => _play(context, streams.streams.first),
-                  ),
-                ),
-              ),
-              if (streams.streams.length > 1) ...[
-                const _SectionHeader('En direct maintenant'),
+              if (!session.isAuthenticated) ...[
                 SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 210,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: streams.streams.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 14),
-                      itemBuilder: (_, i) => StreamCard(
-                        stream: streams.streams[i],
-                        compact: true,
-                        onPlay: () => _play(context, streams.streams[i]),
-                      ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                    child: _FeaturedCard(
+                      stream: streams.streams.first,
+                      onPlay: () => _play(context, streams.streams.first),
                     ),
                   ),
                 ),
+                if (streams.streams.length > 1) ...[
+                  const _SectionHeader('En direct maintenant'),
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 210,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: streams.streams.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(width: 14),
+                        itemBuilder: (_, i) => StreamCard(
+                          stream: streams.streams[i],
+                          compact: true,
+                          onPlay: () => _play(context, streams.streams[i]),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
-              const _SectionHeader('Tous les streams'),
+              const _SectionHeader('En direct'),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverList.separated(
@@ -98,11 +141,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ],
+
+            // ── Favoris (connecté, après les lives) ──────────────────────
+            if (session.isAuthenticated &&
+                favorites.tracks.isNotEmpty) ...[
+              const _SectionHeader('Mes favoris'),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 64,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: favorites.tracks.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                    itemBuilder: (_, i) =>
+                        _FavoriteChip(track: favorites.tracks[i]),
+                  ),
+                ),
+              ),
+            ],
+
             if (!session.isAuthenticated)
               SliverToBoxAdapter(
                 child: _LoginBanner(onTap: () => context.go('/register')),
               ),
-            const SliverPadding(padding: EdgeInsets.only(bottom: 120)),
+            const SliverPadding(padding: EdgeInsets.only(bottom: 140)),
           ],
         ),
       ),
@@ -110,85 +173,131 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ── App bar ───────────────────────────────────────────────────────────────────
+// ── Home header — glassmorphism card combining logo + greeting ────────────────
 
-class _AppBar extends StatelessWidget {
+class _HomeHeader extends StatelessWidget {
   final SessionNotifier session;
-  const _AppBar({required this.session});
+  final String greeting;
+  const _HomeHeader({required this.session, required this.greeting});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final user = session.user;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final name = user?.firstName;
 
-    return SliverAppBar(
-      floating: true,
-      snap: true,
-      backgroundColor: cs.surfaceContainerLowest,
-      surfaceTintColor: Colors.transparent,
-      title: Row(
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: cs.primary,
-              borderRadius: BorderRadius.circular(8),
+          SizedBox(height: topPadding),
+          // ── Top bar: logo + actions ─────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child:
+                      Icon(Icons.radio_rounded, color: cs.onPrimary, size: 17),
+                ),
+                const SizedBox(width: 9),
+                Text(
+                  'StreamPulse',
+                  style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const Spacer(),
+                if (session.isAuthenticated && user != null) ...[
+                  if (user.role == Role.admin)
+                    IconButton(
+                      icon: const Icon(Icons.admin_panel_settings_outlined,
+                          size: 20),
+                      tooltip: 'Administration',
+                      color: cs.onSurfaceVariant,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => context.go('/admin'),
+                    ),
+                  if (user.role == Role.diffuseur)
+                    IconButton(
+                      icon: const Icon(Icons.mic_none_rounded, size: 20),
+                      tooltip: 'Studio',
+                      color: cs.onSurfaceVariant,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => context.go('/broadcaster'),
+                    ),
+                  GestureDetector(
+                    onTap: () => _showAccountMenu(context, session),
+                    child: CircleAvatar(
+                      radius: 15,
+                      backgroundColor: cs.primaryContainer,
+                      child: Text(
+                        _initial(user.firstName, user.email),
+                        style: tt.labelMedium?.copyWith(
+                          color: cs.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ] else ...[
+                  GestureDetector(
+                    onTap: () => context.go('/login'),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: cs.outlineVariant, width: 1),
+                      ),
+                      child: Icon(Icons.person_outline_rounded,
+                          size: 17, color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
             ),
-            child: Icon(Icons.radio_rounded, color: cs.onPrimary, size: 17),
           ),
-          const SizedBox(width: 10),
-          Text(
-            'StreamPulse',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          // ── Greeting ────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+            child: Text(
+              name != null && name.isNotEmpty
+                  ? '$greeting, $name'
+                  : greeting,
+              style: tt.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Text(
+              'Découvre les streams en direct',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 0.5,
+            color: cs.outlineVariant.withValues(alpha: 0.5),
           ),
         ],
       ),
-      actions: [
-        if (session.isAuthenticated && user != null) ...[
-          if (user.role == Role.admin)
-            IconButton(
-              icon: const Icon(Icons.admin_panel_settings_outlined),
-              tooltip: 'Administration',
-              onPressed: () => context.go('/admin'),
-            ),
-          if (user.role == Role.diffuseur)
-            IconButton(
-              icon: const Icon(Icons.mic_none_rounded),
-              tooltip: 'Diffuser',
-              onPressed: () => context.go('/broadcaster'),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => _showAccountMenu(context, session),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  _initial(user.firstName, user.email),
-                  style: tt.labelMedium?.copyWith(
-                    color: cs.onPrimaryContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ] else
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilledButton.tonal(
-              onPressed: () => context.go('/login'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 36),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
-              child: const Text('Se connecter'),
-            ),
-          ),
-      ],
     );
   }
 
@@ -200,37 +309,90 @@ class _AppBar extends StatelessWidget {
 
   void _showAccountMenu(BuildContext context, SessionNotifier session) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final user = session.user!;
+
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: cs.surfaceContainer,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: cs.primaryContainer,
+                    child: Text(
+                      _initial(user.firstName, user.email),
+                      style: tt.titleMedium?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.fullName.trim().isNotEmpty
+                              ? user.fullName
+                              : user.email,
+                          style: tt.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          user.email,
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:
+                                cs.primaryContainer.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _roleLabel(user.role),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: cs.outlineVariant),
             ListTile(
-              leading: const Icon(Icons.person_outline_rounded),
+              leading:
+                  Icon(Icons.logout_rounded, color: cs.error, size: 20),
               title: Text(
-                session.user!.email,
-                style: const TextStyle(fontSize: 14),
+                'Se déconnecter',
+                style: tt.bodyMedium?.copyWith(color: cs.error),
               ),
-              subtitle: Text(_roleLabel(session.user!.role)),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.logout_rounded),
-              title: const Text('Se déconnecter'),
               onTap: () {
                 Navigator.pop(context);
                 session.logout();
@@ -244,45 +406,10 @@ class _AppBar extends StatelessWidget {
   }
 
   String _roleLabel(Role role) => switch (role) {
-    Role.admin => 'Administrateur',
-    Role.diffuseur => 'Diffuseur',
-    _ => 'Auditeur',
-  };
-}
-
-// ── Greeting ──────────────────────────────────────────────────────────────────
-
-class _GreetingSliver extends StatelessWidget {
-  final String greeting;
-  final SessionNotifier session;
-  const _GreetingSliver({required this.greeting, required this.session});
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    final name = session.user?.firstName;
-
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              name != null && name.isNotEmpty ? '$greeting, $name' : greeting,
-              style: tt.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Découvre les streams en direct',
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+        Role.admin => 'Administrateur',
+        Role.diffuseur => 'Diffuseur',
+        _ => 'Auditeur',
+      };
 }
 
 // ── Section header ────────────────────────────────────────────────────────────
@@ -293,12 +420,29 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
-        child: Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        padding: const EdgeInsets.fromLTRB(20, 32, 20, 14),
+        child: Row(
+          children: [
+            Container(
+              width: 3,
+              height: 18,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -320,10 +464,28 @@ class _FeaturedCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onPlay,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: SizedBox(
-          height: 220,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: accent.withValues(alpha: 0.28), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.22),
+              blurRadius: 24,
+              spreadRadius: -4,
+              offset: const Offset(0, 6),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(19),
+          child: SizedBox(
+            height: 220,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -414,7 +576,8 @@ class _FeaturedCard extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -497,9 +660,22 @@ class _LoginBanner extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: cs.primaryContainer.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+            color: cs.primaryContainer.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.35), width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: cs.primary.withValues(alpha: 0.12),
+                blurRadius: 20,
+                spreadRadius: -4,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -532,6 +708,139 @@ class _LoginBanner extends StatelessWidget {
   }
 }
 
+// ── Playlist card (horizontal carousel) ──────────────────────────────────────
+
+class _PlaylistCard extends StatelessWidget {
+  final PlaylistModel playlist;
+  const _PlaylistCard({required this.playlist});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return GestureDetector(
+      onTap: () => context.go('/library'),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant, width: 0.8),
+          boxShadow: [
+            BoxShadow(
+              color: cs.primary.withValues(alpha: 0.07),
+              blurRadius: 12,
+              spreadRadius: -4,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Center(
+                  child: Icon(
+                    Icons.queue_music_rounded,
+                    color: cs.primary.withValues(alpha: 0.65),
+                    size: 36,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              playlist.title,
+              style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              '${playlist.trackCount} titre${playlist.trackCount != 1 ? 's' : ''}',
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+}
+
+// ── Favorite chip (horizontal carousel) ──────────────────────────────────────
+
+class _FavoriteChip extends StatelessWidget {
+  final TrackModel track;
+  const _FavoriteChip({required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+            spreadRadius: -3,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.music_note_rounded, size: 15, color: cs.primary),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                track.title,
+                style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (track.artist.isNotEmpty)
+                Text(
+                  track.artist,
+                  style: TextStyle(
+                      fontSize: 11, color: cs.onSurfaceVariant),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.favorite_rounded,
+              size: 12, color: cs.error.withValues(alpha: 0.65)),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Shared sub-widgets ────────────────────────────────────────────────────────
 
 class _LiveBadge extends StatelessWidget {
@@ -548,7 +857,14 @@ class _LiveBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: cs.error,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: cs.error.withValues(alpha: 0.4),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Text(
         'LIVE',

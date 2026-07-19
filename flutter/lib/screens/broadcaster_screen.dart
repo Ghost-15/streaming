@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../api/models/role.dart';
 import '../notifiers/broadcaster_notifier.dart';
 import '../notifiers/session_notifier.dart';
+import '../widgets/page_header.dart';
 
 class BroadcasterScreen extends StatefulWidget {
   const BroadcasterScreen({super.key});
@@ -33,45 +34,56 @@ class _BroadcasterScreenState extends State<BroadcasterScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mon Studio')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _LiveStatusCard(
-              state: broadcaster.state,
-              listenerCount: broadcaster.listenerCount,
-              streamTitle: broadcaster.currentStream?.title,
+            const PageHeader(
+              icon: Icons.mic_rounded,
+              title: 'Mon Studio',
+              subtitle: 'Gère et diffuse tes streams',
             ),
-            const SizedBox(height: 24),
-            if (!broadcaster.isStreaming) ...[
-              _TitleInput(
-                controller: _titleController,
-                enabled: !broadcaster.isLoading,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _LiveStatusCard(
+                    state: broadcaster.state,
+                    listenerCount: broadcaster.listenerCount,
+                    streamTitle: broadcaster.currentStream?.title,
+                  ),
+                  const SizedBox(height: 24),
+                  if (!broadcaster.isStreaming) ...[
+                    _TitleInput(
+                      controller: _titleController,
+                      enabled: !broadcaster.isLoading,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  if (broadcaster.hasError) ...[
+                    _ErrorBanner(
+                      message: broadcaster.errorMessage,
+                      onDismiss: () =>
+                          context.read<BroadcasterNotifier>().clearError(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (broadcaster.isLoading)
+                    const _LoadingCard()
+                  else
+                    _ToggleButton(
+                      isStreaming: broadcaster.isStreaming,
+                      onStart: () => context
+                          .read<BroadcasterNotifier>()
+                          .startStream(_titleController.text.trim()),
+                      onStop: () =>
+                          context.read<BroadcasterNotifier>().stopStream(),
+                    ),
+                  const SizedBox(height: 120),
+                ],
               ),
-              const SizedBox(height: 24),
-            ],
-            if (broadcaster.hasError) ...[
-              _ErrorBanner(
-                message: broadcaster.errorMessage,
-                onDismiss: () =>
-                    context.read<BroadcasterNotifier>().clearError(),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (broadcaster.isLoading)
-              const _LoadingCard()
-            else
-              _ToggleButton(
-                isStreaming: broadcaster.isStreaming,
-                onStart: () => context
-                    .read<BroadcasterNotifier>()
-                    .startStream(_titleController.text.trim()),
-                onStop: () =>
-                    context.read<BroadcasterNotifier>().stopStream(),
-              ),
-            const SizedBox(height: 120),
+            ),
           ],
         ),
       ),
@@ -373,12 +385,12 @@ class _UnauthorizedView extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Studio')),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(40),
+          padding: EdgeInsets.fromLTRB(40, topPadding + 40, 40, 40),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -387,9 +399,11 @@ class _UnauthorizedView extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(36),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: cs.outlineVariant, width: 0.8),
                 ),
-                child: Icon(Icons.lock_outline_rounded, size: 36, color: cs.onSurfaceVariant),
+                child: Icon(Icons.lock_outline_rounded,
+                    size: 30, color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 20),
               Text(

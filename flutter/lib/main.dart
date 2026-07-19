@@ -21,7 +21,7 @@ void main() async {
   usePathUrlStrategy();
 
   final sessionNotifier = SessionNotifier();
-  await sessionNotifier.init();
+  try { await sessionNotifier.init(); } catch (_) {}
   final router = buildRouter(sessionNotifier);
 
   runApp(
