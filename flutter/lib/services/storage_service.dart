@@ -1,6 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-enum StorageKey { token, refreshToken, userId }
+enum StorageKey { token, refreshToken, userId, userData }
 
 class StorageService {
   static const _storage = FlutterSecureStorage();

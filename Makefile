@@ -1,4 +1,4 @@
-.PHONY: dev build test lint vet clean docker-build migrate help
+.PHONY: dev build test lint vet clean docker-build migrate flutter-dev flutter-run flutter-test flutter-build-apk flutter-build-web help
 
 COVERAGE_THRESHOLD ?= 80
 
@@ -65,6 +65,13 @@ migrate:
 
 # ── Flutter ───────────────────────────────────────────────────────────────────
 
+# Read API_BASE_URL and FLUTTER_WEB_PORT from .env, pass to flutter via --dart-define
+flutter-dev:
+	@export $$(grep -v '^#' .env | grep -E '^(API_BASE_URL|FLUTTER_WEB_PORT)=' | xargs) && \
+		cd flutter && flutter run -d chrome \
+			--web-port=$${FLUTTER_WEB_PORT:-3001} \
+			--dart-define=API_BASE_URL=$${API_BASE_URL:-http://localhost:8080/api/v1}
+
 flutter-run:
 	cd flutter && flutter run
 
@@ -75,7 +82,9 @@ flutter-build-apk:
 	cd flutter && flutter build apk --release
 
 flutter-build-web:
-	cd flutter && flutter build web --release
+	@export $$(grep -v '^#' .env | grep -E '^API_BASE_URL=' | xargs) && \
+		cd flutter && flutter build web --release \
+			--dart-define=API_BASE_URL=$${API_BASE_URL:-http://localhost:8080/api/v1}
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
