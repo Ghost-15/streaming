@@ -115,7 +115,7 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown on SIGTERM / SIGINT (K8s sends SIGTERM)
+	// Graceful shutdown on SIGTERM / SIGINT.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
