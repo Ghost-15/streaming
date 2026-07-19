@@ -91,19 +91,20 @@ func (uc *streamUseCase) Join(ctx context.Context, streamID, userID string) erro
 	if err := uc.streamRepo.IncrementListeners(ctx, streamID, 1); err != nil {
 		return fmt.Errorf("stream: join: %w", err)
 	}
-	uc.recordListen(ctx, streamID, userID)
+	uc.recordStreamEvent(ctx, streamID, userID, entity.ListenEventJoin)
 	return nil
 }
 
-// recordListen persists a listen-history entry for a stream join (best-effort).
-func (uc *streamUseCase) recordListen(ctx context.Context, streamID, userID string) {
+// recordStreamEvent persists stream listen-history events best-effort.
+func (uc *streamUseCase) recordStreamEvent(ctx context.Context, streamID, userID string, event entity.ListenEvent) {
 	if uc.historyRepo == nil {
 		return
 	}
 	sID := streamID
 	_ = uc.historyRepo.Record(ctx, &entity.ListenHistory{
-		UserID:    userID,
-		StreamID:  &sID,
+		UserID:     userID,
+		StreamID:   &sID,
+		Event:      event,
 		ListenedAt: time.Now(),
 	})
 }
@@ -115,6 +116,7 @@ func (uc *streamUseCase) Leave(ctx context.Context, streamID, userID string) err
 	if err := uc.streamRepo.IncrementListeners(ctx, streamID, -1); err != nil {
 		return fmt.Errorf("stream: leave: %w", err)
 	}
+	uc.recordStreamEvent(ctx, streamID, userID, entity.ListenEventLeave)
 	return nil
 }
 

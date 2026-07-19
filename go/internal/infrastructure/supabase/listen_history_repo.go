@@ -34,12 +34,16 @@ func (r *supabaseListenHistoryRepo) Record(ctx context.Context, entry *entity.Li
 	if entry.TrackID != "" {
 		trackID = entry.TrackID
 	}
+	event := entry.Event
+	if event == "" {
+		event = entity.ListenEventJoin
+	}
 
 	const q = `
-		INSERT INTO listen_history (user_id, track_id, stream_id, duration_sec)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO listen_history (user_id, track_id, stream_id, event_type, duration_sec)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, listened_at`
-	if err = r.db.QueryRow(ctx, q, entry.UserID, trackID, entry.StreamID, entry.DurationSec).
+	if err = r.db.QueryRow(ctx, q, entry.UserID, trackID, entry.StreamID, event, entry.DurationSec).
 		Scan(&entry.ID, &entry.ListenedAt); err != nil {
 		return fmt.Errorf("listen_history_repo: record: %w", err)
 	}
@@ -57,7 +61,7 @@ func (r *supabaseListenHistoryRepo) ListByUser(ctx context.Context, userID strin
 	}
 
 	const q = `
-		SELECT id, user_id, COALESCE(track_id::text, ''), stream_id, listened_at, duration_sec
+		SELECT id, user_id, COALESCE(track_id::text, ''), stream_id, event_type, listened_at, duration_sec
 		FROM listen_history
 		WHERE user_id = $1
 		ORDER BY listened_at DESC`
@@ -72,7 +76,7 @@ func (r *supabaseListenHistoryRepo) ListByUser(ctx context.Context, userID strin
 	for rows.Next() {
 		var h entity.ListenHistory
 		if scanErr := rows.Scan(
-			&h.ID, &h.UserID, &h.TrackID, &h.StreamID, &h.ListenedAt, &h.DurationSec,
+			&h.ID, &h.UserID, &h.TrackID, &h.StreamID, &h.Event, &h.ListenedAt, &h.DurationSec,
 		); scanErr != nil {
 			err = fmt.Errorf("listen_history_repo: scan: %w", scanErr)
 			return nil, err

@@ -32,11 +32,16 @@ func newStreamEngine(h *handler.StreamHandler, userID string) *gin.Engine {
 	r.POST("/streams", h.Start)
 	r.PUT("/streams/:id/stop", h.Stop)
 	r.POST("/streams/:id/listen", h.Listen)
+	r.POST("/streams/:id/leave", h.Leave)
 	return r
 }
 
 func newStreamHandler(streamRepo *mock.MockStreamRepository) *handler.StreamHandler {
 	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil))
+}
+
+func newStreamHandlerWithHistory(streamRepo *mock.MockStreamRepository, historyRepo *mock.MockListenHistoryRepository) *handler.StreamHandler {
+	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, historyRepo))
 }
 
 func streamReq(engine *gin.Engine, method, path string, body interface{}) *httptest.ResponseRecorder {
@@ -192,6 +197,48 @@ func TestStreamHandler_Listen(t *testing.T) {
 		w := streamReq(newStreamEngine(newStreamHandler(repo), "u1"), "POST", "/streams/s1/listen", nil)
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("Listen status = %d, want 404", w.Code)
+		}
+	})
+}
+
+func TestStreamHandler_Leave(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			IncrementListenersFn: func(_ context.Context, id string, delta int) error {
+				if id != "s1" || delta != -1 {
+					t.Fatalf("IncrementListeners(%q, %d), want s1, -1", id, delta)
+				}
+				return nil
+			},
+		}
+		history := &mock.MockListenHistoryRepository{
+			RecordFn: func(_ context.Context, entry *entity.ListenHistory) error {
+				if entry.Event != entity.ListenEventLeave {
+					t.Fatalf("history event = %q, want leave", entry.Event)
+				}
+				return nil
+			},
+		}
+		w := streamReq(newStreamEngine(newStreamHandlerWithHistory(repo, history), "u1"), "POST", "/streams/s1/leave", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Leave status = %d, want 200", w.Code)
+		}
+	})
+
+	t.Run("missing claims", func(t *testing.T) {
+		w := streamReq(newStreamEngine(newStreamHandler(&mock.MockStreamRepository{}), ""), "POST", "/streams/s1/leave", nil)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Leave status = %d, want 401", w.Code)
+		}
+	})
+
+	t.Run("repo error", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			IncrementListenersFn: func(_ context.Context, _ string, _ int) error { return errStreamTest },
+		}
+		w := streamReq(newStreamEngine(newStreamHandler(repo), "u1"), "POST", "/streams/s1/leave", nil)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("Leave status = %d, want 500", w.Code)
 		}
 	})
 }

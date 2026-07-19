@@ -109,3 +109,21 @@ func (h *StreamHandler) Listen(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"stream_id": streamID, "status": "listening"})
 }
+
+// Leave records that the authenticated listener left a stream.
+func (h *StreamHandler) Leave(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
+	streamID := c.Param("id")
+	if err := h.useCase.Leave(c.Request.Context(), streamID, claims.UserID); err != nil {
+		middleware.Logger(c).Warn().Err(err).Str("stream_id", streamID).Msg("leave stream failed")
+		mapStreamError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"stream_id": streamID, "status": "left"})
+}

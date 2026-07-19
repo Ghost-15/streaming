@@ -63,6 +63,8 @@ func NewRouter(
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
 		protected.GET("/streams/:id/listen", streamH.Listen)
+		protected.POST("/streams/:id/listen", streamH.Listen)
+		protected.POST("/streams/:id/leave", streamH.Leave)
 
 		diffuseur := protected.Group("/")
 		diffuseur.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))

@@ -145,7 +145,13 @@ func TestStreamUseCase_Join(t *testing.T) {
 			IncrementListenersFn: func(_ context.Context, _ string, _ int) error { return nil },
 		}
 		history := &mock.MockListenHistoryRepository{
-			RecordFn: func(_ context.Context, _ *entity.ListenHistory) error { recorded = true; return nil },
+			RecordFn: func(_ context.Context, entry *entity.ListenHistory) error {
+				recorded = true
+				if entry.Event != entity.ListenEventJoin {
+					t.Fatalf("history event = %q, want join", entry.Event)
+				}
+				return nil
+			},
 		}
 		uc := usecase.NewStreamUseCase(repo, history)
 		if err := uc.Join(context.Background(), "s1", "u1"); err != nil {
@@ -175,14 +181,38 @@ func TestStreamUseCase_Join(t *testing.T) {
 }
 
 func TestStreamUseCase_Leave(t *testing.T) {
-	repo := &mock.MockStreamRepository{
-		IncrementListenersFn: func(_ context.Context, _ string, _ int) error { return nil },
-	}
-	uc := usecase.NewStreamUseCase(repo, nil)
-	if err := uc.Leave(context.Background(), "s1", "u1"); err != nil {
-		t.Fatalf("Leave() err = %v", err)
-	}
-	if err := uc.Leave(context.Background(), "", "u1"); !errors.Is(err, usecase.ErrStreamInvalid) {
-		t.Fatalf("Leave() empty err = %v, want ErrStreamInvalid", err)
-	}
+	t.Run("success records history", func(t *testing.T) {
+		recorded := false
+		repo := &mock.MockStreamRepository{
+			IncrementListenersFn: func(_ context.Context, id string, delta int) error {
+				if id != "s1" || delta != -1 {
+					t.Fatalf("IncrementListeners(%q, %d), want s1, -1", id, delta)
+				}
+				return nil
+			},
+		}
+		history := &mock.MockListenHistoryRepository{
+			RecordFn: func(_ context.Context, entry *entity.ListenHistory) error {
+				recorded = true
+				if entry.Event != entity.ListenEventLeave {
+					t.Fatalf("history event = %q, want leave", entry.Event)
+				}
+				return nil
+			},
+		}
+		uc := usecase.NewStreamUseCase(repo, history)
+		if err := uc.Leave(context.Background(), "s1", "u1"); err != nil {
+			t.Fatalf("Leave() err = %v", err)
+		}
+		if !recorded {
+			t.Error("Leave() did not record listen history")
+		}
+	})
+
+	t.Run("empty ids", func(t *testing.T) {
+		uc := usecase.NewStreamUseCase(&mock.MockStreamRepository{}, nil)
+		if err := uc.Leave(context.Background(), "", "u1"); !errors.Is(err, usecase.ErrStreamInvalid) {
+			t.Fatalf("Leave() empty err = %v, want ErrStreamInvalid", err)
+		}
+	})
 }
