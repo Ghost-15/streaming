@@ -15,12 +15,12 @@ import (
 
 // supabasePlaylistRepo implements repository.PlaylistRepository.
 type supabasePlaylistRepo struct {
-	db *pgxpool.Pool
+	db pgxDB
 }
 
 // NewPlaylistRepo returns a PlaylistRepository backed by Supabase.
 func NewPlaylistRepo(db *pgxpool.Pool) repository.PlaylistRepository {
-	return &supabasePlaylistRepo{db: db}
+	return &supabasePlaylistRepo{db: poolOrNil(db)}
 }
 
 const playlistColumns = `id, owner_id, title, is_queue, track_count, created_at`

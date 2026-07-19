@@ -15,12 +15,12 @@ import (
 
 // supabaseStreamRepo implements repository.StreamRepository.
 type supabaseStreamRepo struct {
-	db *pgxpool.Pool
+	db pgxDB
 }
 
 // NewStreamRepo returns a StreamRepository backed by Supabase.
 func NewStreamRepo(db *pgxpool.Pool) repository.StreamRepository {
-	return &supabaseStreamRepo{db: db}
+	return &supabaseStreamRepo{db: poolOrNil(db)}
 }
 
 const streamColumns = `id, title, broadcaster_id, status, started_at, ended_at, listener_count`
