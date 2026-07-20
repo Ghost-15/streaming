@@ -19,9 +19,10 @@ test:
 	cd go && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
 	go tool cover -func=coverage.out | tail -1
 
-# Run tests and enforce 80% coverage threshold (CI gate)
+# Run tests and enforce 80% coverage threshold (CI gate).
+# Mock packages (test helpers) are excluded from the coverage measurement.
 test-ci:
-	cd go && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
+	cd go && go test $$(go list ./... | grep -v '/mock$$') -coverprofile=../coverage.out -covermode=atomic
 	go tool cover -func=coverage.out | awk -v min="$(COVERAGE_THRESHOLD)" '/total/{if ($$3+0 < min) { print "Coverage below " min "%: " $$3; exit 1 } else { print "Coverage OK: " $$3 " >= " min "%" }}'
 
 # ── Quality ───────────────────────────────────────────────────────────────────
