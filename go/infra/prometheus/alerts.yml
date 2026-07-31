@@ -38,3 +38,30 @@ groups:
         annotations:
           summary: "Listener disconnect spike"
           description: "More than 20 listener disconnects per minute were observed during the last 5 minutes."
+
+      - alert: StreamPulseAudioDrops
+        expr: |
+          sum(rate(streampulse_audio_dropped_chunks_total[5m]))
+          /
+          clamp_min(sum(rate(streampulse_audio_chunks_total{direction="egress"}[5m])), 0.001)
+          > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          service: streampulse-api
+        annotations:
+          summary: "More than 1% of audio chunks are dropped"
+          description: "Listener buffers are saturated; inspect CPU, network throughput and slow clients."
+
+      - alert: StreamPulsePublisherWithoutListeners
+        expr: |
+          sum(streampulse_audio_broadcasters) > 0
+          and
+          sum(streampulse_listeners_per_stream) == 0
+        for: 10m
+        labels:
+          severity: info
+          service: streampulse-api
+        annotations:
+          summary: "Audio is being ingested without listeners"
+          description: "A publisher has sent audio for ten minutes without an active listener."

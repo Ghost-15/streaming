@@ -356,6 +356,101 @@
       ]
     },
     {
+      "id": 14,
+      "title": "Real audio data plane",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 15,
+      "title": "Audio ingest bitrate",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 15},
+      "fieldConfig": {"defaults": {"unit": "Bps", "decimals": 1}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "auto"},
+      "targets": [{
+        "expr": "sum(rate(streampulse_audio_ingest_bytes_total[1m]))",
+        "legendFormat": "ingest",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 16,
+      "title": "Audio egress bitrate",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 15},
+      "fieldConfig": {"defaults": {"unit": "Bps", "decimals": 1}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "auto"},
+      "targets": [{
+        "expr": "sum(rate(streampulse_audio_egress_bytes_total[1m]))",
+        "legendFormat": "egress",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 17,
+      "title": "Dropped audio chunks / second",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 15},
+      "fieldConfig": {"defaults": {"unit": "ops", "decimals": 2}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "auto"},
+      "targets": [{
+        "expr": "sum(rate(streampulse_audio_dropped_chunks_total[1m]))",
+        "legendFormat": "dropped",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 18,
+      "title": "Connected audio publishers",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 15},
+      "fieldConfig": {"defaults": {"unit": "none", "decimals": 0}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "textMode": "auto"},
+      "targets": [{
+        "expr": "sum(streampulse_audio_broadcasters)",
+        "legendFormat": "publishers",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 19,
+      "title": "Real audio bitrate by stream",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "fieldConfig": {"defaults": {"unit": "Bps", "decimals": 1}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum by (stream_id) (rate(streampulse_audio_ingest_bytes_total[1m]))", "legendFormat": "in {{stream_id}}", "refId": "A"},
+        {"expr": "sum by (stream_id) (rate(streampulse_audio_egress_bytes_total[1m]))", "legendFormat": "out {{stream_id}}", "refId": "B"}
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Audio health: chunks delivered vs dropped",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "fieldConfig": {"defaults": {"unit": "ops", "decimals": 2}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum(rate(streampulse_audio_chunks_total{direction=\"egress\"}[1m]))", "legendFormat": "delivered / s", "refId": "A"},
+        {"expr": "sum(rate(streampulse_audio_dropped_chunks_total[1m]))", "legendFormat": "dropped / s", "refId": "B"}
+      ]
+    },
+    {
       "id": 8,
       "title": "Technical metrics",
       "type": "row",
@@ -363,7 +458,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 28
       },
       "collapsed": false,
       "panels": []
@@ -380,7 +475,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 15
+        "y": 29
       },
       "fieldConfig": {
         "defaults": {
@@ -445,7 +540,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 15
+        "y": 29
       },
       "fieldConfig": {
         "defaults": {
@@ -505,7 +600,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 15
+        "y": 29
       },
       "fieldConfig": {
         "defaults": {
@@ -546,7 +641,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 37
       },
       "fieldConfig": {
         "defaults": {
@@ -593,7 +688,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 37
       },
       "fieldConfig": {
         "defaults": {
@@ -619,6 +714,6 @@
   "templating": {
     "list": []
   },
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

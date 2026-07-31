@@ -25,6 +25,18 @@ type StreamUseCase interface {
 	ListActive(ctx context.Context) ([]entity.Stream, error)
 	Join(ctx context.Context, streamID, userID string) error
 	Leave(ctx context.Context, streamID, userID string) error
+	CanBroadcast(ctx context.Context, streamID, broadcasterID string) error
+}
+
+func (uc *streamUseCase) CanBroadcast(ctx context.Context, streamID, broadcasterID string) error {
+	stream, err := uc.fetchOwned(ctx, streamID, broadcasterID)
+	if err != nil {
+		return err
+	}
+	if !stream.IsLive() {
+		return ErrStreamNotFound
+	}
+	return nil
 }
 
 type streamUseCase struct {

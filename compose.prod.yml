@@ -1,0 +1,124 @@
+name: streampulse
+
+services:
+  api:
+    image: "${IMAGE_REPOSITORY:?IMAGE_REPOSITORY is required}:${IMAGE_TAG:?IMAGE_TAG is required}"
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      PORT: "8080"
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_key
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public_key
+      METRICS_BEARER_TOKEN_FILE: /run/secrets/metrics_bearer_token
+      PPROF_ENABLED: "false"
+    expose:
+      - "8080"
+    secrets:
+      - jwt_private_key
+      - jwt_public_key
+      - metrics_bearer_token
+    networks:
+      - edge
+      - observability
+    restart: unless-stopped
+    stop_grace_period: 45s
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2.10-alpine
+    env_file:
+      - .env.production
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    depends_on:
+      - api
+      - grafana
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./go/infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./go/infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    secrets:
+      - metrics_bearer_token
+    networks:
+      - observability
+    depends_on:
+      - api
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    env_file:
+      - .env.production
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SERVER_ROOT_URL: "https://${GRAFANA_DOMAIN}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./go/infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./go/infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    secrets:
+      - grafana_admin_password
+    networks:
+      - edge
+      - observability
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  edge:
+  observability:
+    internal: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+  prometheus_data:
+  grafana_data:
+
+secrets:
+  jwt_private_key:
+    file: ./secrets/private.pem
+  jwt_public_key:
+    file: ./secrets/public.pem
+  metrics_bearer_token:
+    file: ./secrets/metrics_bearer_token
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password

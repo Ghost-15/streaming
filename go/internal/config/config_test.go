@@ -38,6 +38,52 @@ func TestLoadReadsMetricsTokenFile(t *testing.T) {
 	}
 }
 
+func TestLoadValidatesStreamingAndPprofConfiguration(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     string
+		value   string
+		wantErr string
+	}{
+		{name: "invalid duration", key: "STREAM_IDLE_TIMEOUT", value: "later", wantErr: "STREAM_IDLE_TIMEOUT"},
+		{name: "invalid chunk size", key: "STREAM_CHUNK_SIZE", value: "100", wantErr: "streaming limits"},
+		{name: "invalid boolean", key: "PPROF_ENABLED", value: "perhaps", wantErr: "PPROF_ENABLED"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setRequiredEnv(t)
+			t.Setenv(tt.key, tt.value)
+			_, err := Load()
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Load() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+
+	t.Run("production pprof accepts loopback", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("METRICS_BEARER_TOKEN", "token")
+		t.Setenv("PPROF_ENABLED", "true")
+		t.Setenv("PPROF_ADDR", "127.0.0.1:6060")
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+	})
+
+	t.Run("production pprof rejects public bind", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("METRICS_BEARER_TOKEN", "token")
+		t.Setenv("PPROF_ENABLED", "true")
+		t.Setenv("PPROF_ADDR", "0.0.0.0:6060")
+		_, err := Load()
+		if err == nil || !strings.Contains(err.Error(), "loopback") {
+			t.Fatalf("Load() error = %v, want loopback error", err)
+		}
+	})
+}
+
 func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("SUPABASE_DB_URL", "postgres://example")

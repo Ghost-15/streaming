@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../api/models/stream_model.dart';
-import '../api/repositories/stream_repository.dart';
 import '../services/storage_service.dart';
 
 enum AudioPlaybackState {
@@ -96,13 +95,6 @@ class AudioNotifier extends ChangeNotifier {
       _playbackState = AudioPlaybackState.loading;
       _currentStream = stream;
       notifyListeners();
-
-      if (stream.streamUrl.endsWith('/listen')) {
-        await const StreamRepository().joinStream(stream.id);
-        _playbackState = AudioPlaybackState.playing;
-        notifyListeners();
-        return;
-      }
 
       final token = await StorageService.get(StorageKey.token);
       await _audioPlayer.setUrl(

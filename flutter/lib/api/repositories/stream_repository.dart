@@ -27,6 +27,7 @@ class StreamRepository extends ModelRepository<StreamModel> {
 
   Future<StreamModel> joinStream(String id) {
     return ApiService().request(
+      httpMethod: HttpMethod.post,
       uri: 'streams/$id/listen',
       parser: (_) => StreamModel(
         id: id,
