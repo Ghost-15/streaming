@@ -13,8 +13,8 @@ PostgreSQL/Supabase and a Prometheus/Grafana observability stack.
 - Metrics derived from audio bytes actually read and written, not UI events.
 - Reproducible 10/100/500-listener benchmark, k6 scenario and isolated pprof.
 - Multi-stage non-root container image.
-- Production Compose stack behind Caddy with ACME HTTPS.
-- Immutable Docker Hub image tags, release gates, health check and automatic rollback.
+- Immutable Docker Hub SHA/`latest` tags with release gates and provenance.
+- Automatic Render deployment through a secret hook and managed HTTPS edge.
 
 ## Local start
 
@@ -72,21 +72,15 @@ fan-out and asserts real Prometheus ingress/egress counters.
 
 ## Production
 
-Copy `.env.production.example` to `.env.production`, create the JWT, metrics
-and Grafana secret files, point the two DNS names to the host, then run:
+`.github/workflows/deploy.yml` tests the release, publishes the Go image to
+Docker Hub with immutable SHA and `latest` tags, SBOM and provenance, then
+calls the Render deploy hook after a successful push to `main`. Render runs the
+container and provides the managed HTTPS edge.
 
-```bash
-IMAGE_REPOSITORY=dockerhub-user/streampulse-api \
-IMAGE_TAG=<full-git-sha> \
-./deploy/deploy.sh
-```
-
-Caddy obtains and renews certificates automatically. Only ports 80/443 are
-published by the application stack; metrics, pprof and the API container port
-remain private. `.github/workflows/deploy.yml` tests the release and publishes
-the SHA-tagged image to Docker Hub with SBOM/provenance. On `main`, it then
-calls the Render deploy hook. When `ENABLE_VPS_DEPLOY=true`, it may also deploy
-to a standalone host and roll back if the public HTTPS health check fails.
+Configure `DOCKERHUB_USERNAME`, `DOCKERHUB_REPOSITORY`, `DOCKERHUB_TOKEN` and
+`RENDER_DEPLOY_HOOK_URL` in GitHub. Configure database, JWT Secret Files, CORS
+and metrics credentials in Render. See the
+[production guide](docs/deploiement-https.md).
 
 ## Detailed documentation
 

@@ -2,7 +2,7 @@
 
 ## Portée
 
-Le plan de données audio utilise HTTP/1.1 ou HTTP/2 derrière Caddy :
+Le plan de données audio utilise HTTP derrière le reverse proxy HTTPS Render :
 
 - `PUT /api/v1/streams/:id/audio` reçoit un corps binaire chunked ;
 - `GET /api/v1/streams/:id/listen` renvoie le même média en continu ;

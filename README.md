@@ -10,8 +10,8 @@ goroutine lors des déconnexions ou d’un arrêt serveur.
 
 > **English summary:** StreamPulse is a Go + Flutter live-audio platform. It
 > ships real HTTP chunked audio fan-out, JWT/RBAC, graceful cancellation,
-> Prometheus/Grafana observability, reproducible load tests, an HTTPS Caddy
-> reverse proxy and an immutable production deployment pipeline.
+> Prometheus/Grafana observability, reproducible load tests, Docker Hub image
+> publication and an HTTPS Render deployment pipeline.
 
 ## Ce qui est livré
 
@@ -24,18 +24,19 @@ goroutine lors des déconnexions ou d’un arrêt serveur.
   Grafana et alertes Prometheus.
 - Tests Go, race detector, seuil de couverture CI, tests Flutter et build web.
 - Benchmark 10/100/500 auditeurs, scénario k6, CPU/heap/goroutines via pprof.
-- Production Docker Compose derrière Caddy (TLS ACME), secrets en fichiers,
-  image Docker Hub par SHA, health-check et rollback automatique.
+- Image Go publiée sur Docker Hub avec tags SHA/`latest`, SBOM et provenance.
+- Déploiement automatique Render par deploy hook, reverse proxy HTTPS géré et
+  health-check `/health`.
 
 ## Architecture
 
 ```text
-Flutter / diffuseur --HTTPS--> Caddy --HTTP interne--> API Go
-                                                    ├── PostgreSQL/Supabase
-                                                    ├── Hub audio en mémoire
-                                                    └── /metrics (réseau interne)
-Prometheus <---------------------------------------------┘
-Grafana <---------- Prometheus
+Flutter / diffuseur --HTTPS--> Render edge --> conteneur API Go
+                                                ├── PostgreSQL/Supabase
+                                                └── Hub audio en mémoire
+
+Docker Hub <-- image SHA + latest <-- GitHub Actions
+Render <-------- deploy hook -------- GitHub Actions
 ```
 
 Le Hub est volontairement local au processus. Une seule réplique API doit donc
@@ -109,8 +110,7 @@ modèle de capacité/coûts sont dans
 
 ## Observabilité
 
-`/metrics` est protégé par bearer token et n’est pas exposé par Caddy en
-production. Le dashboard provisionné contient :
+`/metrics` est protégé par bearer token. Le dashboard local provisionné contient :
 
 - auditeurs réels et diffuseurs connectés ;
 - débit audio entrant/sortant par stream ;
@@ -122,22 +122,13 @@ Voir [docs/observability-rncp.md](docs/observability-rncp.md).
 
 ## Production HTTPS
 
-La procédure complète, de la création DNS au rollback, est dans
-[docs/deploiement-https.md](docs/deploiement-https.md).
+Le workflow `.github/workflows/deploy.yml` vérifie Go et Flutter, publie
+l’image Go sur Docker Hub avec les tags SHA et `latest`, puis appelle le deploy
+hook Render après un push réussi sur `main`. Render exécute le conteneur et gère
+le reverse proxy HTTPS.
 
-```bash
-cp .env.production.example .env.production
-# Renseigner les domaines, la BDD et créer les quatre fichiers secrets.
-IMAGE_REPOSITORY=utilisateur-dockerhub/streampulse-api \
-IMAGE_TAG=<git-sha> \
-./deploy/deploy.sh
-```
-
-Le workflow `.github/workflows/deploy.yml` vérifie Go et Flutter, puis publie
-l'image sur Docker Hub avec SBOM/provenance. Sur la branche `main`, il appelle
-ensuite le deploy hook Render. Si `ENABLE_VPS_DEPLOY=true`, il peut également
-transférer la configuration sur un serveur autonome, attendre
-`https://API_DOMAIN/health` et revient au SHA précédent si le contrôle échoue.
+La configuration Docker Hub, Render, Secret Files, domaine et rollback est
+détaillée dans [docs/deploiement-https.md](docs/deploiement-https.md).
 
 ## Documentation
 
@@ -150,10 +141,9 @@ transférer la configuration sur un serveur autonome, attendre
 
 ## Sécurité
 
-Ne jamais committer `.env`, `.env.production`, les clés JWT, tokens métriques,
-mot de passe Grafana ou clé SSH. En production, seuls les ports 22 (restreint),
-80 et 443 sont publics ; pprof, Prometheus, PostgreSQL et le port 8080 restent
-privés.
+Ne jamais committer `.env`, les clés JWT, tokens métriques ou deploy hooks.
+Configurer ces valeurs dans GitHub et Render. pprof doit rester désactivé en
+production.
 
 ## Licence
 

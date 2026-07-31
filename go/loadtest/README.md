@@ -72,8 +72,8 @@ PPROF_BASE_URL=http://127.0.0.1:6060 sh loadtest/capture-pprof.sh
 go tool pprof -http=:0 loadtest/results/cpu.pb.gz
 ```
 
-En production, pprof reste désactivé. Pour un diagnostic exceptionnel, le lier
-à `127.0.0.1` et utiliser un tunnel SSH ; ne jamais le router dans Caddy.
+En production Render, pprof reste désactivé et ne doit jamais être exposé par
+le service public.
 
 Les profils binaires sont ignorés par Git, car ils peuvent contenir des
 informations sensibles. Le rapport synthétique et les commandes, eux, restent

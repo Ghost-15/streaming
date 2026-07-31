@@ -1,221 +1,155 @@
-# Mise en production HTTPS
+# Déploiement Docker Hub vers Render
 
-Cette procédure déploie une API StreamPulse mono-nœud avec Caddy, certificats
-ACME automatiques, Prometheus et Grafana. Elle ne requiert ni Kubernetes ni
-Terraform.
+La production StreamPulse utilise exclusivement Render. GitHub Actions construit
+l’image de l’API Go, la publie sur Docker Hub puis appelle un deploy hook
+Render. Render exécute le conteneur, fournit le reverse proxy public et gère
+automatiquement HTTPS.
 
-## 1. Préparer l’hôte
+## 1. Créer le dépôt Docker Hub
 
-Recommandation minimale pour 500 auditeurs à 128 kbit/s : Linux 64 bits,
-2 vCPU, 4 Gio RAM, SSD 40 Gio et au moins 200 Mbit/s. Installer Docker Engine,
-le plugin Compose, curl et tar.
+Créer un dépôt nommé `streampulse-api`, public ou privé. Créer ensuite un
+access token Docker Hub avec droit d’écriture ; ne jamais utiliser le mot de
+passe du compte dans GitHub.
 
-Créer un utilisateur de déploiement non root autorisé à exécuter Docker, puis
-un répertoire dédié :
-
-```bash
-sudo install -d -o streampulse -g streampulse /opt/streampulse
-```
-
-Firewall entrant :
-
-- 22/TCP uniquement depuis les IP d’administration/du runner ;
-- 80/TCP pour le challenge ACME et la redirection HTTPS ;
-- 443/TCP et 443/UDP pour HTTPS/HTTP3 ;
-- aucun accès public à 8080, 3000, 6060, 9090 ou PostgreSQL.
-
-## 2. DNS
-
-Créer deux enregistrements A/AAAA pointant vers l’hôte :
-
-```text
-api.example.com      -> IP du serveur
-grafana.example.com  -> IP du serveur
-```
-
-Attendre leur propagation et vérifier avec `dig +short`. Caddy ne pourra
-obtenir les certificats tant que les domaines ne résolvent pas vers l’hôte et
-que les ports 80/443 ne sont pas joignables.
-
-## 3. Configuration et secrets
-
-Sur le serveur :
-
-```bash
-cd /opt/streampulse
-cp .env.production.example .env.production
-install -m 700 -d secrets
-openssl genrsa -out secrets/private.pem 4096
-openssl rsa -in secrets/private.pem -pubout -out secrets/public.pem
-openssl rand -hex 32 > secrets/metrics_bearer_token
-openssl rand -base64 32 > secrets/grafana_admin_password
-chmod 600 .env.production secrets/*
-```
-
-Renseigner dans `.env.production` les vrais domaines, l’e-mail ACME,
-`SUPABASE_DB_URL`, `CORS_ALLOWED_ORIGINS` et les métadonnées OTEL. Ne pas ajouter
-de guillemets autour des valeurs.
-
-Le serveur doit déjà pouvoir tirer l’image Docker Hub. Pour une image privée :
-
-```bash
-docker login
-```
-
-Utiliser un token Docker Hub limité à la lecture sur le serveur.
-
-## 4. Premier déploiement manuel
-
-```bash
-cd /opt/streampulse
-chmod +x deploy/deploy.sh
-IMAGE_REPOSITORY=utilisateur-dockerhub/streampulse-api \
-IMAGE_TAG=<sha-git-complet> \
-./deploy/deploy.sh
-```
-
-Le script :
-
-1. vérifie les fichiers requis ;
-2. tire toutes les images ;
-3. applique `compose.prod.yml` ;
-4. attend jusqu’à 120 s le health-check HTTPS ;
-5. écrit `.deployed-tag` seulement après succès ;
-6. restaure automatiquement le tag précédent en cas d’échec.
-
-## 5. Pipeline GitHub Actions
-
-Dans `Settings > Secrets and variables > Actions`, créer au niveau du dépôt :
+Dans GitHub, ouvrir `Settings > Secrets and variables > Actions`.
 
 Variables :
 
-- `DOCKERHUB_USERNAME` : nom du compte Docker Hub ;
-- `DOCKERHUB_REPOSITORY` : par exemple `utilisateur/streampulse-api` ;
-- `API_DOMAIN` : domaine API sans `https://` (requis uniquement pour le
-  déploiement VPS ; le build de validation utilise sinon `api.example.com`) ;
-- `ENABLE_VPS_DEPLOY` : `false` pour publier uniquement sur Docker Hub, ou
-  `true` pour exécuter ensuite le déploiement SSH.
+| Nom | Exemple |
+| --- | --- |
+| `DOCKERHUB_USERNAME` | `mon-compte` |
+| `DOCKERHUB_REPOSITORY` | `mon-compte/streampulse-api` |
+| `API_DOMAIN` | `streampulse-api.onrender.com` ou domaine personnalisé |
 
-Secret :
+Secrets :
 
-- `DOCKERHUB_TOKEN` : access token Docker Hub avec droit d’écriture.
-- `RENDER_DEPLOY_HOOK_URL` : URL secrète du deploy hook créée dans Render.
+| Nom | Usage |
+| --- | --- |
+| `DOCKERHUB_TOKEN` | Publication de l’image |
+| `RENDER_DEPLOY_HOOK_URL` | Déclenchement du déploiement Render |
 
-### Déploiement automatique Render
+## 2. Créer le Web Service Render
 
-Configurer dans Render un Web Service basé sur l’image Docker :
+Dans Render, créer un Web Service à partir d’une image existante :
 
 ```text
-utilisateur-dockerhub/streampulse-api:latest
+docker.io/mon-compte/streampulse-api:latest
 ```
 
-Renseigner dans Render :
+Si le dépôt Docker Hub est privé, enregistrer les identifiants du registre dans
+Render. Configurer :
 
-| Type | Nom | Valeur |
-| --- | --- | --- |
-| Variable | `APP_ENV` | `production` |
-| Variable | `SUPABASE_DB_URL` | URL PostgreSQL avec TLS |
-| Variable | `CORS_ALLOWED_ORIGINS` | domaine exact du frontend |
-| Variable | `JWT_PRIVATE_KEY_PATH` | `/etc/secrets/private.pem` |
-| Variable | `JWT_PUBLIC_KEY_PATH` | `/etc/secrets/public.pem` |
-| Variable | `METRICS_BEARER_TOKEN` | token aléatoire long |
-| Variable | `PPROF_ENABLED` | `false` |
-| Secret File | `private.pem` | clé JWT privée |
-| Secret File | `public.pem` | clé JWT publique |
+- health check : `/health` ;
+- auto-deploy Render depuis Git : désactivé, car le deploy hook est utilisé ;
+- une seule instance tant que le Hub audio reste en mémoire ;
+- région proche de la base PostgreSQL/Supabase.
 
-Ne pas définir une valeur fixe pour `PORT` : Render l’injecte et l’API l’utilise
-directement. Configurer le health-check Render sur `/health`.
+Ne pas fixer `PORT` : Render l’injecte et l’API lit directement cette variable.
 
-À chaque push sur `main`, le workflow :
+## 3. Variables et Secret Files Render
 
-1. vérifie Go et Flutter ;
-2. construit l’image Go ;
-3. publie les tags SHA et `latest` sur Docker Hub ;
-4. appelle `RENDER_DEPLOY_HOOK_URL` uniquement après la publication réussie.
+Variables :
 
-Le hook est un secret : ne jamais le placer dans un fichier `.env` committé.
-Pour un dépôt Docker Hub privé, configurer aussi les identifiants du registre
-dans Render.
+| Nom | Valeur |
+| --- | --- |
+| `APP_ENV` | `production` |
+| `SUPABASE_DB_URL` | URL PostgreSQL avec `sslmode=require` |
+| `CORS_ALLOWED_ORIGINS` | origine exacte du frontend |
+| `JWT_PRIVATE_KEY_PATH` | `/etc/secrets/private.pem` |
+| `JWT_PUBLIC_KEY_PATH` | `/etc/secrets/public.pem` |
+| `METRICS_BEARER_TOKEN` | token aléatoire long |
+| `PPROF_ENABLED` | `false` |
+| `STREAM_MAX_DURATION` | `6h` |
+| `STREAM_IDLE_TIMEOUT` | `30s` |
+| `STREAM_WRITE_TIMEOUT` | `10s` |
 
-Si `ENABLE_VPS_DEPLOY=true`, créer aussi un environnement GitHub `production`
-avec approbation manuelle et les secrets suivants :
+Secret Files :
 
-- `PROD_HOST` : IP/nom SSH ;
-- `PROD_USER` : utilisateur de déploiement ;
-- `PROD_PATH` : `/opt/streampulse` ;
-- `PROD_SSH_PRIVATE_KEY` : clé Ed25519 dédiée ;
-- `PROD_KNOWN_HOSTS` : ligne de clé hôte vérifiée hors bande.
+| Nom | Contenu |
+| --- | --- |
+| `private.pem` | clé privée JWT RS256 |
+| `public.pem` | clé publique JWT RS256 |
 
-Le workflow `.github/workflows/deploy.yml` s’exécute sur `main`, sur un tag
-`v*` ou manuellement. Il teste Go avec race detector, analyse/teste/build
-Flutter et publie l’image Docker Hub sous le SHA complet avec SBOM et
-provenance. Render est déclenché uniquement par `main`. Le transfert SSH et
-l’appel du script VPS ne s’exécutent que lorsque `ENABLE_VPS_DEPLOY=true`.
-
-## 6. Vérifications HTTPS
+Les clés peuvent être générées localement :
 
 ```bash
-curl --fail --show-error https://api.example.com/health
-curl -I http://api.example.com/health
-openssl s_client -connect api.example.com:443 -servername api.example.com </dev/null
-docker compose --env-file .env.production -f compose.prod.yml ps
-docker compose --env-file .env.production -f compose.prod.yml logs --tail=100 caddy api
+openssl genrsa -out private.pem 4096
+openssl rsa -in private.pem -pubout -out public.pem
 ```
 
-Résultats attendus :
+Ne jamais committer ces deux fichiers.
 
-- `/health` renvoie 200 en HTTPS ;
-- HTTP redirige vers HTTPS ;
-- le certificat correspond au domaine et sa chaîne est valide ;
-- `/metrics` et `/debug/pprof/` renvoient 404 depuis Internet ;
-- Grafana exige un login et est joignable uniquement en HTTPS.
+## 4. Créer le deploy hook
 
-Caddy conserve certificats et état ACME dans `caddy_data`. Le renouvellement est
-automatique ; surveiller les logs Caddy et ne jamais supprimer ce volume durant
-un déploiement.
+Dans les paramètres du service Render, créer/copier le deploy hook puis
+l’enregistrer dans le secret GitHub `RENDER_DEPLOY_HOOK_URL`.
 
-## 7. Rollback et restauration
+Le workflow `.github/workflows/deploy.yml` suit cet ordre :
 
-Rollback automatique : le script redéploie `.deployed-tag` si le nouveau
-health-check échoue.
+```text
+push main
+  -> tests Go/Flutter
+  -> build go/Dockerfile
+  -> push Docker Hub :<SHA Git>
+  -> push Docker Hub :latest
+  -> POST RENDER_DEPLOY_HOOK_URL
+  -> Render tire :latest et remplace le service
+```
 
-Rollback manuel :
+Le job Render dépend du job Docker Hub : le hook n’est jamais appelé si les
+tests, le build ou le push échouent. Les tags `v*` et les lancements manuels
+publient l’image, mais seul un push sur `main` déclenche Render.
+
+## 5. HTTPS et domaine
+
+L’URL `onrender.com` fournie par Render est disponible en HTTPS. Pour un domaine
+personnalisé :
+
+1. ajouter le domaine dans les paramètres Render ;
+2. créer les enregistrements DNS demandés par Render ;
+3. attendre la validation et l’émission du certificat ;
+4. mettre à jour `CORS_ALLOWED_ORIGINS` et `API_DOMAIN`.
+
+Vérifications :
 
 ```bash
-cd /opt/streampulse
-IMAGE_REPOSITORY=utilisateur-dockerhub/streampulse-api \
-IMAGE_TAG=<ancien-sha> \
-./deploy/deploy.sh
+curl --fail --show-error https://streampulse-api.onrender.com/health
+curl -I http://streampulse-api.onrender.com/health
 ```
 
-Sauvegarder régulièrement :
+Résultats attendus : `/health` renvoie 200 en HTTPS et HTTP redirige vers HTTPS.
 
-- base PostgreSQL/Supabase avec la stratégie du fournisseur ;
-- volumes `grafana_data`, `prometheus_data` et `caddy_data` ;
-- `.env.production` et `secrets/` dans un coffre chiffré, jamais dans Git.
+## 6. Vérifier un déploiement
 
-Tester la restauration sur un hôte isolé. Les métriques ne sont pas une
-sauvegarde métier.
+Dans GitHub Actions :
 
-## 8. Exploitation et pprof
+- `Verify release` doit réussir ;
+- `Publish immutable image to Docker Hub` doit réussir ;
+- `Trigger Render deployment` doit réussir.
 
-Le dashboard Grafana surveille débit, drops, audience, 5xx et latence. pprof est
-désactivé dans `compose.prod.yml`. En incident exceptionnel :
+Dans Docker Hub, vérifier les tags `latest` et le SHA complet. Dans Render,
+contrôler que le digest tiré correspond à la nouvelle image, puis consulter les
+logs et `/health`.
 
-1. activer temporairement `PPROF_ENABLED=true` avec
-   `PPROF_ADDR=127.0.0.1:6060` (aucun port Docker publié) ;
-2. récupérer l’identifiant du conteneur API ;
-3. lancer un conteneur curl éphémère dans le même namespace réseau :
+## 7. Rollback
 
-   ```bash
-   api_id="$(docker compose --env-file .env.production -f compose.prod.yml ps -q api)"
-   docker run --rm --network "container:$api_id" curlimages/curl:8.15.0 \
-     --fail http://127.0.0.1:6060/debug/pprof/profile?seconds=30 \
-     > cpu.pb.gz
-   ```
+Chaque version reste disponible sur Docker Hub avec son SHA Git. Pour revenir à
+une version :
 
-4. analyser le fichier hors du serveur avec `go tool pprof`, puis désactiver
-   pprof et redéployer.
+1. sélectionner dans Render l’image
+   `mon-compte/streampulse-api:<ancien-sha>` ;
+2. lancer un déploiement manuel ;
+3. vérifier `/health` et les logs ;
+4. remettre `latest` après correction si nécessaire.
 
-Ne jamais ajouter pprof au Caddyfile : ses profils peuvent exposer des données
-internes.
+Le tag SHA est la preuve immuable ; `latest` sert uniquement au déploiement
+automatique courant.
+
+## 8. Observabilité et pprof
+
+Prometheus/Grafana restent disponibles dans la stack Docker locale. Pour la
+production, exporter les métriques vers un service compatible ou utiliser
+Grafana Cloud sans exposer publiquement `/metrics`.
+
+pprof doit rester désactivé sur Render : les profils peuvent contenir des
+informations internes et ne doivent pas être rendus publics.

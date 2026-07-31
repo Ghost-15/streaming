@@ -16,33 +16,14 @@ env:
   COVERAGE_MIN: "80"
 
 jobs:
-  deployment-config:
-    name: Deployment configuration
+  observability-config:
+    name: Observability configuration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Prepare non-secret validation files
+      - name: Validate dashboard JSON
         run: |
-          cp .env.example .env
-          cp .env.production.example .env.production
-          mkdir -p secrets
-          printf dummy > secrets/metrics_bearer_token
-          printf dummy > secrets/private.pem
-          printf dummy > secrets/public.pem
-          printf dummy > secrets/grafana_admin_password
-      - name: Validate Compose models and dashboard JSON
-        run: |
-          docker compose -f docker-compose.yml config --quiet
-          docker compose --env-file .env.production -f compose.prod.yml config --quiet
           jq empty go/infra/grafana/dashboards/streampulse.json
-      - name: Validate Caddy configuration
-        run: |
-          docker run --rm \
-            -e API_DOMAIN=api.example.com \
-            -e GRAFANA_DOMAIN=grafana.example.com \
-            -e ACME_EMAIL=ops@example.com \
-            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2.10-alpine validate --config /etc/caddy/Caddyfile
       - name: Validate Prometheus configuration and alerts
         run: |
           docker run --rm --entrypoint /bin/promtool \

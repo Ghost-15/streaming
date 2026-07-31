@@ -46,7 +46,7 @@ services. Avec une interface à 200 Mbit/s, le budget utile est donc 140 Mbit/s,
 soit environ 1 093 auditeurs à 128 kbit/s ou 546 à 256 kbit/s. Cette limite
 réseau arrive bien avant la limite du fan-out en mémoire mesurée ci-dessus.
 
-## Exemple de coût reproductible
+## Comparatif de coût self-hosted
 
 Exemple indicatif en région Paris, prix publics consultés le 31 juillet 2026,
 hors taxes :
@@ -56,7 +56,7 @@ hors taxes :
 | VM | Scaleway BASIC2-A2C-4G, 2 vCPU, 4 Gio, 200 Mbit/s | 16,79 € |
 | IPv4 flexible | 0,004 €/h × 730 h | 2,92 € |
 | Block Storage 5K | 40 Gio × 0,000130 €/Gio/h × 730 h | 3,80 € |
-| Caddy/Prometheus/Grafana | Conteneurs sur la même VM | inclus compute |
+| API/Prometheus/Grafana | Conteneurs sur la même VM | inclus compute |
 | Egress Instance | inclus dans le prix Instance selon la grille | 0 € |
 | **Total infrastructure applicative** | hors BDD/Supabase, sauvegardes et TVA | **23,51 €** |
 
@@ -65,7 +65,14 @@ et [tarifs Block Storage Scaleway](https://www.scaleway.com/en/pricing/storage/)
 Les tarifs changent : revalider le devis dans la console avant une soutenance
 ou une mise en production.
 
-Le coût marginal n’est pas proportionnel aux auditeurs tant que la bande
+Ce tableau reste un comparatif de capacité et non l’architecture actuellement
+déployée : la production utilise Render. Son coût réel doit être relevé dans le
+dashboard et sur la [grille officielle Render](https://render.com/pricing), en
+ajoutant notamment le volume sortant calculé ci-dessus. À 500 auditeurs
+permanents en 128 kbit/s, les 20,74 To/mois rendent le coût de bande passante
+déterminant.
+
+En self-hosted, le coût marginal n’est pas proportionnel aux auditeurs tant que la bande
 passante de l’Instance est incluse et reste sous 200 Mbit/s. Au-delà, il faut
 monter de gamme, répartir les streams ou placer la diffusion derrière un
 service média/CDN ; recalculer alors le coût d’egress réel.
