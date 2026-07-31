@@ -1,9 +1,10 @@
+import 'dart:js_interop';
+
 import 'package:flutter/foundation.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:web/web.dart' as web;
 
 import '../api/models/stream_model.dart';
 import '../api/repositories/stream_repository.dart';
-import '../services/storage_service.dart';
 
 enum AudioPlaybackState {
   idle,
@@ -16,25 +17,23 @@ enum AudioPlaybackState {
 }
 
 class AudioNotifier extends ChangeNotifier {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  web.HTMLAudioElement? _el;
+  int _version = 0;
 
   AudioPlaybackState _playbackState = AudioPlaybackState.idle;
   double _volume = 1.0;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
   StreamModel? _currentStream;
   String _errorMessage = '';
-  bool _isShuffled = false;
-  bool _isLooping = false;
 
   AudioPlaybackState get playbackState => _playbackState;
   double get volume => _volume;
-  Duration get position => _position;
-  Duration get duration => _duration;
+  Duration get position => Duration.zero;
+  Duration get duration => Duration.zero;
+  double get progress => 0.0;
   StreamModel? get currentStream => _currentStream;
   String get errorMessage => _errorMessage;
-  bool get isShuffled => _isShuffled;
-  bool get isLooping => _isLooping;
+  bool get isShuffled => false;
+  bool get isLooping => false;
 
   bool get isPlaying => _playbackState == AudioPlaybackState.playing;
   bool get isPaused => _playbackState == AudioPlaybackState.paused;
@@ -42,127 +41,122 @@ class AudioNotifier extends ChangeNotifier {
   bool get isBuffering => _playbackState == AudioPlaybackState.buffering;
   bool get hasError => _playbackState == AudioPlaybackState.error;
 
-  double get progress {
-    if (_duration.inMilliseconds == 0) return 0.0;
-    return _position.inMilliseconds / _duration.inMilliseconds;
-  }
-
-  AudioNotifier() {
-    _initAudioPlayer();
-  }
-
-  void _initAudioPlayer() {
-    _audioPlayer.playerStateStream.listen((state) {
-      switch (state.processingState) {
-        case ProcessingState.idle:
-          _playbackState = AudioPlaybackState.idle;
-          break;
-        case ProcessingState.loading:
-          _playbackState = AudioPlaybackState.loading;
-          break;
-        case ProcessingState.buffering:
-          _playbackState = AudioPlaybackState.buffering;
-          break;
-        case ProcessingState.ready:
-          _playbackState = state.playing
-              ? AudioPlaybackState.playing
-              : AudioPlaybackState.paused;
-          break;
-        case ProcessingState.completed:
-          _playbackState = AudioPlaybackState.stopped;
-          break;
-      }
-      notifyListeners();
-    });
-
-    _audioPlayer.positionStream.listen((pos) {
-      _position = pos;
-      notifyListeners();
-    });
-
-    _audioPlayer.durationStream.listen((dur) {
-      _duration = dur ?? Duration.zero;
-      notifyListeners();
-    });
-
-    _audioPlayer.volumeStream.listen((vol) {
-      _volume = vol;
-      notifyListeners();
-    });
-  }
-
   Future<void> playStream(StreamModel stream) async {
-    try {
-      _playbackState = AudioPlaybackState.loading;
-      _currentStream = stream;
-      notifyListeners();
+    final v = ++_version;
+    _stopElement();
 
-      if (stream.streamUrl.endsWith('/listen')) {
-        await const StreamRepository().joinStream(stream.id);
-        _playbackState = AudioPlaybackState.playing;
-        notifyListeners();
-        return;
+    _playbackState = AudioPlaybackState.loading;
+    _currentStream = stream;
+    notifyListeners();
+
+    const StreamRepository().joinStream(stream.id).catchError((_) {});
+
+    final el = web.HTMLAudioElement();
+    _el = el;
+    el.volume = _volume;
+    // Required for CORS: ensures the browser sends Origin header so the server
+    // can add Access-Control-Allow-Origin and the response is readable.
+    el.crossOrigin = 'anonymous';
+
+    el.addEventListener(
+      'waiting',
+      ((web.Event _) {
+        debugPrint('[Audio] waiting');
+        if (_version == v) _setState(AudioPlaybackState.buffering);
+      }).toJS,
+    );
+    el.addEventListener(
+      'stalled',
+      ((web.Event _) {
+        debugPrint('[Audio] stalled');
+        if (_version == v) _setState(AudioPlaybackState.buffering);
+      }).toJS,
+    );
+    el.addEventListener(
+      'playing',
+      ((web.Event _) {
+        debugPrint('[Audio] playing');
+        if (_version == v) _setState(AudioPlaybackState.playing);
+      }).toJS,
+    );
+    el.addEventListener(
+      'pause',
+      ((web.Event _) {
+        debugPrint('[Audio] pause');
+        if (_version == v && _playbackState != AudioPlaybackState.idle) {
+          _setState(AudioPlaybackState.paused);
+        }
+      }).toJS,
+    );
+    el.addEventListener(
+      'ended',
+      ((web.Event _) {
+        debugPrint('[Audio] ended — broadcaster stopped');
+        if (_version == v) {
+          _stopElement();
+          _currentStream = null;
+          _setState(AudioPlaybackState.idle);
+        }
+      }).toJS,
+    );
+    el.addEventListener(
+      'error',
+      ((web.Event _) {
+        debugPrint('[Audio] error');
+        if (_version == v) {
+          _errorMessage = 'Erreur de lecture audio';
+          _setState(AudioPlaybackState.error);
+        }
+      }).toJS,
+    );
+
+    debugPrint('[Audio] src → ${stream.streamUrl}');
+    el.src = stream.streamUrl;
+    el.load();
+    debugPrint('[Audio] play()');
+    el.play().toDart.then((_) {
+      debugPrint('[Audio] play() resolved');
+    }).catchError((Object e) {
+      debugPrint('[Audio] play() rejected: $e');
+      if (_version == v && _playbackState != AudioPlaybackState.idle) {
+        _errorMessage = 'Lecture bloquée: $e';
+        _setState(AudioPlaybackState.error);
       }
+      return null;
+    });
+  }
 
-      final token = await StorageService.get(StorageKey.token);
-      await _audioPlayer.setUrl(
-        stream.streamUrl,
-        headers: {if (token != null) 'Authorization': 'Bearer $token'},
-      );
-      await _audioPlayer.play();
-    } catch (e) {
-      _playbackState = AudioPlaybackState.error;
-      _errorMessage = 'Failed to play stream: $e';
-      notifyListeners();
+  void _stopElement() {
+    final el = _el;
+    if (el != null) {
+      el.pause();
+      el.src = '';
+      _el = null;
     }
   }
 
-  Future<void> pause() async {
-    try {
-      await _audioPlayer.pause();
-    } catch (e) {
-      _errorMessage = 'Failed to pause: $e';
-      notifyListeners();
-    }
-  }
+  Future<void> pause() async => _el?.pause();
 
   Future<void> resume() async {
-    try {
-      await _audioPlayer.play();
-    } catch (e) {
-      _errorMessage = 'Failed to resume: $e';
-      notifyListeners();
-    }
+    _el?.play().toDart.catchError((Object _) => null as JSAny?);
   }
 
   Future<void> stop() async {
-    try {
-      await _audioPlayer.stop();
-      _position = Duration.zero;
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = 'Failed to stop: $e';
-      notifyListeners();
-    }
+    _stopElement();
+    _currentStream = null;
+    _playbackState = AudioPlaybackState.idle;
+    notifyListeners();
   }
 
   Future<void> setVolume(double volume) async {
-    await _audioPlayer.setVolume(volume.clamp(0.0, 1.0));
-  }
-
-  Future<void> seek(Duration position) async {
-    await _audioPlayer.seek(position);
-  }
-
-  void toggleShuffle() {
-    _isShuffled = !_isShuffled;
+    _volume = volume.clamp(0.0, 1.0);
+    if (_el != null) _el!.volume = _volume;
     notifyListeners();
   }
 
-  void toggleLoop() {
-    _isLooping = !_isLooping;
-    notifyListeners();
-  }
+  Future<void> seek(Duration position) async {}
+  void toggleShuffle() {}
+  void toggleLoop() {}
 
   Future<void> retry() async {
     if (_currentStream == null) return;
@@ -171,13 +165,17 @@ class AudioNotifier extends ChangeNotifier {
 
   void clearError() {
     _errorMessage = '';
-    _playbackState = AudioPlaybackState.idle;
+    _setState(AudioPlaybackState.idle);
+  }
+
+  void _setState(AudioPlaybackState s) {
+    _playbackState = s;
     notifyListeners();
   }
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    _stopElement();
     super.dispose();
   }
 }

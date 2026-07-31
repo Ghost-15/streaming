@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -132,17 +133,18 @@ func (r *supabaseStreamRepo) UpdateStatus(ctx context.Context, id string, status
 		return errDatabaseUnavailable
 	}
 
-	const q = `
-		UPDATE streams
-		SET status = $2,
-		    ended_at = CASE WHEN $2 = 'ended' THEN NOW() ELSE NULL END
-		WHERE id = $1`
-	tag, execErr := r.db.Exec(ctx, q, id, status)
+	// Compute ended_at in Go to avoid PostgreSQL SQLSTATE 42P08 (inconsistent
+	// type inference when the same parameter $2 appears in both SET and CASE).
+	var endedAt *time.Time
+	if status == entity.StreamStatusEnded {
+		now := time.Now()
+		endedAt = &now
+	}
+
+	const q = `UPDATE streams SET status = $2, ended_at = $3 WHERE id = $1`
+	_, execErr := r.db.Exec(ctx, q, id, status, endedAt)
 	if execErr != nil {
 		return fmt.Errorf("stream_repo: update status: %w", execErr)
-	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("stream_repo: stream %s not found", id)
 	}
 	return nil
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/handler"
+	"github.com/Ghost-15/streaming/internal/infrastructure/streaming"
 	"github.com/Ghost-15/streaming/internal/infrastructure/supabase"
 	"github.com/Ghost-15/streaming/internal/infrastructure/telemetry"
 	"github.com/Ghost-15/streaming/internal/router"
@@ -89,9 +90,12 @@ func main() {
 	adminUC := usecase.NewAdminUseCase(adminRepo)
 	favoriteUC := usecase.NewFavoriteUseCase(favoriteRepo)
 
+	// 6b. Audio relay hub (goroutines + channels, no external dependency)
+	hub := streaming.NewHub()
+
 	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
-	streamH := handler.NewStreamHandler(streamUC)
+	streamH := handler.NewStreamHandler(streamUC, hub)
 	playlistH := handler.NewPlaylistHandler(playlistUC)
 	adminH := handler.NewAdminHandler(adminUC)
 	favoriteH := handler.NewFavoriteHandler(favoriteUC)
@@ -99,13 +103,14 @@ func main() {
 	// 8. Router
 	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH)
 
-	// 9. HTTP server with graceful shutdown
+	// 9. HTTP server with graceful shutdown.
+	// ReadTimeout and WriteTimeout are 0 (disabled) to allow long-lived
+	// streaming connections (broadcaster Push + listener Audio).
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      engine,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           engine,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
