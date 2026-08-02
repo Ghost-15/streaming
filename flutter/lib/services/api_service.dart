@@ -96,7 +96,7 @@ class ApiService {
     }
   }
 
-  // POST binary data (audio chunks). Best-effort: errors are silently dropped.
+  // POST binary data (audio chunks).
   Future<void> rawPost({
     required String uri,
     required Uint8List body,
@@ -104,11 +104,19 @@ class ApiService {
   }) async {
     final url = Uri.parse('$baseUrl/$uri');
     final token = await StorageService.get(StorageKey.token);
-    try {
-      await client.post(url, body: body, headers: {
+    final response = await client.post(
+      url,
+      body: body,
+      headers: {
         'Content-Type': contentType,
         if (token != null) 'Authorization': 'Bearer $token',
-      });
-    } catch (_) {}
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        httpStatus: response.statusCode,
+        message: response.body,
+      );
+    }
   }
 }

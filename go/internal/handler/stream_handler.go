@@ -88,10 +88,14 @@ func (h *StreamHandler) Stop(c *gin.Context) {
 		return
 	}
 
-	if err := h.useCase.End(c.Request.Context(), c.Param("id"), claims.UserID); err != nil {
-		middleware.Logger(c).Warn().Err(err).Str("stream_id", c.Param("id")).Msg("stop stream failed")
+	streamID := c.Param("id")
+	if err := h.useCase.End(c.Request.Context(), streamID, claims.UserID); err != nil {
+		middleware.Logger(c).Warn().Err(err).Str("stream_id", streamID).Msg("stop stream failed")
 		mapStreamError(c, err)
 		return
+	}
+	if h.hub != nil {
+		h.hub.CloseStream(streamID)
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -184,7 +188,7 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 		StreamID: streamID,
 		Send:     make(chan []byte, 128),
 	}
-	h.hub.Register(client)
+	initSegment := h.hub.Register(client)
 	defer h.hub.Unregister(client)
 
 	// Prefer http.Flusher for real-time streaming; fall back to a no-op so the
@@ -203,8 +207,8 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 
 	// Send cached init segment immediately so the browser can initialise its
 	// decoder even when the listener joins after the stream has started.
-	if init := h.hub.InitSegment(streamID); len(init) > 0 {
-		_, _ = c.Writer.Write(init)
+	if len(initSegment) > 0 {
+		_, _ = c.Writer.Write(initSegment)
 		flush()
 	}
 

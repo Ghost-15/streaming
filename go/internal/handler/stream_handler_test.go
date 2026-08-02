@@ -37,11 +37,11 @@ func newStreamEngine(h *handler.StreamHandler, userID string) *gin.Engine {
 }
 
 func newStreamHandler(streamRepo *mock.MockStreamRepository) *handler.StreamHandler {
-	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil))
+	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil), nil)
 }
 
 func newStreamHandlerWithHistory(streamRepo *mock.MockStreamRepository, historyRepo *mock.MockListenHistoryRepository) *handler.StreamHandler {
-	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, historyRepo))
+	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, historyRepo), nil)
 }
 
 func streamReq(engine *gin.Engine, method, path string, body interface{}) *httptest.ResponseRecorder {

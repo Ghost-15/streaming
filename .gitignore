@@ -384,3 +384,4 @@ hs_err_pid*
 !/gradle/wrapper/gradle-wrapper.jar
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,flutter,go,androidstudio,goland
+docs/Audit_conformite_RNCP_StreamPulse.docx

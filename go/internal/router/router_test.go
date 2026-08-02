@@ -55,7 +55,7 @@ func TestNewRouter(t *testing.T) {
 	}
 
 	authH := handler.NewAuthHandler(usecase.NewAuthUseCase(&mock.MockUserRepository{}, ""))
-	streamH := handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil))
+	streamH := handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil), nil)
 	playlistH := handler.NewPlaylistHandler(usecase.NewPlaylistUseCase(&mock.MockPlaylistRepository{}))
 	adminH := handler.NewAdminHandler(usecase.NewAdminUseCase(&mock.MockAdminRepository{}))
 	favoriteH := handler.NewFavoriteHandler(usecase.NewFavoriteUseCase(&mock.MockFavoriteRepository{}))

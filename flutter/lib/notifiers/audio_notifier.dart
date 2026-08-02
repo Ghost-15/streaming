@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:js_interop';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:web/web.dart' as web;
 
 import '../api/models/stream_model.dart';
@@ -17,13 +20,30 @@ enum AudioPlaybackState {
 }
 
 class AudioNotifier extends ChangeNotifier {
+  static const _liveMimeType = 'audio/webm;codecs=opus';
+  static const _startupTimeout = Duration(seconds: 12);
+
+  final http.Client _streamClient;
+  final Queue<Uint8List> _appendQueue = Queue<Uint8List>();
+
   web.HTMLAudioElement? _el;
+  web.MediaSource? _mediaSource;
+  web.SourceBuffer? _sourceBuffer;
+  StreamSubscription<List<int>>? _audioSubscription;
+  Timer? _startupTimer;
+  String? _objectUrl;
+  bool _responseEnded = false;
   int _version = 0;
 
   AudioPlaybackState _playbackState = AudioPlaybackState.idle;
   double _volume = 1.0;
   StreamModel? _currentStream;
   String _errorMessage = '';
+  bool _isShuffled = false;
+  bool _isLooping = false;
+
+  AudioNotifier({http.Client? streamClient})
+    : _streamClient = streamClient ?? http.Client();
 
   AudioPlaybackState get playbackState => _playbackState;
   double get volume => _volume;
@@ -32,8 +52,8 @@ class AudioNotifier extends ChangeNotifier {
   double get progress => 0.0;
   StreamModel? get currentStream => _currentStream;
   String get errorMessage => _errorMessage;
-  bool get isShuffled => false;
-  bool get isLooping => false;
+  bool get isShuffled => _isShuffled;
+  bool get isLooping => _isLooping;
 
   bool get isPlaying => _playbackState == AudioPlaybackState.playing;
   bool get isPaused => _playbackState == AudioPlaybackState.paused;
@@ -47,43 +67,89 @@ class AudioNotifier extends ChangeNotifier {
 
     _playbackState = AudioPlaybackState.loading;
     _currentStream = stream;
+    _errorMessage = '';
     notifyListeners();
 
     const StreamRepository().joinStream(stream.id).catchError((_) {});
 
+    if (!web.MediaSource.isTypeSupported(_liveMimeType)) {
+      _fail(
+        v,
+        'Le streaming audio n\'est pas pris en charge par ce navigateur',
+      );
+      return;
+    }
+
     final el = web.HTMLAudioElement();
+    final mediaSource = web.MediaSource();
+    final objectUrl = web.URL.createObjectURL(mediaSource);
     _el = el;
+    _mediaSource = mediaSource;
+    _objectUrl = objectUrl;
     el.volume = _volume;
-    // Required for CORS: ensures the browser sends Origin header so the server
-    // can add Access-Control-Allow-Origin and the response is readable.
     el.crossOrigin = 'anonymous';
 
+    _bindElementEvents(el, v);
+    mediaSource.addEventListener(
+      'sourceopen',
+      ((web.Event _) {
+        if (_version == v) {
+          unawaited(_openLiveResponse(stream.streamUrl, mediaSource, v));
+        }
+      }).toJS,
+    );
+
+    el.src = objectUrl;
+    el.load();
+
+    // Keep play() in the original click call stack so browser autoplay rules
+    // recognise it as a user action. The promise resolves after data is added.
+    el.play().toDart.catchError((Object e) {
+      if (_version == v && _playbackState != AudioPlaybackState.idle) {
+        _fail(v, 'Lecture bloquée par le navigateur: $e');
+      }
+      return null;
+    });
+
+    _startupTimer = Timer(_startupTimeout, () {
+      if (_version == v && !isPlaying) {
+        _fail(v, 'Le stream ne fournit aucune donnée audio lisible');
+      }
+    });
+  }
+
+  void _bindElementEvents(web.HTMLAudioElement el, int v) {
     el.addEventListener(
       'waiting',
       ((web.Event _) {
-        debugPrint('[Audio] waiting');
-        if (_version == v) _setState(AudioPlaybackState.buffering);
+        if (_version == v && !isLoading) {
+          _setState(AudioPlaybackState.buffering);
+        }
       }).toJS,
     );
     el.addEventListener(
       'stalled',
       ((web.Event _) {
-        debugPrint('[Audio] stalled');
-        if (_version == v) _setState(AudioPlaybackState.buffering);
+        if (_version == v && !isLoading) {
+          _setState(AudioPlaybackState.buffering);
+        }
       }).toJS,
     );
     el.addEventListener(
       'playing',
       ((web.Event _) {
-        debugPrint('[Audio] playing');
-        if (_version == v) _setState(AudioPlaybackState.playing);
+        if (_version == v) {
+          _startupTimer?.cancel();
+          _setState(AudioPlaybackState.playing);
+        }
       }).toJS,
     );
     el.addEventListener(
       'pause',
       ((web.Event _) {
-        debugPrint('[Audio] pause');
-        if (_version == v && _playbackState != AudioPlaybackState.idle) {
+        if (_version == v &&
+            _playbackState != AudioPlaybackState.idle &&
+            _playbackState != AudioPlaybackState.error) {
           _setState(AudioPlaybackState.paused);
         }
       }).toJS,
@@ -91,7 +157,6 @@ class AudioNotifier extends ChangeNotifier {
     el.addEventListener(
       'ended',
       ((web.Event _) {
-        debugPrint('[Audio] ended — broadcaster stopped');
         if (_version == v) {
           _stopElement();
           _currentStream = null;
@@ -102,46 +167,138 @@ class AudioNotifier extends ChangeNotifier {
     el.addEventListener(
       'error',
       ((web.Event _) {
-        debugPrint('[Audio] error');
         if (_version == v) {
-          _errorMessage = 'Erreur de lecture audio';
-          _setState(AudioPlaybackState.error);
+          _fail(v, 'Erreur de décodage du stream audio');
         }
       }).toJS,
     );
+  }
 
-    debugPrint('[Audio] src → ${stream.streamUrl}');
-    el.src = stream.streamUrl;
-    el.load();
-    debugPrint('[Audio] play()');
-    el.play().toDart.then((_) {
-      debugPrint('[Audio] play() resolved');
-    }).catchError((Object e) {
-      debugPrint('[Audio] play() rejected: $e');
-      if (_version == v && _playbackState != AudioPlaybackState.idle) {
-        _errorMessage = 'Lecture bloquée: $e';
-        _setState(AudioPlaybackState.error);
+  Future<void> _openLiveResponse(
+    String url,
+    web.MediaSource mediaSource,
+    int v,
+  ) async {
+    try {
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await _streamClient.send(request);
+      if (_version != v) return;
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
       }
-      return null;
-    });
+
+      final responseType = response.headers['content-type'] ?? _liveMimeType;
+      final mimeType = web.MediaSource.isTypeSupported(responseType)
+          ? responseType
+          : _liveMimeType;
+      final sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+      sourceBuffer.mode = 'sequence';
+      _sourceBuffer = sourceBuffer;
+
+      sourceBuffer.addEventListener(
+        'updateend',
+        ((web.Event _) {
+          if (_version == v) _appendNext(v);
+        }).toJS,
+      );
+      sourceBuffer.addEventListener(
+        'error',
+        ((web.Event _) {
+          if (_version == v) {
+            _fail(v, 'Fragment audio invalide ou reçu dans le désordre');
+          }
+        }).toJS,
+      );
+
+      _audioSubscription = response.stream.listen(
+        (bytes) {
+          if (_version != v || bytes.isEmpty) return;
+          _appendQueue.add(Uint8List.fromList(bytes));
+          _appendNext(v);
+        },
+        onError: (Object e) => _fail(v, 'Connexion au stream interrompue: $e'),
+        onDone: () {
+          if (_version != v) return;
+          _responseEnded = true;
+          _finishMediaSourceIfReady(v);
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      _fail(v, 'Impossible de rejoindre le stream: $e');
+    }
+  }
+
+  void _appendNext(int v) {
+    if (_version != v) return;
+    final sourceBuffer = _sourceBuffer;
+    if (sourceBuffer == null || sourceBuffer.updating) return;
+    if (_appendQueue.isEmpty) {
+      _finishMediaSourceIfReady(v);
+      return;
+    }
+
+    final bytes = _appendQueue.removeFirst();
+    try {
+      sourceBuffer.appendBuffer(bytes.toJS);
+    } catch (e) {
+      _fail(v, 'Impossible de mettre en mémoire le stream: $e');
+    }
+  }
+
+  void _finishMediaSourceIfReady(int v) {
+    if (_version != v || !_responseEnded || _appendQueue.isNotEmpty) return;
+    final sourceBuffer = _sourceBuffer;
+    final mediaSource = _mediaSource;
+    if (sourceBuffer == null || sourceBuffer.updating || mediaSource == null) {
+      return;
+    }
+    if (mediaSource.readyState == 'open') {
+      mediaSource.endOfStream();
+    }
+  }
+
+  void _fail(int v, String message) {
+    if (_version != v) return;
+    _errorMessage = message;
+    _playbackState = AudioPlaybackState.error;
+    _startupTimer?.cancel();
+    unawaited(_audioSubscription?.cancel());
+    notifyListeners();
   }
 
   void _stopElement() {
+    _startupTimer?.cancel();
+    _startupTimer = null;
+    unawaited(_audioSubscription?.cancel());
+    _audioSubscription = null;
+    _appendQueue.clear();
+    _responseEnded = false;
+    _sourceBuffer = null;
+    _mediaSource = null;
+
     final el = _el;
     if (el != null) {
       el.pause();
-      el.src = '';
+      el.removeAttribute('src');
+      el.load();
       _el = null;
+    }
+    final objectUrl = _objectUrl;
+    if (objectUrl != null) {
+      web.URL.revokeObjectURL(objectUrl);
+      _objectUrl = null;
     }
   }
 
   Future<void> pause() async => _el?.pause();
 
   Future<void> resume() async {
-    _el?.play().toDart.catchError((Object _) => null as JSAny?);
+    _el?.play().toDart.catchError((Object _) => null);
   }
 
   Future<void> stop() async {
+    ++_version;
     _stopElement();
     _currentStream = null;
     _playbackState = AudioPlaybackState.idle;
@@ -155,8 +312,16 @@ class AudioNotifier extends ChangeNotifier {
   }
 
   Future<void> seek(Duration position) async {}
-  void toggleShuffle() {}
-  void toggleLoop() {}
+
+  void toggleShuffle() {
+    _isShuffled = !_isShuffled;
+    notifyListeners();
+  }
+
+  void toggleLoop() {
+    _isLooping = !_isLooping;
+    notifyListeners();
+  }
 
   Future<void> retry() async {
     if (_currentStream == null) return;
@@ -168,14 +333,16 @@ class AudioNotifier extends ChangeNotifier {
     _setState(AudioPlaybackState.idle);
   }
 
-  void _setState(AudioPlaybackState s) {
-    _playbackState = s;
+  void _setState(AudioPlaybackState state) {
+    _playbackState = state;
     notifyListeners();
   }
 
   @override
   void dispose() {
+    ++_version;
     _stopElement();
+    _streamClient.close();
     super.dispose();
   }
 }

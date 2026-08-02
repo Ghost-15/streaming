@@ -71,17 +71,23 @@ func (h *Hub) InitSegment(streamID string) []byte {
 	return h.initSegments[streamID]
 }
 
-// Register adds a listener to a stream.
-func (h *Hub) Register(client *Client) {
+// Register adds a listener to a stream and atomically snapshots its cached
+// initialization segment. This prevents a first chunk from being both returned
+// here and queued concurrently by Broadcast.
+func (h *Hub) Register(client *Client) []byte {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	initSegment := append([]byte(nil), h.initSegments[client.StreamID]...)
 
 	if _, ok := h.streams[client.StreamID]; !ok {
 		h.streams[client.StreamID] = make(map[string]*Client)
 	}
-	if _, exists := h.streams[client.StreamID][client.UserID]; exists {
+	if previous, exists := h.streams[client.StreamID][client.UserID]; exists {
+		if previous != client {
+			close(previous.Send)
+		}
 		h.streams[client.StreamID][client.UserID] = client
-		return
+		return initSegment
 	}
 
 	h.streams[client.StreamID][client.UserID] = client
@@ -90,6 +96,7 @@ func (h *Hub) Register(client *Client) {
 		telemetry.OnlineUsers.Inc()
 	}
 	h.userConnections[client.UserID]++
+	return initSegment
 }
 
 // Unregister removes a listener from a stream.
@@ -102,7 +109,7 @@ func (h *Hub) Unregister(client *Client) {
 		return
 	}
 	storedClient, exists := listeners[client.UserID]
-	if !exists {
+	if !exists || storedClient != client {
 		return
 	}
 
@@ -120,6 +127,33 @@ func (h *Hub) Unregister(client *Client) {
 	}
 	if len(listeners) == 0 {
 		delete(h.streams, client.StreamID)
+	}
+}
+
+// CloseStream disconnects every listener and removes the cached WebM metadata
+// when a broadcaster stops. Closing the channels also lets the HTTP handlers
+// finish their chunked responses, so listeners receive a real end-of-stream.
+func (h *Hub) CloseStream(streamID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	listeners := h.streams[streamID]
+	delete(h.streams, streamID)
+	delete(h.contentTypes, streamID)
+	delete(h.initSegments, streamID)
+
+	for _, client := range listeners {
+		close(client.Send)
+		telemetry.ListenersPerStream.WithLabelValues(streamID).Dec()
+		telemetry.ListenerDisconnectTotal.Inc()
+
+		if h.userConnections[client.UserID] > 0 {
+			h.userConnections[client.UserID]--
+			if h.userConnections[client.UserID] == 0 {
+				delete(h.userConnections, client.UserID)
+				telemetry.OnlineUsers.Dec()
+			}
+		}
 	}
 }
 
