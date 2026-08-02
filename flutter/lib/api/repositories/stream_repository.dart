@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../services/api_service.dart';
 import '../../config/app_config.dart';
 import '../models/stream_model.dart';
@@ -14,30 +16,19 @@ class StreamRepository extends ModelRepository<StreamModel> {
         final list = res is List ? res : (res['data'] as List);
         return list.map<StreamModel>((e) {
           final stream = StreamModel.fromJson(e as Map<String, dynamic>);
-          return stream.streamUrl.isEmpty
-              ? stream.copyWith(
-                  streamUrl:
-                      '${AppConfig.apiBaseUrl}/streams/${stream.id}/listen',
-                )
-              : stream;
+          return stream.copyWith(
+            streamUrl: '${AppConfig.apiBaseUrl}/streams/${stream.id}/audio',
+          );
         }).toList();
       },
     );
   }
 
-  Future<StreamModel> joinStream(String id) {
-    return ApiService().request(
+  Future<void> joinStream(String id) {
+    return ApiService().request<dynamic>(
       httpMethod: HttpMethod.post,
       uri: 'streams/$id/listen',
-      parser: (_) => StreamModel(
-        id: id,
-        title: 'Stream',
-        broadcasterId: '',
-        broadcasterName: '',
-        streamUrl: '${AppConfig.apiBaseUrl}/streams/$id/listen',
-        isLive: true,
-        createdAt: DateTime.now(),
-      ),
+      notifyOnUnauthorized: false,
     );
   }
 
@@ -54,6 +45,14 @@ class StreamRepository extends ModelRepository<StreamModel> {
     return ApiService().request(
       httpMethod: HttpMethod.put,
       uri: 'streams/$id/stop',
+    );
+  }
+
+  Future<void> pushChunk(String id, Uint8List chunk, String contentType) {
+    return ApiService().rawPost(
+      uri: 'streams/$id/push',
+      body: chunk,
+      contentType: contentType,
     );
   }
 }

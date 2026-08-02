@@ -2,6 +2,7 @@ package supabase
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 
 	"github.com/Ghost-15/streaming/internal/entity"
 )
+
+var errStreamMockErr = errors.New("stream repo mock error")
 
 func streamRows() *pgxmock.Rows {
 	return pgxmock.NewRows([]string{"id", "title", "broadcaster_id", "status", "started_at", "ended_at", "listener_count"}).
@@ -72,14 +75,19 @@ func TestStreamRepo_UpdateStatus_Mock(t *testing.T) {
 	defer mock.Close()
 	r := &supabaseStreamRepo{db: mock}
 
-	mock.ExpectExec("UPDATE streams").WithArgs(anyArgs(2)...).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectExec("UPDATE streams").WithArgs(anyArgs(3)...).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 	if err := r.UpdateStatus(context.Background(), "s1", entity.StreamStatusEnded); err != nil {
-		t.Fatalf("UpdateStatus err = %v", err)
+		t.Fatalf("UpdateStatus ended err = %v", err)
 	}
 
-	mock.ExpectExec("UPDATE streams").WithArgs(anyArgs(2)...).WillReturnResult(pgxmock.NewResult("UPDATE", 0))
-	if err := r.UpdateStatus(context.Background(), "missing", entity.StreamStatusEnded); err == nil {
-		t.Error("UpdateStatus missing: expected error")
+	mock.ExpectExec("UPDATE streams").WithArgs(anyArgs(3)...).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	if err := r.UpdateStatus(context.Background(), "s1", entity.StreamStatusLive); err != nil {
+		t.Fatalf("UpdateStatus live err = %v", err)
+	}
+
+	mock.ExpectExec("UPDATE streams").WithArgs(anyArgs(3)...).WillReturnError(errStreamMockErr)
+	if err := r.UpdateStatus(context.Background(), "s1", entity.StreamStatusEnded); err == nil {
+		t.Error("UpdateStatus exec error: expected error")
 	}
 }
 

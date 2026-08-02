@@ -7,6 +7,7 @@ class FavoriteRepository {
   Future<List<TrackModel>> list() {
     return ApiService().request(
       uri: 'favorites',
+      notifyOnUnauthorized: false,
       parser: (res) {
         final list = res is List ? res : (res['data'] as List);
         return list

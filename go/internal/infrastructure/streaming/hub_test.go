@@ -55,3 +55,51 @@ func TestHubMetricsTrackOnlineUsersListenersAndDisconnects(t *testing.T) {
 		t.Fatalf("ListenerDisconnectTotal delta = %v, want 2", afterDisconnects-beforeDisconnects)
 	}
 }
+
+func TestHubCloseStreamDisconnectsListenersAndClearsMetadata(t *testing.T) {
+	telemetry.ListenersPerStream.Reset()
+	telemetry.OnlineUsers.Set(0)
+
+	hub := streaming.NewHub()
+	first := &streaming.Client{UserID: "user-1", StreamID: "stream-A", Send: make(chan []byte, 1)}
+	second := &streaming.Client{UserID: "user-2", StreamID: "stream-A", Send: make(chan []byte, 1)}
+	hub.Register(first)
+	hub.Register(second)
+	hub.SetContentType("stream-A", "audio/webm;codecs=opus")
+	hub.SetInitSegment("stream-A", []byte{0x1a, 0x45, 0xdf, 0xa3})
+
+	hub.CloseStream("stream-A")
+
+	if got := hub.ListenerCount("stream-A"); got != 0 {
+		t.Fatalf("ListenerCount(stream-A) = %d, want 0", got)
+	}
+	if _, open := <-first.Send; open {
+		t.Fatal("first listener channel is still open")
+	}
+	if _, open := <-second.Send; open {
+		t.Fatal("second listener channel is still open")
+	}
+	if got := hub.InitSegment("stream-A"); got != nil {
+		t.Fatalf("InitSegment(stream-A) = %v, want nil", got)
+	}
+	if got := testutil.ToFloat64(telemetry.OnlineUsers); got != 0 {
+		t.Fatalf("OnlineUsers after CloseStream = %v, want 0", got)
+	}
+}
+
+func TestHubRegisterReturnsCachedInitSegment(t *testing.T) {
+	hub := streaming.NewHub()
+	want := []byte{0x1a, 0x45, 0xdf, 0xa3}
+	hub.SetInitSegment("stream-A", want)
+	client := &streaming.Client{UserID: "user-1", StreamID: "stream-A", Send: make(chan []byte, 1)}
+
+	got := hub.Register(client)
+
+	if string(got) != string(want) {
+		t.Fatalf("Register init segment = %v, want %v", got, want)
+	}
+	got[0] = 0
+	if cached := hub.InitSegment("stream-A"); cached[0] != want[0] {
+		t.Fatal("Register returned the hub's mutable init segment")
+	}
+}

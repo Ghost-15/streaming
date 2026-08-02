@@ -86,6 +86,7 @@ func main() {
 	adminRepo := supabase.NewAdminRepo(db)
 	favoriteRepo := supabase.NewFavoriteRepo(db)
 	historyRepo := supabase.NewListenHistoryRepo(db)
+	recommendationRepo := supabase.NewRecommendationRepo(db)
 
 	// 6. Use Cases (business layer)
 	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
@@ -93,6 +94,10 @@ func main() {
 	playlistUC := usecase.NewPlaylistUseCase(playlistRepo)
 	adminUC := usecase.NewAdminUseCase(adminRepo)
 	favoriteUC := usecase.NewFavoriteUseCase(favoriteRepo)
+	recommendationUC := usecase.NewRecommendationUseCase(recommendationRepo)
+
+	// 6b. Audio relay hub (goroutines + channels, no external dependency)
+	hub := streaming.NewHub()
 
 	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
@@ -112,11 +117,14 @@ func main() {
 	playlistH := handler.NewPlaylistHandler(playlistUC)
 	adminH := handler.NewAdminHandler(adminUC)
 	favoriteH := handler.NewFavoriteHandler(favoriteUC)
+	recommendationH := handler.NewRecommendationHandler(recommendationUC)
 
 	// 8. Router
-	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH)
+	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
 
-	// 9. HTTP server with graceful shutdown
+	// 9. HTTP server with graceful shutdown.
+	// ReadTimeout and WriteTimeout are 0 (disabled) to allow long-lived
+	// streaming connections (broadcaster Push + listener Audio).
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           engine,

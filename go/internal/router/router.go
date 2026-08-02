@@ -23,6 +23,7 @@ func NewRouter(
 	playlistH *handler.PlaylistHandler,
 	adminH *handler.AdminHandler,
 	favoriteH *handler.FavoriteHandler,
+	recommendationH *handler.RecommendationHandler,
 ) *gin.Engine {
 	pubKeyBytes, err := os.ReadFile(cfg.JWTPublicKeyPath)
 	if err != nil {
@@ -52,6 +53,8 @@ func NewRouter(
 		}
 
 		v1.GET("/streams", streamH.ListActive)
+		// Public: browser <audio> cannot set Authorization headers
+		v1.GET("/streams/:id/audio", streamH.Audio)
 	}
 
 	protected := r.Group("/api/v1")
@@ -87,6 +90,15 @@ func NewRouter(
 		protected.GET("/favorites", favoriteH.List)
 		protected.POST("/favorites", favoriteH.Add)
 		protected.DELETE("/favorites/:trackID", favoriteH.Remove)
+
+		protected.GET("/recommendations", recommendationH.List)
+	}
+
+	// Audio ingest: broadcaster pushes ~10 chunks/s — exempt from general rate limit.
+	audioIngest := r.Group("/api/v1")
+	audioIngest.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
+	{
+		audioIngest.POST("/streams/:id/push", streamH.Push)
 	}
 
 	admin := r.Group("/api/v1/admin")

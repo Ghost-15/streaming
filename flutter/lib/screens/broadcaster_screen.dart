@@ -127,6 +127,7 @@ class _LiveStatusCard extends StatelessWidget {
           // Status indicator
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (isLive)
                 _PulsingDot(color: cs.error)
@@ -140,12 +141,15 @@ class _LiveStatusCard extends StatelessWidget {
                   ),
                 ),
               const SizedBox(width: 10),
-              Text(
-                isLive ? 'EN DIRECT' : 'HORS LIGNE',
-                style: tt.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                  color: isLive ? cs.error : cs.onSurfaceVariant,
+              Flexible(
+                child: Text(
+                  isLive ? 'EN DIRECT' : 'HORS LIGNE',
+                  style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                    color: isLive ? cs.error : cs.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

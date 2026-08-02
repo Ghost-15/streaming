@@ -34,6 +34,8 @@ type publisher struct {
 type Hub struct {
 	mu              sync.RWMutex
 	streams         map[string]map[string]*Client
+	contentTypes    map[string]string // streamID → audio MIME type set by broadcaster
+	initSegments    map[string][]byte // streamID → first chunk (WebM header) for late joiners
 	userConnections map[string]int
 	publishers      map[string]publisher
 	closed          bool
@@ -43,6 +45,8 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		streams:         make(map[string]map[string]*Client),
+		contentTypes:    make(map[string]string),
+		initSegments:    make(map[string][]byte),
 		userConnections: make(map[string]int),
 		publishers:      make(map[string]publisher),
 	}
@@ -52,6 +56,47 @@ func NewHub() *Hub {
 func (h *Hub) Register(client *Client) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.contentTypes[streamID] = contentType
+}
+
+// ContentType returns the stored MIME type, defaulting to audio/webm; codecs=opus
+// (what Chrome MediaRecorder produces — supported by all modern browsers).
+func (h *Hub) ContentType(streamID string) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if ct, ok := h.contentTypes[streamID]; ok && ct != "" {
+		return ct
+	}
+	return "audio/webm; codecs=opus"
+}
+
+// SetInitSegment caches the first audio chunk for a stream (WebM EBML header +
+// Tracks element). Listeners who join after the stream started need it so the
+// browser can initialise its decoder. Only the first call per stream is kept.
+func (h *Hub) SetInitSegment(streamID string, data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, already := h.initSegments[streamID]; !already {
+		buf := make([]byte, len(data))
+		copy(buf, data)
+		h.initSegments[streamID] = buf
+	}
+}
+
+// InitSegment returns the cached init segment for a stream, or nil.
+func (h *Hub) InitSegment(streamID string) []byte {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.initSegments[streamID]
+}
+
+// Register adds a listener to a stream and atomically snapshots its cached
+// initialization segment. This prevents a first chunk from being both returned
+// here and queued concurrently by Broadcast.
+func (h *Hub) Register(client *Client) []byte {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	initSegment := append([]byte(nil), h.initSegments[client.StreamID]...)
 
 	if h.closed {
 		return ErrHubClosed
@@ -108,6 +153,33 @@ func (h *Hub) Unregister(client *Client) {
 	h.disconnectLocked(storedClient)
 	if len(listeners) == 0 {
 		delete(h.streams, client.StreamID)
+	}
+}
+
+// CloseStream disconnects every listener and removes the cached WebM metadata
+// when a broadcaster stops. Closing the channels also lets the HTTP handlers
+// finish their chunked responses, so listeners receive a real end-of-stream.
+func (h *Hub) CloseStream(streamID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	listeners := h.streams[streamID]
+	delete(h.streams, streamID)
+	delete(h.contentTypes, streamID)
+	delete(h.initSegments, streamID)
+
+	for _, client := range listeners {
+		close(client.Send)
+		telemetry.ListenersPerStream.WithLabelValues(streamID).Dec()
+		telemetry.ListenerDisconnectTotal.Inc()
+
+		if h.userConnections[client.UserID] > 0 {
+			h.userConnections[client.UserID]--
+			if h.userConnections[client.UserID] == 0 {
+				delete(h.userConnections, client.UserID)
+				telemetry.OnlineUsers.Dec()
+			}
+		}
 	}
 }
 
