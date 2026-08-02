@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -17,6 +16,9 @@ class ApiService {
 
   ApiService._internal();
 
+  // Called on HTTP 401 (except when notifyOnUnauthorized is false).
+  static void Function()? onUnauthorized;
+
   final client = http.Client();
   final baseUrl = AppConfig.apiBaseUrl;
 
@@ -27,6 +29,7 @@ class ApiService {
     Map<String, dynamic>? data,
     Map<String, String>? queryParams,
     T Function(dynamic)? parser,
+    bool notifyOnUnauthorized = true,
   }) async {
     Uri url = Uri.parse('$baseUrl/$uri');
 
@@ -82,11 +85,30 @@ class ApiService {
         return decoded as T;
       case HttpStatus.noContent:
         return null as T;
+      case HttpStatus.unauthorized:
+        if (notifyOnUnauthorized) ApiService.onUnauthorized?.call();
+        throw ApiException(httpStatus: 401, message: response.body);
       default:
         throw ApiException(
           httpStatus: response.statusCode,
           message: response.body,
         );
     }
+  }
+
+  // POST binary data (audio chunks). Best-effort: errors are silently dropped.
+  Future<void> rawPost({
+    required String uri,
+    required Uint8List body,
+    required String contentType,
+  }) async {
+    final url = Uri.parse('$baseUrl/$uri');
+    final token = await StorageService.get(StorageKey.token);
+    try {
+      await client.post(url, body: body, headers: {
+        'Content-Type': contentType,
+        if (token != null) 'Authorization': 'Bearer $token',
+      });
+    } catch (_) {}
   }
 }

@@ -18,6 +18,8 @@ type Client struct {
 type Hub struct {
 	mu              sync.RWMutex
 	streams         map[string]map[string]*Client
+	contentTypes    map[string]string // streamID → audio MIME type set by broadcaster
+	initSegments    map[string][]byte // streamID → first chunk (WebM header) for late joiners
 	userConnections map[string]int
 }
 
@@ -25,8 +27,48 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		streams:         make(map[string]map[string]*Client),
+		contentTypes:    make(map[string]string),
+		initSegments:    make(map[string][]byte),
 		userConnections: make(map[string]int),
 	}
+}
+
+// SetContentType records the audio MIME type pushed by the broadcaster.
+func (h *Hub) SetContentType(streamID, contentType string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.contentTypes[streamID] = contentType
+}
+
+// ContentType returns the stored MIME type, defaulting to audio/webm; codecs=opus
+// (what Chrome MediaRecorder produces — supported by all modern browsers).
+func (h *Hub) ContentType(streamID string) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if ct, ok := h.contentTypes[streamID]; ok && ct != "" {
+		return ct
+	}
+	return "audio/webm; codecs=opus"
+}
+
+// SetInitSegment caches the first audio chunk for a stream (WebM EBML header +
+// Tracks element). Listeners who join after the stream started need it so the
+// browser can initialise its decoder. Only the first call per stream is kept.
+func (h *Hub) SetInitSegment(streamID string, data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, already := h.initSegments[streamID]; !already {
+		buf := make([]byte, len(data))
+		copy(buf, data)
+		h.initSegments[streamID] = buf
+	}
+}
+
+// InitSegment returns the cached init segment for a stream, or nil.
+func (h *Hub) InitSegment(streamID string) []byte {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.initSegments[streamID]
 }
 
 // Register adds a listener to a stream.

@@ -8,6 +8,7 @@ class PlaylistRepository {
   Future<List<PlaylistModel>> list() {
     return ApiService().request(
       uri: 'playlists',
+      notifyOnUnauthorized: false,
       parser: (res) {
         final list = res is List ? res : (res['data'] as List);
         return list
