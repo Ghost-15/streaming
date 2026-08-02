@@ -34,6 +34,15 @@ Panels metier :
 - Listeners by stream : `streampulse_listeners_per_stream`
 - Audience and active streams over time
 
+Panels audio reels :
+
+- Audio ingest bitrate : octets recus sur la route d'ingestion
+- Audio egress bitrate : octets remis aux auditeurs HTTP
+- Dropped audio chunks : backpressure des clients lents
+- Connected audio publishers
+- Real audio bitrate by stream
+- Audio health : chunks livres et abandonnes
+
 Panels techniques :
 
 - API latency p50 / p95 / p99
@@ -54,6 +63,14 @@ si `METRICS_BEARER_TOKEN` ou `METRICS_BEARER_TOKEN_FILE` est configure.
 | `streampulse_listeners_per_stream{stream_id}` | Gauge | Listeners actifs par stream |
 | `streampulse_stream_start_total` | Counter | Nombre total de streams demarres |
 | `streampulse_listener_disconnect_total` | Counter | Nombre total de deconnexions listeners |
+| `streampulse_audio_ingest_bytes_total{stream_id}` | Counter | Octets effectivement recus du diffuseur |
+| `streampulse_audio_egress_bytes_total{stream_id}` | Counter | Octets effectivement ecrits dans les reponses HTTP auditeurs |
+| `streampulse_audio_chunks_total{stream_id,direction}` | Counter | Chunks audio traites en entree/sortie |
+| `streampulse_audio_dropped_chunks_total{stream_id}` | Counter | Chunks abandonnes pour clients lents |
+| `streampulse_audio_broadcasters{stream_id}` | Gauge | Sources audio reellement connectees |
+| `streampulse_audio_chunk_size_bytes` | Histogram | Taille des chunks recus |
+| `streampulse_audio_listener_session_duration_seconds` | Histogram | Duree des connexions audio auditeur |
+| `streampulse_audio_broadcaster_session_duration_seconds` | Histogram | Duree des connexions d'ingestion |
 | `streampulse_api_request_duration_seconds` | Histogram | Latence HTTP, debit et erreurs par route/methode/status |
 
 ## Alerting simple
@@ -68,6 +85,8 @@ Regles livrees :
 - `StreamPulseHighLatencyP95` : latence p95 > 500 ms pendant 5 minutes
 - `StreamPulseDisconnectSpike` : plus de 20 deconnexions listeners par minute
   pendant 5 minutes
+- `StreamPulseAudioDrops` : plus de 1 % de chunks audio abandonnes pendant 2 minutes
+- `StreamPulsePublisherWithoutListeners` : source connectee sans auditeur pendant 10 minutes
 
 Ces seuils sont volontairement simples pour la soutenance. Ils montrent les
 risques principaux : indisponibilite API, degradation de performance et rupture

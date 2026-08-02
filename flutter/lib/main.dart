@@ -8,6 +8,7 @@ import 'api/repositories/playlist_repository.dart';
 import 'api/repositories/stream_repository.dart';
 import 'config/router.dart';
 import 'config/theme.dart';
+import 'services/api_service.dart';
 import 'notifiers/admin_notifier.dart';
 import 'notifiers/audio_notifier.dart';
 import 'notifiers/broadcaster_notifier.dart';
@@ -22,6 +23,7 @@ void main() async {
 
   final sessionNotifier = SessionNotifier();
   try { await sessionNotifier.init(); } catch (_) {}
+  ApiService.onUnauthorized = sessionNotifier.logout;
   final router = buildRouter(sessionNotifier);
 
   runApp(

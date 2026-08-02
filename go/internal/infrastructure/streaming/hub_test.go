@@ -55,3 +55,55 @@ func TestHubMetricsTrackOnlineUsersListenersAndDisconnects(t *testing.T) {
 		t.Fatalf("ListenerDisconnectTotal delta = %v, want 2", afterDisconnects-beforeDisconnects)
 	}
 }
+
+func TestHubCloseStreamDisconnectsListenersAndClearsMetadata(t *testing.T) {
+	telemetry.ListenersPerStream.Reset()
+	telemetry.OnlineUsers.Set(0)
+
+	hub := streaming.NewHub()
+	first := &streaming.Client{UserID: "user-1", StreamID: "stream-A", Send: make(chan []byte, 1)}
+	second := &streaming.Client{UserID: "user-2", StreamID: "stream-A", Send: make(chan []byte, 1)}
+	hub.Register(first)
+	hub.Register(second)
+	hub.SetInitSegment("stream-A", []byte{0x1a, 0x45, 0xdf, 0xa3})
+
+	hub.CloseStream("stream-A")
+
+	if got := hub.ListenerCount("stream-A"); got != 0 {
+		t.Fatalf("ListenerCount(stream-A) = %d, want 0", got)
+	}
+	if _, open := <-first.Send; open {
+		t.Fatal("first listener channel is still open")
+	}
+	if _, open := <-second.Send; open {
+		t.Fatal("second listener channel is still open")
+	}
+	if got := hub.InitSegment("stream-A"); got != nil {
+		t.Fatalf("InitSegment(stream-A) = %v, want nil", got)
+	}
+	if got := testutil.ToFloat64(telemetry.OnlineUsers); got != 0 {
+		t.Fatalf("OnlineUsers after CloseStream = %v, want 0", got)
+	}
+}
+
+func TestHubInitSegmentCaching(t *testing.T) {
+	hub := streaming.NewHub()
+	want := []byte{0x1a, 0x45, 0xdf, 0xa3}
+
+	// Only the first cached chunk per stream is kept.
+	hub.SetInitSegment("stream-A", want)
+	hub.SetInitSegment("stream-A", []byte{0xff, 0xff})
+
+	got := hub.InitSegment("stream-A")
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("InitSegment = %v, want %v", got, want)
+	}
+
+	// SetInitSegment stores a copy: mutating the source must not corrupt the cache.
+	src := []byte{1, 2, 3}
+	hub.SetInitSegment("stream-B", src)
+	src[0] = 9
+	if cached := hub.InitSegment("stream-B"); cached[0] != 1 {
+		t.Fatalf("cache aliased caller slice: got %v", cached)
+	}
+}

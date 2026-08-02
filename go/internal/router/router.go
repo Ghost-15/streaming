@@ -23,6 +23,7 @@ func NewRouter(
 	playlistH *handler.PlaylistHandler,
 	adminH *handler.AdminHandler,
 	favoriteH *handler.FavoriteHandler,
+	recommendationH *handler.RecommendationHandler,
 ) *gin.Engine {
 	pubKeyBytes, err := os.ReadFile(cfg.JWTPublicKeyPath)
 	if err != nil {
@@ -52,6 +53,8 @@ func NewRouter(
 		}
 
 		v1.GET("/streams", streamH.ListActive)
+		// Public: browser <audio> cannot set Authorization headers
+		v1.GET("/streams/:id/audio", streamH.Audio)
 	}
 
 	protected := r.Group("/api/v1")
@@ -62,7 +65,7 @@ func NewRouter(
 	))
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
-		protected.GET("/streams/:id/listen", streamH.Listen)
+		protected.GET("/streams/:id/listen", streamH.StreamAudio)
 		protected.POST("/streams/:id/listen", streamH.Listen)
 		protected.POST("/streams/:id/leave", streamH.Leave)
 
@@ -71,6 +74,7 @@ func NewRouter(
 		{
 			diffuseur.POST("/streams", streamH.Start)
 			diffuseur.PUT("/streams/:id/stop", streamH.Stop)
+			diffuseur.PUT("/streams/:id/audio", streamH.IngestAudio)
 		}
 
 		protected.GET("/playlists", playlistH.List)
@@ -86,6 +90,8 @@ func NewRouter(
 		protected.GET("/favorites", favoriteH.List)
 		protected.POST("/favorites", favoriteH.Add)
 		protected.DELETE("/favorites/:trackID", favoriteH.Remove)
+
+		protected.GET("/recommendations", recommendationH.List)
 	}
 
 	admin := r.Group("/api/v1/admin")

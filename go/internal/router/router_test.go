@@ -59,8 +59,9 @@ func TestNewRouter(t *testing.T) {
 	playlistH := handler.NewPlaylistHandler(usecase.NewPlaylistUseCase(&mock.MockPlaylistRepository{}))
 	adminH := handler.NewAdminHandler(usecase.NewAdminUseCase(&mock.MockAdminRepository{}))
 	favoriteH := handler.NewFavoriteHandler(usecase.NewFavoriteUseCase(&mock.MockFavoriteRepository{}))
+	recommendationH := handler.NewRecommendationHandler(usecase.NewRecommendationUseCase(&mock.MockRecommendationRepository{}))
 
-	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH)
+	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
 
 	t.Run("health ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)

@@ -15,6 +15,8 @@ go/.gocache/
 go/.gomodcache/
 go/.gotmp/
 coverage.out
+go/loadtest/results/*
+!go/loadtest/results/.gitkeep
 
 # Test RSA keys — generated in-memory at test runtime
 go/internal/usecase/testdata/
@@ -384,3 +386,4 @@ hs_err_pid*
 !/gradle/wrapper/gradle-wrapper.jar
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,flutter,go,androidstudio,goland
+docs/Audit_conformite_RNCP_StreamPulse.docx

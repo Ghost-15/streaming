@@ -16,6 +16,26 @@ env:
   COVERAGE_MIN: "80"
 
 jobs:
+  observability-config:
+    name: Observability configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate dashboard JSON
+        run: |
+          jq empty go/infra/grafana/dashboards/streampulse.json
+      - name: Validate Prometheus configuration and alerts
+        run: |
+          docker run --rm --entrypoint /bin/promtool \
+            -v "$PWD/go/infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$PWD/go/infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            prom/prometheus:v3.5.0 \
+            check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint /bin/promtool \
+            -v "$PWD/go/infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            prom/prometheus:v3.5.0 \
+            check rules /etc/prometheus/alerts.yml
+
   go-lint:
     name: Go Lint
     runs-on: ubuntu-latest
