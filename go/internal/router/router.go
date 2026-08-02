@@ -65,7 +65,7 @@ func NewRouter(
 	))
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
-		protected.GET("/streams/:id/listen", streamH.Listen)
+		protected.GET("/streams/:id/listen", streamH.StreamAudio)
 		protected.POST("/streams/:id/listen", streamH.Listen)
 		protected.POST("/streams/:id/leave", streamH.Leave)
 
@@ -74,6 +74,7 @@ func NewRouter(
 		{
 			diffuseur.POST("/streams", streamH.Start)
 			diffuseur.PUT("/streams/:id/stop", streamH.Stop)
+			diffuseur.PUT("/streams/:id/audio", streamH.IngestAudio)
 		}
 
 		protected.GET("/playlists", playlistH.List)

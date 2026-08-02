@@ -1,4 +1,4 @@
-.PHONY: dev build test lint vet clean docker-build migrate flutter-dev flutter-run flutter-test flutter-build-apk flutter-build-web help
+.PHONY: dev build test lint vet clean docker-build migrate flutter-dev flutter-run flutter-test flutter-build-apk flutter-build-web load-bench load-k6 profile-cpu help
 
 COVERAGE_THRESHOLD ?= 80
 
@@ -24,6 +24,18 @@ test:
 test-ci:
 	cd go && go test $$(go list ./... | grep -v '/mock$$') -coverprofile=../coverage.out -covermode=atomic
 	go tool cover -func=coverage.out | awk -v min="$(COVERAGE_THRESHOLD)" '/total/{if ($$3+0 < min) { print "Coverage below " min "%: " $$3; exit 1 } else { print "Coverage OK: " $$3 " >= " min "%" }}'
+
+# Reproducible in-process fan-out benchmark at 10, 100 and 500 listeners.
+load-bench:
+	cd go && go test ./internal/infrastructure/streaming -run '^$$' -bench '^BenchmarkHubBroadcast$$' -benchmem -benchtime=2s
+
+# End-to-end test; requires STREAM_ID and LISTENER_TOKEN plus a live publisher.
+load-k6:
+	cd go && k6 run -e LISTENERS=$${LISTENERS:-10} -e BASE_URL=$${BASE_URL} -e STREAM_ID=$${STREAM_ID} -e LISTENER_TOKEN=$${LISTENER_TOKEN} loadtest/stream.js
+
+# Capture CPU, heap and goroutine profiles from a local PPROF_ENABLED API.
+profile-cpu:
+	cd go && PPROF_BASE_URL=$${PPROF_BASE_URL:-http://127.0.0.1:6060} sh loadtest/capture-pprof.sh
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 

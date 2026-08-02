@@ -42,6 +42,52 @@ var (
 		Help: "Total number of listener disconnects since process boot.",
 	})
 
+	// AudioIngestBytesTotal and AudioEgressBytesTotal are fed only by bytes
+	// that cross the live-audio endpoints. They are not inferred from database
+	// join/leave events.
+	AudioIngestBytesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "streampulse_audio_ingest_bytes_total",
+		Help: "Audio bytes received from broadcasters.",
+	}, []string{"stream_id"})
+
+	AudioEgressBytesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "streampulse_audio_egress_bytes_total",
+		Help: "Audio bytes written successfully to listener HTTP responses.",
+	}, []string{"stream_id"})
+
+	AudioChunksTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "streampulse_audio_chunks_total",
+		Help: "Audio chunks handled by direction.",
+	}, []string{"stream_id", "direction"})
+
+	AudioDroppedChunksTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "streampulse_audio_dropped_chunks_total",
+		Help: "Audio chunks dropped because a listener buffer was full.",
+	}, []string{"stream_id"})
+
+	AudioBroadcasters = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "streampulse_audio_broadcasters",
+		Help: "Broadcasters currently ingesting audio (zero or one per stream).",
+	}, []string{"stream_id"})
+
+	AudioChunkSizeBytes = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "streampulse_audio_chunk_size_bytes",
+		Help:    "Size of audio chunks received from broadcasters.",
+		Buckets: prometheus.ExponentialBuckets(256, 2, 8),
+	})
+
+	ListenerSessionDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "streampulse_audio_listener_session_duration_seconds",
+		Help:    "Duration of real HTTP audio listener connections.",
+		Buckets: []float64{1, 5, 15, 30, 60, 300, 900, 3600},
+	})
+
+	BroadcasterSessionDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "streampulse_audio_broadcaster_session_duration_seconds",
+		Help:    "Duration of real HTTP audio ingestion connections.",
+		Buckets: []float64{1, 5, 15, 30, 60, 300, 900, 3600},
+	})
+
 	// APIRequestDuration measures the duration of HTTP requests (histogram).
 	// Labels: route (Gin pattern, e.g. /api/v1/playlists/:id), method, status.
 	APIRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{

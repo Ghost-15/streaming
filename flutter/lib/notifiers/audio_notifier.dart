@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:web/web.dart' as web;
 
 import '../api/models/stream_model.dart';
-import '../api/repositories/stream_repository.dart';
+import '../services/storage_service.dart';
 
 enum AudioPlaybackState {
   idle,
@@ -180,49 +180,14 @@ class AudioNotifier extends ChangeNotifier {
     int v,
   ) async {
     try {
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await _streamClient.send(request);
-      if (_version != v) return;
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
+      _playbackState = AudioPlaybackState.loading;
+      _currentStream = stream;
+      notifyListeners();
 
-      final responseType = response.headers['content-type'] ?? _liveMimeType;
-      final mimeType = web.MediaSource.isTypeSupported(responseType)
-          ? responseType
-          : _liveMimeType;
-      final sourceBuffer = mediaSource.addSourceBuffer(mimeType);
-      sourceBuffer.mode = 'sequence';
-      _sourceBuffer = sourceBuffer;
-
-      sourceBuffer.addEventListener(
-        'updateend',
-        ((web.Event _) {
-          if (_version == v) _appendNext(v);
-        }).toJS,
-      );
-      sourceBuffer.addEventListener(
-        'error',
-        ((web.Event _) {
-          if (_version == v) {
-            _fail(v, 'Fragment audio invalide ou reçu dans le désordre');
-          }
-        }).toJS,
-      );
-
-      _audioSubscription = response.stream.listen(
-        (bytes) {
-          if (_version != v || bytes.isEmpty) return;
-          _appendQueue.add(Uint8List.fromList(bytes));
-          _appendNext(v);
-        },
-        onError: (Object e) => _fail(v, 'Connexion au stream interrompue: $e'),
-        onDone: () {
-          if (_version != v) return;
-          _responseEnded = true;
-          _finishMediaSourceIfReady(v);
-        },
-        cancelOnError: true,
+      final token = await StorageService.get(StorageKey.token);
+      await _audioPlayer.setUrl(
+        stream.streamUrl,
+        headers: {if (token != null) 'Authorization': 'Bearer $token'},
       );
     } catch (e) {
       _fail(v, 'Impossible de rejoindre le stream: $e');

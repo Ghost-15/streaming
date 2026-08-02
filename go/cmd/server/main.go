@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,6 +36,8 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("config load failed")
 	}
+	rootCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
 
 	// 2. Loki writer — multi-writer: stdout + Loki
 	lokiWriter, lokiErr := telemetry.NewLokiWriter(
@@ -97,7 +101,19 @@ func main() {
 
 	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
-	streamH := handler.NewStreamHandler(streamUC, hub)
+	audioHub := streaming.NewHub()
+	streamH := handler.NewStreamHandler(
+		streamUC,
+		handler.WithAudioStreaming(
+			audioHub,
+			cfg.StreamMaxDuration,
+			cfg.StreamIdleTimeout,
+			cfg.StreamWriteTimeout,
+			cfg.StreamMaxIngestBytes,
+			cfg.StreamChunkSize,
+			cfg.StreamClientBuffer,
+		),
+	)
 	playlistH := handler.NewPlaylistHandler(playlistUC)
 	adminH := handler.NewAdminHandler(adminUC)
 	favoriteH := handler.NewFavoriteHandler(favoriteUC)
@@ -112,28 +128,57 @@ func main() {
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           engine,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
+		// ReadTimeout and WriteTimeout intentionally remain zero: absolute
+		// server deadlines are incompatible with multi-hour audio requests.
+		// The audio handlers apply sliding read/write deadlines instead.
+		IdleTimeout: cfg.HTTPIdleTimeout,
+		BaseContext: func(net.Listener) context.Context {
+			return rootCtx
+		},
 	}
 
+	serverErr := make(chan error, 1)
 	go func() {
 		log.Info().Str("port", cfg.Port).Str("env", cfg.Env).Msg("streampulse-api listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("http server failed")
+			serverErr <- err
 		}
 	}()
 
-	// Graceful shutdown on SIGTERM / SIGINT.
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	var pprofServer *http.Server
+	if cfg.PprofEnabled {
+		pprofServer = telemetry.NewPprofServer(cfg.PprofAddr)
+		go func() {
+			log.Info().Str("address", cfg.PprofAddr).Msg("pprof diagnostics listening")
+			if err := pprofServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error().Err(err).Msg("pprof server failed")
+			}
+		}()
+	}
+
+	select {
+	case <-rootCtx.Done():
+	case err := <-serverErr:
+		log.Error().Err(err).Msg("http server failed")
+		stopSignals()
+	}
 
 	log.Info().Msg("shutting down server")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Close the Hub first so long-lived responses finish before Server.Shutdown
+	// waits for HTTP handlers.
+	audioHub.Shutdown()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatal().Err(err).Msg("server forced to shutdown")
+		log.Error().Err(err).Msg("server forced to shutdown")
+		_ = srv.Close()
+	}
+	if pprofServer != nil {
+		if err := pprofServer.Shutdown(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("pprof shutdown failed")
+		}
 	}
 	log.Info().Msg("server exited cleanly")
 }
