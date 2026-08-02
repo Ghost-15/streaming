@@ -96,11 +96,9 @@ func main() {
 	favoriteUC := usecase.NewFavoriteUseCase(favoriteRepo)
 	recommendationUC := usecase.NewRecommendationUseCase(recommendationRepo)
 
-	// 6b. Audio relay hub (goroutines + channels, no external dependency)
-	hub := streaming.NewHub()
-
 	// 7. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
+	// Audio relay hub (goroutines + channels, no external dependency).
 	audioHub := streaming.NewHub()
 	streamH := handler.NewStreamHandler(
 		streamUC,

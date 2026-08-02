@@ -65,7 +65,6 @@ func TestHubCloseStreamDisconnectsListenersAndClearsMetadata(t *testing.T) {
 	second := &streaming.Client{UserID: "user-2", StreamID: "stream-A", Send: make(chan []byte, 1)}
 	hub.Register(first)
 	hub.Register(second)
-	hub.SetContentType("stream-A", "audio/webm;codecs=opus")
 	hub.SetInitSegment("stream-A", []byte{0x1a, 0x45, 0xdf, 0xa3})
 
 	hub.CloseStream("stream-A")
@@ -87,19 +86,24 @@ func TestHubCloseStreamDisconnectsListenersAndClearsMetadata(t *testing.T) {
 	}
 }
 
-func TestHubRegisterReturnsCachedInitSegment(t *testing.T) {
+func TestHubInitSegmentCaching(t *testing.T) {
 	hub := streaming.NewHub()
 	want := []byte{0x1a, 0x45, 0xdf, 0xa3}
+
+	// Only the first cached chunk per stream is kept.
 	hub.SetInitSegment("stream-A", want)
-	client := &streaming.Client{UserID: "user-1", StreamID: "stream-A", Send: make(chan []byte, 1)}
+	hub.SetInitSegment("stream-A", []byte{0xff, 0xff})
 
-	got := hub.Register(client)
-
-	if string(got) != string(want) {
-		t.Fatalf("Register init segment = %v, want %v", got, want)
+	got := hub.InitSegment("stream-A")
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("InitSegment = %v, want %v", got, want)
 	}
-	got[0] = 0
-	if cached := hub.InitSegment("stream-A"); cached[0] != want[0] {
-		t.Fatal("Register returned the hub's mutable init segment")
+
+	// SetInitSegment stores a copy: mutating the source must not corrupt the cache.
+	src := []byte{1, 2, 3}
+	hub.SetInitSegment("stream-B", src)
+	src[0] = 9
+	if cached := hub.InitSegment("stream-B"); cached[0] != 1 {
+		t.Fatalf("cache aliased caller slice: got %v", cached)
 	}
 }

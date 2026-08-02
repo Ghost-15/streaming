@@ -94,13 +94,6 @@ func NewRouter(
 		protected.GET("/recommendations", recommendationH.List)
 	}
 
-	// Audio ingest: broadcaster pushes ~10 chunks/s — exempt from general rate limit.
-	audioIngest := r.Group("/api/v1")
-	audioIngest.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
-	{
-		audioIngest.POST("/streams/:id/push", streamH.Push)
-	}
-
 	admin := r.Group("/api/v1/admin")
 	admin.Use(middleware.RBACMiddleware(publicKey, entity.RoleAdmin))
 	admin.Use(middleware.UserRateLimitMiddleware(100, 100))

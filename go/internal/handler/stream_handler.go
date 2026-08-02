@@ -306,6 +306,9 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 		_ = controller.SetReadDeadline(readDeadline)
 		n, readErr := body.Read(buffer)
 		if n > 0 {
+			// Cache the first chunk (WebM EBML header) so late-joining listeners
+			// on the public /audio path can initialise their browser decoder.
+			h.hub.SetInitSegment(streamID, buffer[:n])
 			h.hub.Broadcast(streamID, buffer[:n])
 		}
 		if readErr == nil {
@@ -358,46 +361,14 @@ func (h *StreamHandler) Leave(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stream_id": streamID, "status": "left"})
 }
 
-// Push receives audio chunks from the broadcaster (one POST per chunk) and
-// fans them out to all connected listeners via the Hub.
-func (h *StreamHandler) Push(c *gin.Context) {
-	claims, ok := middleware.GetClaims(c)
-	if !ok || claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
-		return
-	}
-
-	streamID := c.Param("id")
-	contentType := c.GetHeader("Content-Type")
-	if contentType == "" {
-		contentType = "audio/aac"
-	}
-	h.hub.SetContentType(streamID, contentType)
-
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil || len(body) == 0 {
-		c.Status(http.StatusOK)
-		return
-	}
-
-	// Cache the first chunk: it contains the WebM EBML header that late-joining
-	// listeners need to initialise their browser decoder.
-	h.hub.SetInitSegment(streamID, body)
-	h.hub.Broadcast(streamID, body)
-
-	middleware.Logger(c).Debug().
-		Str("stream_id", streamID).
-		Str("user_id", claims.UserID).
-		Int("bytes", len(body)).
-		Msg("audio chunk pushed")
-
-	c.Status(http.StatusOK)
-}
-
 // Audio streams audio data to a listener using chunked HTTP transfer.
 // The endpoint is intentionally public: the browser <audio> element cannot
-// set custom Authorization headers, so auth is handled at the Push side.
+// set custom Authorization headers, so auth is handled on the ingest side.
 func (h *StreamHandler) Audio(c *gin.Context) {
+	if h.hub == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})
+		return
+	}
 	streamID := c.Param("id")
 
 	connID := uuid.NewString()
@@ -406,12 +377,17 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 	}
 
 	client := &streaming.Client{
+		ID:       uuid.NewString(),
 		UserID:   connID,
 		StreamID: streamID,
 		Send:     make(chan []byte, 128),
 	}
-	initSegment := h.hub.Register(client)
+	if err := h.hub.Register(client); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
 	defer h.hub.Unregister(client)
+	initSegment := h.hub.InitSegment(streamID)
 
 	// Prefer http.Flusher for real-time streaming; fall back to a no-op so the
 	// handler keeps working even when a middleware wraps the ResponseWriter with
@@ -421,7 +397,11 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 		flush = f.Flush
 	}
 
-	c.Header("Content-Type", h.hub.ContentType(streamID))
+	contentType, ok := h.hub.ContentType(streamID)
+	if !ok || contentType == "" {
+		contentType = "audio/webm; codecs=opus"
+	}
+	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "no-cache, no-store")
 	c.Header("X-Accel-Buffering", "no")
 	c.Writer.WriteHeader(http.StatusOK)

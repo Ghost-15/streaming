@@ -13,7 +13,6 @@ import (
 
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/handler"
-	"github.com/Ghost-15/streaming/internal/infrastructure/streaming"
 	"github.com/Ghost-15/streaming/internal/usecase"
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
@@ -38,11 +37,11 @@ func newStreamEngine(h *handler.StreamHandler, userID string) *gin.Engine {
 }
 
 func newStreamHandler(streamRepo *mock.MockStreamRepository) *handler.StreamHandler {
-	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil), streaming.NewHub())
+	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil))
 }
 
 func newStreamHandlerWithHistory(streamRepo *mock.MockStreamRepository, historyRepo *mock.MockListenHistoryRepository) *handler.StreamHandler {
-	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, historyRepo), streaming.NewHub())
+	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, historyRepo))
 }
 
 func streamReq(engine *gin.Engine, method, path string, body interface{}) *httptest.ResponseRecorder {
