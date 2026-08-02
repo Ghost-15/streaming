@@ -23,6 +23,7 @@ func NewRouter(
 	playlistH *handler.PlaylistHandler,
 	adminH *handler.AdminHandler,
 	favoriteH *handler.FavoriteHandler,
+	recommendationH *handler.RecommendationHandler,
 ) *gin.Engine {
 	pubKeyBytes, err := os.ReadFile(cfg.JWTPublicKeyPath)
 	if err != nil {
@@ -88,6 +89,8 @@ func NewRouter(
 		protected.GET("/favorites", favoriteH.List)
 		protected.POST("/favorites", favoriteH.Add)
 		protected.DELETE("/favorites/:trackID", favoriteH.Remove)
+
+		protected.GET("/recommendations", recommendationH.List)
 	}
 
 	// Audio ingest: broadcaster pushes ~10 chunks/s — exempt from general rate limit.
