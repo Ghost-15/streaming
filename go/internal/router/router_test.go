@@ -14,6 +14,7 @@ import (
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/handler"
+	"github.com/Ghost-15/streaming/internal/infrastructure/streaming"
 	"github.com/Ghost-15/streaming/internal/router"
 	"github.com/Ghost-15/streaming/internal/usecase"
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
@@ -55,12 +56,13 @@ func TestNewRouter(t *testing.T) {
 	}
 
 	authH := handler.NewAuthHandler(usecase.NewAuthUseCase(&mock.MockUserRepository{}, ""))
-	streamH := handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil), nil)
+	streamH := handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil), streaming.NewHub())
 	playlistH := handler.NewPlaylistHandler(usecase.NewPlaylistUseCase(&mock.MockPlaylistRepository{}))
 	adminH := handler.NewAdminHandler(usecase.NewAdminUseCase(&mock.MockAdminRepository{}))
 	favoriteH := handler.NewFavoriteHandler(usecase.NewFavoriteUseCase(&mock.MockFavoriteRepository{}))
+	recommendationH := handler.NewRecommendationHandler(usecase.NewRecommendationUseCase(&mock.MockRecommendationRepository{}))
 
-	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH)
+	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
 
 	t.Run("health ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)

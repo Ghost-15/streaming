@@ -12,11 +12,11 @@ import (
 )
 
 type supabaseListenHistoryRepo struct {
-	db *pgxpool.Pool
+	db pgxDB
 }
 
 func NewListenHistoryRepo(db *pgxpool.Pool) repository.ListenHistoryRepository {
-	return &supabaseListenHistoryRepo{db: db}
+	return &supabaseListenHistoryRepo{db: poolOrNil(db)}
 }
 
 func (r *supabaseListenHistoryRepo) Record(ctx context.Context, entry *entity.ListenHistory) (err error) {

@@ -14,12 +14,12 @@ import (
 )
 
 type adminRepo struct {
-	db *pgxpool.Pool
+	db pgxDB
 }
 
 // NewAdminRepo returns an AdminRepository backed by Supabase.
 func NewAdminRepo(db *pgxpool.Pool) repository.AdminRepository {
-	return &adminRepo{db: db}
+	return &adminRepo{db: poolOrNil(db)}
 }
 
 // ListUsers returns a paginated list of users and the total count.

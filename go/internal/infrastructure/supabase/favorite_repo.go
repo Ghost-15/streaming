@@ -12,11 +12,11 @@ import (
 )
 
 type supabaseFavoriteRepo struct {
-	db *pgxpool.Pool
+	db pgxDB
 }
 
 func NewFavoriteRepo(db *pgxpool.Pool) repository.FavoriteRepository {
-	return &supabaseFavoriteRepo{db: db}
+	return &supabaseFavoriteRepo{db: poolOrNil(db)}
 }
 
 func (r *supabaseFavoriteRepo) Add(ctx context.Context, userID, trackID string) error {

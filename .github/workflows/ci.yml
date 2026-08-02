@@ -12,8 +12,8 @@ permissions:
 env:
   GO_VERSION: "1.25"
   GOTOOLCHAIN: local
-  # Set to "80" to enforce the coverage gate once the baseline is ready.
-  COVERAGE_MIN: "0"
+  # Coverage gate enforced at 80% (mock helper packages excluded from the measure).
+  COVERAGE_MIN: "80"
 
 jobs:
   go-lint:
@@ -44,7 +44,8 @@ jobs:
           cache-dependency-path: go/go.sum
       - name: Run tests with race detector and coverage
         working-directory: go
-        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+        # Exclude mock helper packages from the coverage measurement.
+        run: go test $(go list ./... | grep -v '/mock$') -race -coverprofile=coverage.out -covermode=atomic
       - name: Report coverage
         id: coverage
         working-directory: go
