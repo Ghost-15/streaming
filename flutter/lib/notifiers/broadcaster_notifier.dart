@@ -14,6 +14,7 @@ class BroadcasterNotifier extends ChangeNotifier {
 
   web.MediaRecorder? _recorder;
   web.MediaStream? _mediaStream;
+  Future<void> _chunkUpload = Future<void>.value();
 
   BroadcasterNotifier(this._repository);
 
@@ -46,6 +47,16 @@ class BroadcasterNotifier extends ChangeNotifier {
       await _startMediaRecorder(stream);
       _set(BroadcasterState.streaming);
     } catch (e) {
+      final stream = _currentStream;
+      _recorder?.stop();
+      _recorder = null;
+      _releaseMediaStream();
+      if (stream != null) {
+        try {
+          await _repository.stopStream(stream.id);
+        } catch (_) {}
+      }
+      _currentStream = null;
       _errorMessage = e.toString();
       _set(BroadcasterState.error);
     }
@@ -64,15 +75,26 @@ class BroadcasterNotifier extends ChangeNotifier {
       throw Exception('getUserMedia: $e');
     }
 
-    // No mimeType override: Chrome defaults to audio/webm;codecs=opus for
-    // audio-only streams. Forcing the MIME string can throw OperationError
-    // if the exact codec label doesn't match the browser's internal list.
+    // The listener uses MediaSource, so recording and playback must agree on a
+    // MIME type that supports incremental WebM/Opus segments.
+    const mimeType = 'audio/webm;codecs=opus';
+    if (!web.MediaRecorder.isTypeSupported(mimeType) ||
+        !web.MediaSource.isTypeSupported(mimeType)) {
+      _releaseMediaStream();
+      throw Exception(
+        'Le streaming WebM/Opus n\'est pas pris en charge par ce navigateur',
+      );
+    }
+
     // Retry once after a short delay: on the first cold-load Chrome's audio
     // subsystem occasionally isn't ready yet when MediaRecorder is created.
     web.MediaRecorder? recorder;
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
-        recorder = web.MediaRecorder(_mediaStream!);
+        recorder = web.MediaRecorder(
+          _mediaStream!,
+          web.MediaRecorderOptions(mimeType: mimeType),
+        );
         break;
       } catch (e) {
         if (attempt == 0) {
@@ -82,32 +104,37 @@ class BroadcasterNotifier extends ChangeNotifier {
         }
       }
     }
-    final mimeType = recorder!.mimeType;
-    debugPrint('[Broadcaster] mimeType: $mimeType');
+    final recorderMimeType = recorder!.mimeType;
+    debugPrint('[Broadcaster] mimeType: $recorderMimeType');
 
     recorder.onerror = ((web.Event e) {
       debugPrint('[Broadcaster] MediaRecorder error: $e');
     }).toJS;
 
     final streamId = stream.id;
+    _chunkUpload = Future<void>.value();
     recorder.ondataavailable = ((web.BlobEvent event) {
       final blob = event.data;
       debugPrint('[Broadcaster] ondataavailable — blob.size=${blob.size}');
       if (blob.size > 0) {
-        blob.arrayBuffer().toDart.then((jsBuffer) {
-          final chunk = jsBuffer.toDart.asUint8List();
-          debugPrint('[Broadcaster] pushing chunk: ${chunk.length} bytes');
-          _repository.pushChunk(streamId, chunk, mimeType).catchError((e) {
-            debugPrint('[Broadcaster] pushChunk error: $e');
-          });
-        }).catchError((e) {
-          debugPrint('[Broadcaster] arrayBuffer error: $e');
-        });
+        // Keep both Blob conversion and HTTP upload in the event order. The
+        // first WebM blob contains the decoder header; parallel requests could
+        // otherwise make a later media fragment reach the server first.
+        _chunkUpload = _chunkUpload
+            .then((_) async {
+              final jsBuffer = await blob.arrayBuffer().toDart;
+              final chunk = jsBuffer.toDart.asUint8List();
+              debugPrint('[Broadcaster] pushing chunk: ${chunk.length} bytes');
+              await _repository.pushChunk(streamId, chunk, recorderMimeType);
+            })
+            .catchError((e) {
+              debugPrint('[Broadcaster] chunk upload error: $e');
+            });
       }
     }).toJS;
 
-    recorder.start(100); // 100 ms timeslice → one WebM cluster per chunk
-    debugPrint('[Broadcaster] recorder.start(100) — state: ${recorder.state}');
+    recorder.start(250);
+    debugPrint('[Broadcaster] recorder.start(250) — state: ${recorder.state}');
     _recorder = recorder;
   }
 
@@ -115,8 +142,7 @@ class BroadcasterNotifier extends ChangeNotifier {
     if (_currentStream == null) return;
     _set(BroadcasterState.loading);
     try {
-      _recorder?.stop();
-      _recorder = null;
+      await _stopRecorderAndFlush();
       _releaseMediaStream();
       await _repository.stopStream(_currentStream!.id);
       _currentStream = null;
@@ -127,6 +153,26 @@ class BroadcasterNotifier extends ChangeNotifier {
       _errorMessage = e.toString();
       _set(BroadcasterState.error);
     }
+  }
+
+  Future<void> _stopRecorderAndFlush() async {
+    final recorder = _recorder;
+    _recorder = null;
+    if (recorder == null || recorder.state == 'inactive') {
+      await _chunkUpload;
+      return;
+    }
+
+    final stopped = Completer<void>();
+    recorder.addEventListener(
+      'stop',
+      ((web.Event _) {
+        if (!stopped.isCompleted) stopped.complete();
+      }).toJS,
+    );
+    recorder.stop();
+    await stopped.future.timeout(const Duration(seconds: 2), onTimeout: () {});
+    await _chunkUpload;
   }
 
   void _releaseMediaStream() {
