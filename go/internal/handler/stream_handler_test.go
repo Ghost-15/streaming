@@ -19,6 +19,8 @@ import (
 
 var errStreamTest = errors.New("stream test error")
 
+const handlerSessionID = "session-1"
+
 func newStreamEngine(h *handler.StreamHandler, userID string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -29,15 +31,58 @@ func newStreamEngine(h *handler.StreamHandler, userID string) *gin.Engine {
 		})
 	}
 	r.GET("/streams", h.ListActive)
+	r.GET("/streams/mine", h.ListOwned)
 	r.POST("/streams", h.Start)
+	r.PUT("/streams/:id/start", h.Restart)
 	r.PUT("/streams/:id/stop", h.Stop)
+	r.DELETE("/streams/:id", h.Delete)
 	r.POST("/streams/:id/listen", h.Listen)
 	r.POST("/streams/:id/leave", h.Leave)
 	return r
 }
 
+func TestStreamHandler_ListOwned(t *testing.T) {
+	repo := &mock.MockStreamRepository{
+		ListByBroadcasterFn: func(_ context.Context, broadcasterID string) ([]entity.Stream, error) {
+			return []entity.Stream{{ID: "s1", BroadcasterID: broadcasterID}}, nil
+		},
+	}
+	w := streamReq(newStreamEngine(newStreamHandler(repo), "bc-1"), http.MethodGet, "/streams/mine", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListOwned status = %d, want 200", w.Code)
+	}
+}
+
 func newStreamHandler(streamRepo *mock.MockStreamRepository) *handler.StreamHandler {
 	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil))
+}
+
+func TestStreamHandler_RestartAndDelete(t *testing.T) {
+	t.Run("restart owned stream", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
+				return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusEnded}, nil
+			},
+			ActivateFn: func(_ context.Context, _, _ string) error { return nil },
+		}
+		w := streamReq(newStreamEngine(newStreamHandler(repo), "bc-1"), http.MethodPut, "/streams/s1/start", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Restart status = %d, want 200 (body=%s)", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("delete owned stream", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
+				return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusEnded}, nil
+			},
+			DeleteFn: func(_ context.Context, _ string) error { return nil },
+		}
+		w := streamReq(newStreamEngine(newStreamHandler(repo), "bc-1"), http.MethodDelete, "/streams/s1", nil)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("Delete status = %d, want 204", w.Code)
+		}
+	})
 }
 
 func newStreamHandlerWithHistory(streamRepo *mock.MockStreamRepository, historyRepo *mock.MockListenHistoryRepository) *handler.StreamHandler {
@@ -54,6 +99,7 @@ func streamReq(engine *gin.Engine, method, path string, body interface{}) *httpt
 	}
 	req := httptest.NewRequestWithContext(context.Background(), method, path, r)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Stream-Session-ID", handlerSessionID)
 	w := httptest.NewRecorder()
 	engine.ServeHTTP(w, req)
 	return w
@@ -129,9 +175,10 @@ func TestStreamHandler_Stop(t *testing.T) {
 			userID: "bc-1",
 			repoSetup: func(r *mock.MockStreamRepository) {
 				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Stream, error) {
-					return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusLive}, nil
+					sessionID := handlerSessionID
+					return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusLive, ActiveSessionID: &sessionID}, nil
 				}
-				r.UpdateStatusFn = func(_ context.Context, _ string, _ entity.StreamStatus) error { return nil }
+				r.DeactivateFn = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
 			},
 			wantStatus: http.StatusNoContent,
 		},

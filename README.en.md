@@ -36,16 +36,19 @@ Grafana and loopback-only pprof endpoints listen on ports 8080, 9090, 3000 and
 ## Audio protocol
 
 1. Create a live stream with `POST /api/v1/streams`.
-2. The owner sends a continuous authenticated body to
-   `PUT /api/v1/streams/{id}/audio` with an `audio/*` content type.
-3. Each listener opens authenticated
-   `GET /api/v1/streams/{id}/listen`.
+2. Flutter Web captures WebM/Opus and sends ordered `MediaRecorder` blobs to
+   authenticated `POST /api/v1/streams/{id}/push`. Continuous sources such as
+   FFmpeg can still use `PUT /api/v1/streams/{id}/audio`.
+3. Flutter consumes public `GET /api/v1/streams/{id}/audio` incrementally through
+   `MediaSource`; short authenticated `/listen` and `/leave` requests record the
+   business history. Authenticated streaming `GET /listen` remains available to
+   non-Web clients.
 4. Stop the stream with `PUT /api/v1/streams/{id}/stop`.
 
-The GET connection owns the business join/leave lifecycle. A disconnect,
-stream stop, idle deadline or SIGTERM releases its Hub channel, database count
-and metrics. Slow listener queues never block the broadcaster; dropped chunks
-are counted.
+The Web player bounds its live buffer, jumps back to the live edge after a long
+pause, and publishes play/pause/stop through the browser Media Session API.
+A disconnect, stream stop, idle deadline or SIGTERM releases Hub resources.
+Slow listener queues never block the broadcaster; dropped chunks are counted.
 
 ```bash
 ffmpeg -re -stream_loop -1 -i sample.mp3 -codec copy -f mp3 - \

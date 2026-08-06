@@ -4,12 +4,36 @@
 
 Le plan de données audio utilise HTTP derrière le reverse proxy HTTPS Render :
 
-- `PUT /api/v1/streams/:id/audio` reçoit un corps binaire chunked ;
-- `GET /api/v1/streams/:id/listen` renvoie le même média en continu ;
+- `POST /api/v1/streams/:id/push` reçoit les blobs WebM/Opus ordonnés de
+  `MediaRecorder` (4 Mio maximum par blob) ;
+- `PUT /api/v1/streams/:id/audio` conserve le contrat de corps continu pour
+  FFmpeg et les producteurs non-Web ;
+- `GET /api/v1/streams/:id/audio` renvoie le live public utilisé par Flutter Web ;
+- `GET /api/v1/streams/:id/listen` fournit la variante authentifiée non-Web ;
 - le Hub effectue un fan-out non bloquant vers un channel borné par connexion.
 
-Le `POST /listen` reste un événement métier court. Seule la connexion GET
-alimente les gauges d’auditeurs audio réels.
+Le `POST /listen` et le `POST /leave` restent des événements métier courts pour
+le client Web. Les connexions GET alimentent les gauges d’auditeurs audio réels.
+
+## Live réutilisable et sessions isolées
+
+La ligne `streams` représente désormais un live persistant que son diffuseur
+peut reprendre avec le même identifiant. Une diffusion effective est identifiée
+séparément par `active_session_id`, renouvelé à chaque création ou reprise :
+
+- `GET /api/v1/streams/mine` liste les lives du diffuseur, actifs ou arrêtés ;
+- `PUT /api/v1/streams/:id/start` reprend un live existant ;
+- `PUT /api/v1/streams/:id/stop` termine uniquement la session active ;
+- `DELETE /api/v1/streams/:id` supprime définitivement un live possédé ;
+- chaque envoi audio et chaque `Stop` porte `X-Stream-Session-ID`.
+
+Le Hub conserve la session autorisée même lorsqu'aucun publisher n'est encore
+ouvert. `Stop` la révoque atomiquement avec la fermeture des auditeurs. Un chunk
+retardé qui avait déjà passé le contrôle BDD ne peut donc pas rouvrir le flux.
+De même, un `Stop` retardé d'un ancien onglet ne peut pas arrêter la reprise.
+Après un redémarrage du serveur, la première requête valide réhydrate cette
+autorisation depuis la BDD ; une reprise explicite est seule autorisée à
+remplacer une session révoquée.
 
 ## Propagation de l’annulation
 
@@ -17,6 +41,7 @@ alimente les gauges d’auditeurs audio réels.
 | --- | --- |
 | Auditeur ferme la connexion | `Request.Context()` est annulé, le client est retiré du Hub, son channel est fermé et le leave BDD s’exécute avec un contexte détaché borné |
 | Diffuseur ferme le corps PUT | EOF ferme le publisher et observe la durée de session |
+| Diffuseur Web arrête | le dernier blob est vidé, puis `/stop` ferme le publisher chunké et tous les auditeurs |
 | Stream arrêté | `Hub.CloseStream` annule l’ingestion et ferme tous les channels auditeurs |
 | SIGINT/SIGTERM | Le contexte racine est annulé, le Hub est fermé avant `http.Server.Shutdown`, puis l’arrêt est borné |
 | Client lent | Son channel borné ne bloque jamais le diffuseur ; le chunk est abandonné et métriqué |
@@ -51,6 +76,10 @@ handlers posent à la place une deadline glissante avant chaque lecture/écritur
 - `Shutdown` est idempotent et refuse les nouvelles connexions ;
 - un channel plein ne bloque pas le Hub ;
 - un payload ingéré est reçu à l’identique par un auditeur HTTP ;
+- deux auditeurs publics reçoivent le même blob envoyé par `POST /push` ;
+- le cache du segment d’initialisation et son fan-out sont atomiques ;
+- une session arrêtée ne peut ni rouvrir un publisher ni envoyer un chunk ;
+- une reprise renouvelle la session tout en conservant l'identifiant du live ;
 - l’annulation auditeur ramène le delta BDD join/leave à zéro ;
 - `go test -race ./...` vérifie les accès concurrents.
 

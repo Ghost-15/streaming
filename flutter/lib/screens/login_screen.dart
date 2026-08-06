@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
         'password': _passwordController.text,
       });
       if (!mounted) return;
-      context.read<SessionNotifier>().onAuthentication(response);
+      await context.read<SessionNotifier>().onAuthentication(response);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Email ou mot de passe incorrect.');
@@ -64,10 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF3D1F9A),
-                    cs.surfaceContainerLowest,
-                  ],
+                  colors: [const Color(0xFF3D1F9A), cs.surfaceContainerLowest],
                   stops: const [0.0, 1.0],
                 ),
               ),
@@ -109,9 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'Connecte-toi pour continuer.',
-                    style: tt.bodyMedium?.copyWith(
-                      color: Colors.white60,
-                    ),
+                    style: tt.bodyMedium?.copyWith(color: Colors.white60),
                   ),
                 ],
               ),
@@ -184,8 +179,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Text(
                         'Pas encore de compte ?',
-                        style: tt.bodyMedium
-                            ?.copyWith(color: cs.onSurfaceVariant),
+                        style: tt.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                       TextButton(
                         onPressed: () => context.go('/register'),
@@ -223,9 +219,9 @@ class _ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onErrorContainer,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: cs.onErrorContainer),
             ),
           ),
         ],

@@ -10,8 +10,10 @@ import (
 )
 
 var (
-	ErrHubClosed       = errors.New("streaming: hub closed")
-	ErrPublisherActive = errors.New("streaming: publisher already active")
+	ErrHubClosed              = errors.New("streaming: hub closed")
+	ErrPublisherActive        = errors.New("streaming: publisher already active")
+	ErrPublisherFormatChanged = errors.New("streaming: publisher content type changed")
+	ErrPublisherNotActive     = errors.New("streaming: publisher is not active")
 )
 
 // Client represents a connected listener on a stream.
@@ -24,9 +26,18 @@ type Client struct {
 }
 
 type publisher struct {
-	contentType string
-	cancel      context.CancelFunc
-	startedAt   time.Time
+	contentType   string
+	broadcasterID string
+	sessionID     string
+	cancel        context.CancelFunc
+	startedAt     time.Time
+	chunked       bool
+}
+
+type authorizedSession struct {
+	broadcasterID string
+	sessionID     string
+	revoked       bool
 }
 
 // Hub manages active streams and their connected listeners.
@@ -37,6 +48,7 @@ type Hub struct {
 	initSegments    map[string][]byte // streamID → first chunk (WebM header) for late joiners
 	userConnections map[string]int
 	publishers      map[string]publisher
+	sessions        map[string]authorizedSession
 	closed          bool
 }
 
@@ -47,20 +59,83 @@ func NewHub() *Hub {
 		initSegments:    make(map[string][]byte),
 		userConnections: make(map[string]int),
 		publishers:      make(map[string]publisher),
+		sessions:        make(map[string]authorizedSession),
 	}
+}
+
+// ActivateStreamSession atomically replaces the session allowed to publish on
+// a persistent stream. Any publisher and listeners from the preceding session
+// are disconnected before the new session can accept audio.
+func (h *Hub) ActivateStreamSession(streamID, broadcasterID, sessionID string) error {
+	if streamID == "" || broadcasterID == "" || sessionID == "" {
+		return ErrPublisherNotActive
+	}
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		return ErrHubClosed
+	}
+	pub, hasPublisher := h.closeStreamLocked(streamID)
+	h.sessions[streamID] = authorizedSession{
+		broadcasterID: broadcasterID,
+		sessionID:     sessionID,
+	}
+	h.mu.Unlock()
+	h.finishPublisher(streamID, pub, hasPublisher)
+	return nil
+}
+
+// AuthorizeStreamSession initializes the in-memory session after a process
+// restart, once the database has confirmed it. A revoked or superseded session
+// can never claim the stream again; only ActivateStreamSession may replace it.
+func (h *Hub) AuthorizeStreamSession(streamID, broadcasterID, sessionID string) error {
+	if streamID == "" || broadcasterID == "" || sessionID == "" {
+		return ErrPublisherNotActive
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return ErrHubClosed
+	}
+	current, exists := h.sessions[streamID]
+	if !exists {
+		h.sessions[streamID] = authorizedSession{
+			broadcasterID: broadcasterID,
+			sessionID:     sessionID,
+		}
+		return nil
+	}
+	if current.revoked || current.broadcasterID != broadcasterID || current.sessionID != sessionID {
+		return ErrPublisherNotActive
+	}
+	return nil
+}
+
+func (h *Hub) sessionAuthorizedLocked(streamID, broadcasterID, sessionID string) bool {
+	current, exists := h.sessions[streamID]
+	return exists && !current.revoked &&
+		current.broadcasterID == broadcasterID && current.sessionID == sessionID
 }
 
 // Register adds a listener to a stream. A duplicate connection for the same key
 // (client ID, or user ID when no ID is set) replaces the previous one.
 func (h *Hub) Register(client *Client) error {
+	_, err := h.RegisterWithInit(client)
+	return err
+}
+
+// RegisterWithInit atomically registers a listener and snapshots the cached
+// media initialisation segment. This prevents a new listener from receiving
+// the first chunk once through Broadcast and a second time from the cache.
+func (h *Hub) RegisterWithInit(client *Client) ([]byte, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if h.closed {
-		return ErrHubClosed
+		return nil, ErrHubClosed
 	}
 	if client.Send == nil {
-		return errors.New("streaming: client send channel is nil")
+		return nil, errors.New("streaming: client send channel is nil")
 	}
 	if client.joinedAt.IsZero() {
 		client.joinedAt = time.Now()
@@ -77,7 +152,7 @@ func (h *Hub) Register(client *Client) error {
 	if previous, exists := h.streams[client.StreamID][key]; exists {
 		close(previous.Send)
 		h.streams[client.StreamID][key] = client
-		return nil
+		return append([]byte(nil), h.initSegments[client.StreamID]...), nil
 	}
 
 	h.streams[client.StreamID][key] = client
@@ -86,7 +161,7 @@ func (h *Hub) Register(client *Client) error {
 		telemetry.OnlineUsers.Inc()
 	}
 	h.userConnections[client.UserID]++
-	return nil
+	return append([]byte(nil), h.initSegments[client.StreamID]...), nil
 }
 
 // SetInitSegment caches the first audio chunk for a stream (WebM EBML header +
@@ -106,7 +181,7 @@ func (h *Hub) SetInitSegment(streamID string, data []byte) {
 func (h *Hub) InitSegment(streamID string) []byte {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.initSegments[streamID]
+	return append([]byte(nil), h.initSegments[streamID]...)
 }
 
 // Unregister removes a listener from a stream.
@@ -138,6 +213,23 @@ func (h *Hub) Unregister(client *Client) {
 func (h *Hub) Broadcast(streamID string, data []byte) (delivered, dropped int) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+	return h.broadcastLocked(streamID, data)
+}
+
+// BroadcastWithInit atomically caches the first packet and fans it out. A
+// listener racing with the first browser upload therefore receives that packet
+// either from its queue or from RegisterWithInit, never from both.
+func (h *Hub) BroadcastWithInit(streamID string, data []byte) (delivered, dropped int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, already := h.initSegments[streamID]; !already {
+		h.initSegments[streamID] = append([]byte(nil), data...)
+	}
+	return h.broadcastLocked(streamID, data)
+}
+
+// broadcastLocked requires either the Hub read or write lock.
+func (h *Hub) broadcastLocked(streamID string, data []byte) (delivered, dropped int) {
 	// One immutable copy detaches the packet from the broadcaster's reusable
 	// read buffer. All listener queues may safely share that same byte slice.
 	packet := append([]byte(nil), data...)
@@ -182,8 +274,128 @@ func (h *Hub) OpenPublisher(streamID, contentType string) (context.Context, erro
 		cancel:      cancel,
 		startedAt:   time.Now(),
 	}
+	delete(h.initSegments, streamID)
 	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
 	return ctx, nil
+}
+
+// OpenOwnedPublisher reserves the continuous ingestion slot for an authorized
+// broadcast session. The session gate prevents a request that raced with Stop
+// from reopening a publisher after CloseStream.
+func (h *Hub) OpenOwnedPublisher(
+	streamID, broadcasterID, sessionID, contentType string,
+) (context.Context, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return nil, ErrHubClosed
+	}
+	if !h.sessionAuthorizedLocked(streamID, broadcasterID, sessionID) {
+		return nil, ErrPublisherNotActive
+	}
+	if _, exists := h.publishers[streamID]; exists {
+		return nil, ErrPublisherActive
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	h.publishers[streamID] = publisher{
+		contentType:   contentType,
+		broadcasterID: broadcasterID,
+		sessionID:     sessionID,
+		cancel:        cancel,
+		startedAt:     time.Now(),
+	}
+	delete(h.initSegments, streamID)
+	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
+	return ctx, nil
+}
+
+// OpenChunkPublisher opens, or reuses, the publisher session used by browser
+// MediaRecorder uploads. Unlike the continuous PUT publisher, the session
+// spans multiple short HTTP requests and is closed by Stop/CloseStream.
+func (h *Hub) OpenChunkPublisher(streamID, contentType string) error {
+	return h.OpenOwnedChunkPublisher(streamID, "", "", contentType)
+}
+
+// OpenOwnedChunkPublisher opens, or reuses, a browser publisher owned by the
+// authenticated broadcaster. Ownership lets subsequent short chunk requests
+// stay entirely on the in-memory data plane after the first database check.
+func (h *Hub) OpenOwnedChunkPublisher(streamID, broadcasterID, sessionID, contentType string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return ErrHubClosed
+	}
+	// The blank pair is retained for the low-level compatibility wrapper used
+	// by Hub tests and non-authenticated internal callers.
+	if (broadcasterID != "" || sessionID != "") &&
+		!h.sessionAuthorizedLocked(streamID, broadcasterID, sessionID) {
+		return ErrPublisherNotActive
+	}
+	if current, exists := h.publishers[streamID]; exists {
+		if !current.chunked {
+			return ErrPublisherActive
+		}
+		if current.contentType != contentType {
+			return ErrPublisherFormatChanged
+		}
+		if current.broadcasterID != broadcasterID {
+			return ErrPublisherActive
+		}
+		if current.sessionID != sessionID {
+			return ErrPublisherActive
+		}
+		return nil
+	}
+	_, cancel := context.WithCancel(context.Background())
+	h.publishers[streamID] = publisher{
+		contentType:   contentType,
+		broadcasterID: broadcasterID,
+		sessionID:     sessionID,
+		cancel:        cancel,
+		startedAt:     time.Now(),
+		chunked:       true,
+	}
+	delete(h.initSegments, streamID)
+	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
+	return nil
+}
+
+// OwnsChunkPublisher reports whether this exact authenticated publisher
+// session is already open. It is used to avoid a database lookup per blob.
+func (h *Hub) OwnsChunkPublisher(streamID, broadcasterID, sessionID, contentType string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	current, exists := h.publishers[streamID]
+	return exists && current.chunked &&
+		current.broadcasterID == broadcasterID &&
+		current.sessionID == sessionID &&
+		current.contentType == contentType
+}
+
+// BroadcastOwnedChunk verifies that the publisher still exists while holding
+// the same lock used by CloseStream, then atomically caches and broadcasts the
+// payload. A request that finishes after Stop therefore cannot revive audio.
+func (h *Hub) BroadcastOwnedChunk(
+	streamID, broadcasterID, sessionID, contentType string,
+	data []byte,
+) (delivered, dropped int, err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return 0, 0, ErrHubClosed
+	}
+	current, exists := h.publishers[streamID]
+	if !exists || !current.chunked || current.broadcasterID != broadcasterID || current.sessionID != sessionID {
+		return 0, 0, ErrPublisherNotActive
+	}
+	if current.contentType != contentType {
+		return 0, 0, ErrPublisherFormatChanged
+	}
+	if _, already := h.initSegments[streamID]; !already {
+		h.initSegments[streamID] = append([]byte(nil), data...)
+	}
+	delivered, dropped = h.broadcastLocked(streamID, data)
+	return delivered, dropped, nil
 }
 
 // ClosePublisher releases a broadcaster slot. It is idempotent.
@@ -192,6 +404,12 @@ func (h *Hub) ClosePublisher(streamID string) {
 	pub, exists := h.publishers[streamID]
 	if exists {
 		delete(h.publishers, streamID)
+	}
+	listeners := h.streams[streamID]
+	delete(h.streams, streamID)
+	delete(h.initSegments, streamID)
+	for _, client := range listeners {
+		h.disconnectLocked(client)
 	}
 	h.mu.Unlock()
 	if !exists {
@@ -217,6 +435,42 @@ func (h *Hub) ContentType(streamID string) (string, bool) {
 // end-of-stream.
 func (h *Hub) CloseStream(streamID string) {
 	h.mu.Lock()
+	pub, hasPublisher := h.closeStreamLocked(streamID)
+	h.sessions[streamID] = authorizedSession{revoked: true}
+	h.mu.Unlock()
+	h.finishPublisher(streamID, pub, hasPublisher)
+}
+
+// CloseStreamSession revokes and closes only the named session. This keeps a
+// delayed Stop response from tearing down a newer session that reused the same
+// persistent stream ID.
+func (h *Hub) CloseStreamSession(streamID, broadcasterID, sessionID string) error {
+	if streamID == "" || broadcasterID == "" || sessionID == "" {
+		return ErrPublisherNotActive
+	}
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		return ErrHubClosed
+	}
+	current, exists := h.sessions[streamID]
+	if exists && (current.broadcasterID != broadcasterID || current.sessionID != sessionID) {
+		h.mu.Unlock()
+		return ErrPublisherNotActive
+	}
+	pub, hasPublisher := h.closeStreamLocked(streamID)
+	h.sessions[streamID] = authorizedSession{
+		broadcasterID: broadcasterID,
+		sessionID:     sessionID,
+		revoked:       true,
+	}
+	h.mu.Unlock()
+	h.finishPublisher(streamID, pub, hasPublisher)
+	return nil
+}
+
+// closeStreamLocked detaches all volatile media state. The caller owns h.mu.
+func (h *Hub) closeStreamLocked(streamID string) (publisher, bool) {
 	pub, hasPublisher := h.publishers[streamID]
 	if hasPublisher {
 		delete(h.publishers, streamID)
@@ -227,13 +481,16 @@ func (h *Hub) CloseStream(streamID string) {
 	for _, client := range listeners {
 		h.disconnectLocked(client)
 	}
-	h.mu.Unlock()
+	return pub, hasPublisher
+}
 
-	if hasPublisher {
-		pub.cancel()
-		telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(0)
-		telemetry.BroadcasterSessionDuration.Observe(time.Since(pub.startedAt).Seconds())
+func (h *Hub) finishPublisher(streamID string, pub publisher, exists bool) {
+	if !exists {
+		return
 	}
+	pub.cancel()
+	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(0)
+	telemetry.BroadcasterSessionDuration.Observe(time.Since(pub.startedAt).Seconds())
 }
 
 // Shutdown releases every long-lived connection and rejects new ones.

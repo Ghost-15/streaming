@@ -1,4 +1,4 @@
-# ADR-006 — Prometheus pull (client_golang) vs OTEL metrics push
+# ADR-005 — Prometheus pull (client_golang) vs OTEL metrics push
 
 ## Status
 Accepted — Sprint 3 (US-010).

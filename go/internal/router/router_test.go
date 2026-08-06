@@ -89,4 +89,14 @@ func TestNewRouter(t *testing.T) {
 			t.Fatalf("/api/v1/playlists status = %d, want 401", w.Code)
 		}
 	})
+
+	t.Run("browser audio push route is protected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/streams/s1/push", nil)
+		req.Header.Set("Content-Type", "audio/webm;codecs=opus")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("/api/v1/streams/s1/push status = %d, want 401", w.Code)
+		}
+	})
 }

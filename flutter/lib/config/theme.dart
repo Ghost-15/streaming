@@ -92,21 +92,90 @@ class AppTheme {
   static ThemeData _build(ColorScheme cs) {
     final base = ThemeData(useMaterial3: true, colorScheme: cs);
     final text = GoogleFonts.dmSansTextTheme(base.textTheme).copyWith(
-      displayLarge: GoogleFonts.dmSans(fontSize: 57, fontWeight: FontWeight.w300, letterSpacing: -0.5, color: cs.onSurface),
-      displayMedium: GoogleFonts.dmSans(fontSize: 45, fontWeight: FontWeight.w300, letterSpacing: -0.25, color: cs.onSurface),
-      displaySmall: GoogleFonts.dmSans(fontSize: 36, fontWeight: FontWeight.w400, color: cs.onSurface),
-      headlineLarge: GoogleFonts.dmSans(fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.75, color: cs.onSurface),
-      headlineMedium: GoogleFonts.dmSans(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: cs.onSurface),
-      headlineSmall: GoogleFonts.dmSans(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.25, color: cs.onSurface),
-      titleLarge: GoogleFonts.dmSans(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: -0.1, color: cs.onSurface),
-      titleMedium: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurface),
-      titleSmall: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface),
-      bodyLarge: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w400, color: cs.onSurface),
-      bodyMedium: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w400, color: cs.onSurface),
-      bodySmall: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w400, color: cs.onSurfaceVariant),
-      labelLarge: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.1, color: cs.onSurface),
-      labelMedium: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.4, color: cs.onSurface),
-      labelSmall: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5, color: cs.onSurfaceVariant),
+      displayLarge: GoogleFonts.dmSans(
+        fontSize: 57,
+        fontWeight: FontWeight.w300,
+        letterSpacing: -0.5,
+        color: cs.onSurface,
+      ),
+      displayMedium: GoogleFonts.dmSans(
+        fontSize: 45,
+        fontWeight: FontWeight.w300,
+        letterSpacing: -0.25,
+        color: cs.onSurface,
+      ),
+      displaySmall: GoogleFonts.dmSans(
+        fontSize: 36,
+        fontWeight: FontWeight.w400,
+        color: cs.onSurface,
+      ),
+      headlineLarge: GoogleFonts.dmSans(
+        fontSize: 32,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.75,
+        color: cs.onSurface,
+      ),
+      headlineMedium: GoogleFonts.dmSans(
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.5,
+        color: cs.onSurface,
+      ),
+      headlineSmall: GoogleFonts.dmSans(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.25,
+        color: cs.onSurface,
+      ),
+      titleLarge: GoogleFonts.dmSans(
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.1,
+        color: cs.onSurface,
+      ),
+      titleMedium: GoogleFonts.dmSans(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: cs.onSurface,
+      ),
+      titleSmall: GoogleFonts.dmSans(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: cs.onSurface,
+      ),
+      bodyLarge: GoogleFonts.dmSans(
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        color: cs.onSurface,
+      ),
+      bodyMedium: GoogleFonts.dmSans(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: cs.onSurface,
+      ),
+      bodySmall: GoogleFonts.dmSans(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: cs.onSurfaceVariant,
+      ),
+      labelLarge: GoogleFonts.dmSans(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.1,
+        color: cs.onSurface,
+      ),
+      labelMedium: GoogleFonts.dmSans(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.4,
+        color: cs.onSurface,
+      ),
+      labelSmall: GoogleFonts.dmSans(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        letterSpacing: 0.5,
+        color: cs.onSurfaceVariant,
+      ),
     );
 
     const pill = RoundedRectangleBorder(
@@ -166,9 +235,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: cs.surfaceContainerHigh,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         margin: EdgeInsets.zero,
       ),
 
@@ -200,7 +267,10 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 32),
           shape: pill,
           elevation: 0,
-          textStyle: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: GoogleFonts.dmSans(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
 
@@ -212,7 +282,10 @@ class AppTheme {
           minimumSize: const Size(0, 56),
           padding: const EdgeInsets.symmetric(horizontal: 32),
           shape: pill,
-          textStyle: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: GoogleFonts.dmSans(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
 
@@ -221,8 +294,13 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: cs.primary,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
-          textStyle: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(50),
+          ),
+          textStyle: GoogleFonts.dmSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
 
@@ -230,7 +308,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: cs.surfaceContainerHigh,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
@@ -273,7 +354,10 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: cs.surfaceContainerHigh,
         selectedColor: cs.primaryContainer.withValues(alpha: 0.5),
-        labelStyle: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w500),
+        labelStyle: GoogleFonts.dmSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         shape: const StadiumBorder(),
         side: BorderSide(color: cs.outlineVariant, width: 0.5),
@@ -389,8 +473,14 @@ class AppTheme {
         indicatorColor: cs.primary,
         indicatorSize: TabBarIndicatorSize.label,
         dividerColor: cs.outlineVariant,
-        labelStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w400),
+        labelStyle: GoogleFonts.dmSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelStyle: GoogleFonts.dmSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
+        ),
       ),
     );
   }

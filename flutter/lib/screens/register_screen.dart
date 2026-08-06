@@ -60,7 +60,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'role': _selectedRole,
       });
       if (!mounted) return;
-      context.read<SessionNotifier>().onAuthentication(response);
+      await context.read<SessionNotifier>().onAuthentication(response);
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
@@ -92,10 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF3D1F9A),
-                    cs.surfaceContainerLowest,
-                  ],
+                  colors: [const Color(0xFF3D1F9A), cs.surfaceContainerLowest],
                   stops: const [0.0, 1.0],
                 ),
               ),
@@ -105,9 +102,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back_rounded),
                     color: Colors.white70,
-                    onPressed: () => context.canPop()
-                        ? context.pop()
-                        : context.go('/login'),
+                    onPressed: () =>
+                        context.canPop() ? context.pop() : context.go('/login'),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                   ),
@@ -187,8 +183,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Expanded(
                         child: TextField(
                           controller: _firstNameController,
-                          decoration:
-                              const InputDecoration(labelText: 'Prénom'),
+                          decoration: const InputDecoration(
+                            labelText: 'Prénom',
+                          ),
                           textCapitalization: TextCapitalization.words,
                           textInputAction: TextInputAction.next,
                         ),
@@ -270,8 +267,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     children: [
                       Text(
                         'Déjà un compte ?',
-                        style: tt.bodyMedium
-                            ?.copyWith(color: cs.onSurfaceVariant),
+                        style: tt.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                       TextButton(
                         onPressed: () => context.go('/login'),
@@ -337,9 +335,7 @@ class _RoleCard extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: selected
-                        ? cs.primary
-                        : cs.surfaceContainerHighest,
+                    color: selected ? cs.primary : cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -404,9 +400,9 @@ class _ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onErrorContainer,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: cs.onErrorContainer),
             ),
           ),
         ],

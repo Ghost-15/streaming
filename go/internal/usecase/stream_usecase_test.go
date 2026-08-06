@@ -11,7 +11,23 @@ import (
 )
 
 func liveStream() *entity.Stream {
-	return &entity.Stream{ID: "s1", Title: "Live", BroadcasterID: "bc-1", Status: entity.StreamStatusLive}
+	sessionID := "session-1"
+	return &entity.Stream{ID: "s1", Title: "Live", BroadcasterID: "bc-1", Status: entity.StreamStatusLive, ActiveSessionID: &sessionID}
+}
+
+func TestStreamUseCase_ListOwned(t *testing.T) {
+	repo := &mock.MockStreamRepository{
+		ListByBroadcasterFn: func(_ context.Context, broadcasterID string) ([]entity.Stream, error) {
+			if broadcasterID != "bc-1" {
+				t.Fatalf("broadcasterID = %q", broadcasterID)
+			}
+			return []entity.Stream{{ID: "s1"}}, nil
+		},
+	}
+	streams, err := usecase.NewStreamUseCase(repo, nil).ListOwned(context.Background(), "bc-1")
+	if err != nil || len(streams) != 1 {
+		t.Fatalf("ListOwned streams=%v err=%v", streams, err)
+	}
 }
 
 func TestStreamUseCase_ListActive(t *testing.T) {
@@ -42,6 +58,29 @@ func TestStreamUseCase_ListActive(t *testing.T) {
 			t.Error("ListActive() expected error")
 		}
 	})
+}
+
+func TestStreamUseCase_Restart(t *testing.T) {
+	var activatedSession string
+	repo := &mock.MockStreamRepository{
+		FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
+			return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusEnded}, nil
+		},
+		ActivateFn: func(_ context.Context, id, sessionID string) error {
+			if id != "s1" || sessionID == "" {
+				t.Fatalf("Activate(%q, %q)", id, sessionID)
+			}
+			activatedSession = sessionID
+			return nil
+		},
+	}
+	stream, err := usecase.NewStreamUseCase(repo, nil).Restart(context.Background(), "s1", "bc-1")
+	if err != nil || stream == nil || !stream.IsLive() || stream.ActiveSessionID == nil {
+		t.Fatalf("Restart stream=%v err=%v", stream, err)
+	}
+	if *stream.ActiveSessionID != activatedSession {
+		t.Fatalf("active session = %q, want %q", *stream.ActiveSessionID, activatedSession)
+	}
 }
 
 func TestStreamUseCase_Start(t *testing.T) {
@@ -92,6 +131,34 @@ func TestStreamUseCase_Start(t *testing.T) {
 	}
 }
 
+func TestStreamUseCase_DeleteOwned(t *testing.T) {
+	deleted := false
+	repo := &mock.MockStreamRepository{
+		FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
+			return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusEnded}, nil
+		},
+		DeleteFn: func(_ context.Context, id string) error {
+			deleted = id == "s1"
+			return nil
+		},
+	}
+	if err := usecase.NewStreamUseCase(repo, nil).Delete(context.Background(), "s1", "bc-1"); err != nil || !deleted {
+		t.Fatalf("Delete deleted=%v err=%v", deleted, err)
+	}
+}
+
+func TestStreamUseCase_CanBroadcastRequiresCurrentSession(t *testing.T) {
+	uc := usecase.NewStreamUseCase(&mock.MockStreamRepository{
+		FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) { return liveStream(), nil },
+	}, nil)
+	if err := uc.CanBroadcast(context.Background(), "s1", "bc-1", "session-1"); err != nil {
+		t.Fatalf("current session rejected: %v", err)
+	}
+	if err := uc.CanBroadcast(context.Background(), "s1", "bc-1", "stale"); !errors.Is(err, usecase.ErrStreamSessionExpired) {
+		t.Fatalf("stale session err = %v", err)
+	}
+}
+
 func TestStreamUseCase_End(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -104,7 +171,7 @@ func TestStreamUseCase_End(t *testing.T) {
 			bcaster: "bc-1",
 			repoSetup: func(r *mock.MockStreamRepository) {
 				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Stream, error) { return liveStream(), nil }
-				r.UpdateStatusFn = func(_ context.Context, _ string, _ entity.StreamStatus) error { return nil }
+				r.DeactivateFn = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
 			},
 		},
 		{
@@ -129,7 +196,7 @@ func TestStreamUseCase_End(t *testing.T) {
 			repo := &mock.MockStreamRepository{}
 			tt.repoSetup(repo)
 			uc := usecase.NewStreamUseCase(repo, nil)
-			err := uc.End(context.Background(), "s1", tt.bcaster)
+			err := uc.End(context.Background(), "s1", tt.bcaster, "session-1")
 			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
 				t.Fatalf("End() err = %v, want %v", err, tt.wantErr)
 			}

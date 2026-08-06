@@ -70,14 +70,12 @@ class _HomeScreenState extends State<HomeScreen> {
             _HomeHeader(session: session, greeting: _greeting()),
 
             // ── Playlists (connecté) ─────────────────────────────────────
-            if (session.isAuthenticated &&
-                playlists.playlists.isNotEmpty) ...[
+            if (session.isAuthenticated && playlists.playlists.isNotEmpty) ...[
               const _SectionHeader('Mes playlists'),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverGrid.builder(
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
@@ -113,11 +111,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       height: 210,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                         itemCount: streams.streams.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(width: 14),
+                        separatorBuilder: (_, _) => const SizedBox(width: 14),
                         itemBuilder: (_, i) => StreamCard(
                           stream: streams.streams[i],
                           compact: true,
@@ -143,8 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
 
             // ── Favoris (connecté, après les lives) ──────────────────────
-            if (session.isAuthenticated &&
-                favorites.tracks.isNotEmpty) ...[
+            if (session.isAuthenticated && favorites.tracks.isNotEmpty) ...[
               const _SectionHeader('Mes favoris'),
               SliverToBoxAdapter(
                 child: SizedBox(
@@ -205,8 +200,11 @@ class _HomeHeader extends StatelessWidget {
                     color: cs.primary,
                     borderRadius: BorderRadius.circular(9),
                   ),
-                  child:
-                      Icon(Icons.radio_rounded, color: cs.onPrimary, size: 17),
+                  child: Icon(
+                    Icons.radio_rounded,
+                    color: cs.onPrimary,
+                    size: 17,
+                  ),
                 ),
                 const SizedBox(width: 9),
                 Text(
@@ -220,8 +218,10 @@ class _HomeHeader extends StatelessWidget {
                 if (session.isAuthenticated && user != null) ...[
                   if (user.role == Role.admin)
                     IconButton(
-                      icon: const Icon(Icons.admin_panel_settings_outlined,
-                          size: 20),
+                      icon: const Icon(
+                        Icons.admin_panel_settings_outlined,
+                        size: 20,
+                      ),
                       tooltip: 'Administration',
                       color: cs.onSurfaceVariant,
                       visualDensity: VisualDensity.compact,
@@ -259,11 +259,13 @@ class _HomeHeader extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerHighest,
                         shape: BoxShape.circle,
-                        border:
-                            Border.all(color: cs.outlineVariant, width: 1),
+                        border: Border.all(color: cs.outlineVariant, width: 1),
                       ),
-                      child: Icon(Icons.person_outline_rounded,
-                          size: 17, color: cs.onSurfaceVariant),
+                      child: Icon(
+                        Icons.person_outline_rounded,
+                        size: 17,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -275,9 +277,7 @@ class _HomeHeader extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
             child: Text(
-              name != null && name.isNotEmpty
-                  ? '$greeting, $name'
-                  : greeting,
+              name != null && name.isNotEmpty ? '$greeting, $name' : greeting,
               style: tt.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
@@ -353,21 +353,24 @@ class _HomeHeader extends StatelessWidget {
                           user.fullName.trim().isNotEmpty
                               ? user.fullName
                               : user.email,
-                          style: tt.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         Text(
                           user.email,
-                          style: tt.bodySmall
-                              ?.copyWith(color: cs.onSurfaceVariant),
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color:
-                                cs.primaryContainer.withValues(alpha: 0.4),
+                            color: cs.primaryContainer.withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -387,8 +390,7 @@ class _HomeHeader extends StatelessWidget {
             ),
             Divider(height: 1, color: cs.outlineVariant),
             ListTile(
-              leading:
-                  Icon(Icons.logout_rounded, color: cs.error, size: 20),
+              leading: Icon(Icons.logout_rounded, color: cs.error, size: 20),
               title: Text(
                 'Se déconnecter',
                 style: tt.bodyMedium?.copyWith(color: cs.error),
@@ -406,10 +408,10 @@ class _HomeHeader extends StatelessWidget {
   }
 
   String _roleLabel(Role role) => switch (role) {
-        Role.admin => 'Administrateur',
-        Role.diffuseur => 'Diffuseur',
-        _ => 'Auditeur',
-      };
+    Role.admin => 'Administrateur',
+    Role.diffuseur => 'Diffuseur',
+    _ => 'Auditeur',
+  };
 }
 
 // ── Section header ────────────────────────────────────────────────────────────
@@ -486,98 +488,104 @@ class _FeaturedCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(19),
           child: SizedBox(
             height: 220,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Gradient background
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      accent,
-                      accent.withValues(alpha: 0.6),
-                      cs.surfaceContainerHigh,
-                    ],
-                    stops: const [0.0, 0.5, 1.0],
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Gradient background
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        accent,
+                        accent.withValues(alpha: 0.6),
+                        cs.surfaceContainerHigh,
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
                   ),
                 ),
-              ),
-              // Decorative waveform icon
-              Positioned(
-                right: -20,
-                top: -20,
-                child: Icon(
-                  Icons.radio_rounded,
-                  size: 180,
-                  color: Colors.white.withValues(alpha: 0.06),
+                // Decorative waveform icon
+                Positioned(
+                  right: -20,
+                  top: -20,
+                  child: Icon(
+                    Icons.radio_rounded,
+                    size: 180,
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
                 ),
-              ),
-              // Content
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // LIVE badge
-                    if (stream.isLive)
-                      const _LiveBadge(large: true),
-                    const Spacer(),
-                    // Title
-                    Text(
-                      stream.title,
-                      style: tt.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        shadows: [
-                          const Shadow(color: Colors.black54, blurRadius: 8),
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // LIVE badge
+                      if (stream.isLive) const _LiveBadge(large: true),
+                      const Spacer(),
+                      // Title
+                      Text(
+                        stream.title,
+                        style: tt.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          shadows: [
+                            const Shadow(color: Colors.black54, blurRadius: 8),
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'par ${stream.broadcasterName}',
+                        style: tt.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Bottom row
+                      Row(
+                        children: [
+                          _ListenerCount(
+                            count: stream.listenerCount,
+                            light: true,
+                          ),
+                          const Spacer(),
+                          // Play button
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(26),
+                              boxShadow: [
+                                const BoxShadow(
+                                  color: Colors.black38,
+                                  blurRadius: 12,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.play_arrow_rounded,
+                              color: accent,
+                              size: 30,
+                            ),
+                          ),
                         ],
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'par ${stream.broadcasterName}',
-                      style: tt.bodyMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.8),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Bottom row
-                    Row(
-                      children: [
-                        _ListenerCount(count: stream.listenerCount, light: true),
-                        const Spacer(),
-                        // Play button
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(26),
-                            boxShadow: [
-                              const BoxShadow(
-                                color: Colors.black38,
-                                blurRadius: 12,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Icon(Icons.play_arrow_rounded, color: accent, size: 30),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 
@@ -621,7 +629,11 @@ class _EmptyState extends StatelessWidget {
                 color: cs.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(40),
               ),
-              child: Icon(Icons.radio_outlined, size: 40, color: cs.onSurfaceVariant),
+              child: Icon(
+                Icons.radio_outlined,
+                size: 40,
+                color: cs.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 20),
             Text(
@@ -662,7 +674,10 @@ class _LoginBanner extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.primaryContainer.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: cs.primary.withValues(alpha: 0.35), width: 0.8),
+            border: Border.all(
+              color: cs.primary.withValues(alpha: 0.35),
+              width: 0.8,
+            ),
             boxShadow: [
               BoxShadow(
                 color: cs.primary.withValues(alpha: 0.12),
@@ -699,7 +714,11 @@ class _LoginBanner extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded, size: 16, color: cs.onSurfaceVariant),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: cs.onSurfaceVariant,
+              ),
             ],
           ),
         ),
@@ -753,20 +772,20 @@ class _PlaylistCard extends StatelessWidget {
                   ),
                 ),
               ),
-            const SizedBox(height: 8),
-            Text(
-              playlist.title,
-              style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              '${playlist.trackCount} titre${playlist.trackCount != 1 ? 's' : ''}',
-              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                playlist.title,
+                style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                '${playlist.trackCount} titre${playlist.trackCount != 1 ? 's' : ''}',
+                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -825,16 +844,18 @@ class _FavoriteChip extends StatelessWidget {
               if (track.artist.isNotEmpty)
                 Text(
                   track.artist,
-                  style: TextStyle(
-                      fontSize: 11, color: cs.onSurfaceVariant),
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
             ],
           ),
           const SizedBox(width: 8),
-          Icon(Icons.favorite_rounded,
-              size: 12, color: cs.error.withValues(alpha: 0.65)),
+          Icon(
+            Icons.favorite_rounded,
+            size: 12,
+            color: cs.error.withValues(alpha: 0.65),
+          ),
         ],
       ),
     );

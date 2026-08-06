@@ -72,9 +72,11 @@ func NewRouter(
 		diffuseur := protected.Group("/")
 		diffuseur.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
 		{
+			diffuseur.GET("/streams/mine", streamH.ListOwned)
 			diffuseur.POST("/streams", streamH.Start)
+			diffuseur.PUT("/streams/:id/start", streamH.Restart)
 			diffuseur.PUT("/streams/:id/stop", streamH.Stop)
-			diffuseur.PUT("/streams/:id/audio", streamH.IngestAudio)
+			diffuseur.DELETE("/streams/:id", streamH.Delete)
 		}
 
 		protected.GET("/playlists", playlistH.List)
@@ -92,6 +94,17 @@ func NewRouter(
 		protected.DELETE("/favorites/:trackID", favoriteH.Remove)
 
 		protected.GET("/recommendations", recommendationH.List)
+	}
+
+	// MediaRecorder sends two short audio requests per second. Keep this data
+	// plane outside the 100 req/min business-API limiter, otherwise its token
+	// bucket is eventually exhausted and a healthy live is stopped by a 429.
+	media := r.Group("/api/v1")
+	media.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
+	media.Use(middleware.StreamDataRateLimitMiddleware())
+	{
+		media.POST("/streams/:id/push", streamH.PushAudio)
+		media.PUT("/streams/:id/audio", streamH.IngestAudio)
 	}
 
 	admin := r.Group("/api/v1/admin")

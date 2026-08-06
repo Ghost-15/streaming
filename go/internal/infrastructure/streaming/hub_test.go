@@ -1,6 +1,7 @@
 package streaming_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -105,5 +106,97 @@ func TestHubInitSegmentCaching(t *testing.T) {
 	src[0] = 9
 	if cached := hub.InitSegment("stream-B"); cached[0] != 1 {
 		t.Fatalf("cache aliased caller slice: got %v", cached)
+	}
+	// InitSegment also returns a copy, so listeners cannot mutate the cache.
+	returned := hub.InitSegment("stream-B")
+	returned[0] = 7
+	if cached := hub.InitSegment("stream-B"); cached[0] != 1 {
+		t.Fatalf("cache aliased returned slice: got %v", cached)
+	}
+}
+
+func TestHubRegisterWithInitAndChunkPublisher(t *testing.T) {
+	hub := streaming.NewHub()
+	if err := hub.OpenChunkPublisher("stream-A", "audio/webm; codecs=opus"); err != nil {
+		t.Fatal(err)
+	}
+	// Repeated blobs reuse the same logical publisher, but changing formats or
+	// opening a continuous producer at the same time is rejected.
+	if err := hub.OpenChunkPublisher("stream-A", "audio/webm; codecs=opus"); err != nil {
+		t.Fatalf("reuse chunk publisher: %v", err)
+	}
+	if err := hub.OpenChunkPublisher("stream-A", "audio/mpeg"); !errors.Is(err, streaming.ErrPublisherFormatChanged) {
+		t.Fatalf("format change error = %v", err)
+	}
+	if _, err := hub.OpenPublisher("stream-A", "audio/webm"); !errors.Is(err, streaming.ErrPublisherActive) {
+		t.Fatalf("continuous publisher error = %v", err)
+	}
+
+	initSegment := []byte("init")
+	hub.SetInitSegment("stream-A", initSegment)
+	client := &streaming.Client{
+		ID:       "connection-1",
+		UserID:   "user-1",
+		StreamID: "stream-A",
+		Send:     make(chan []byte, 1),
+	}
+	got, err := hub.RegisterWithInit(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(initSegment) {
+		t.Fatalf("RegisterWithInit() = %q, want %q", got, initSegment)
+	}
+
+	hub.ClosePublisher("stream-A")
+	if _, open := <-client.Send; open {
+		t.Fatal("ClosePublisher did not end the listener response")
+	}
+}
+
+func TestHubOwnedChunkPublisherRejectsLateAndForeignChunks(t *testing.T) {
+	hub := streaming.NewHub()
+	const contentType = "audio/webm; codecs=opus"
+	if err := hub.ActivateStreamSession("stream-A", "owner", "session-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.OpenOwnedChunkPublisher("stream-A", "owner", "session-1", contentType); err != nil {
+		t.Fatal(err)
+	}
+	if !hub.OwnsChunkPublisher("stream-A", "owner", "session-1", contentType) {
+		t.Fatal("owner publisher session was not retained")
+	}
+	if hub.OwnsChunkPublisher("stream-A", "other", "session-1", contentType) {
+		t.Fatal("foreign broadcaster matched the publisher session")
+	}
+	if _, _, err := hub.BroadcastOwnedChunk("stream-A", "other", "session-1", contentType, []byte("x")); !errors.Is(err, streaming.ErrPublisherNotActive) {
+		t.Fatalf("foreign chunk error = %v, want ErrPublisherNotActive", err)
+	}
+	if _, _, err := hub.BroadcastOwnedChunk("stream-A", "owner", "stale-session", contentType, []byte("x")); !errors.Is(err, streaming.ErrPublisherNotActive) {
+		t.Fatalf("stale session error = %v, want ErrPublisherNotActive", err)
+	}
+
+	hub.CloseStream("stream-A")
+	if err := hub.OpenOwnedChunkPublisher("stream-A", "owner", "session-1", contentType); !errors.Is(err, streaming.ErrPublisherNotActive) {
+		t.Fatalf("late publisher reopen error = %v, want ErrPublisherNotActive", err)
+	}
+	if _, _, err := hub.BroadcastOwnedChunk("stream-A", "owner", "session-1", contentType, []byte("late")); !errors.Is(err, streaming.ErrPublisherNotActive) {
+		t.Fatalf("late chunk error = %v, want ErrPublisherNotActive", err)
+	}
+	if got := hub.InitSegment("stream-A"); got != nil {
+		t.Fatalf("late chunk recreated init segment: %v", got)
+	}
+
+	if err := hub.ActivateStreamSession("stream-A", "owner", "session-2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.OpenOwnedChunkPublisher("stream-A", "owner", "session-2", contentType); err != nil {
+		t.Fatalf("new session could not publish: %v", err)
+	}
+	if err := hub.CloseStreamSession("stream-A", "owner", "session-1"); !errors.Is(err, streaming.ErrPublisherNotActive) {
+		t.Fatalf("stale stop error = %v, want ErrPublisherNotActive", err)
+	}
+	if !hub.OwnsChunkPublisher("stream-A", "owner", "session-2", contentType) {
+		t.Fatal("stale stop closed the newer publisher session")
 	}
 }

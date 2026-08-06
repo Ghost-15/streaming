@@ -6,6 +6,7 @@ class StreamModel {
   final int listenerCount;
   final String description;
   final String streamUrl;
+  final String activeSessionId;
   final bool isLive;
   final DateTime createdAt;
 
@@ -17,6 +18,7 @@ class StreamModel {
     this.listenerCount = 0,
     this.description = '',
     required this.streamUrl,
+    this.activeSessionId = '',
     this.isLive = false,
     required this.createdAt,
   });
@@ -31,6 +33,8 @@ class StreamModel {
       listenerCount: json['listenerCount'] ?? json['listener_count'] ?? 0,
       description: json['description'] ?? '',
       streamUrl: json['streamUrl'] ?? json['stream_url'] ?? '',
+      activeSessionId:
+          json['activeSessionId'] ?? json['active_session_id'] ?? '',
       isLive: json['isLive'] ?? json['is_live'] ?? json['status'] == 'live',
       createdAt:
           DateTime.tryParse(
@@ -40,7 +44,12 @@ class StreamModel {
     );
   }
 
-  StreamModel copyWith({String? streamUrl}) {
+  StreamModel copyWith({
+    String? streamUrl,
+    String? activeSessionId,
+    bool? isLive,
+    DateTime? createdAt,
+  }) {
     return StreamModel(
       id: id,
       title: title,
@@ -49,8 +58,9 @@ class StreamModel {
       listenerCount: listenerCount,
       description: description,
       streamUrl: streamUrl ?? this.streamUrl,
-      isLive: isLive,
-      createdAt: createdAt,
+      activeSessionId: activeSessionId ?? this.activeSessionId,
+      isLive: isLive ?? this.isLive,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }

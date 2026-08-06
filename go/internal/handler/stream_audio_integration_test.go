@@ -29,9 +29,10 @@ func TestAudioIngestFanoutAndListenerCancellation(t *testing.T) {
 	repo := &mock.MockStreamRepository{
 		FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
 			return &entity.Stream{
-				ID:            "stream-1",
-				BroadcasterID: "user-1",
-				Status:        entity.StreamStatusLive,
+				ID:              "stream-1",
+				BroadcasterID:   "user-1",
+				Status:          entity.StreamStatusLive,
+				ActiveSessionID: &testActiveSessionID,
 			}, nil
 		},
 		IncrementListenersFn: func(_ context.Context, _ string, delta int) error {
@@ -60,6 +61,7 @@ func TestAudioIngestFanoutAndListenerCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	ingestRequest.Header.Set("Content-Type", "audio/mpeg")
+	ingestRequest.Header.Set("X-Stream-Session-ID", testActiveSessionID)
 	ingestDone := make(chan error, 1)
 	go func() {
 		response, requestErr := http.DefaultClient.Do(ingestRequest)

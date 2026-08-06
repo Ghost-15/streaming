@@ -8,6 +8,11 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const (
+	streamDataRequestsPerMinute = 600
+	streamDataBurst             = 100
+)
+
 // keyedLimiter stores rate limiters per caller key.
 type keyedLimiter struct {
 	mu       sync.Mutex
@@ -50,6 +55,12 @@ func UserRateLimitMiddleware(reqPerMin float64, burst int) gin.HandlerFunc {
 		}
 		return c.ClientIP()
 	})
+}
+
+// StreamDataRateLimitMiddleware allows the steady cadence produced by browser
+// MediaRecorder while still bounding abusive authenticated publishers.
+func StreamDataRateLimitMiddleware() gin.HandlerFunc {
+	return UserRateLimitMiddleware(streamDataRequestsPerMinute, streamDataBurst)
 }
 
 func rateLimitByKey(reqPerMin float64, burst int, keyFn func(*gin.Context) string) gin.HandlerFunc {

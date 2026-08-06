@@ -16,7 +16,11 @@ class SessionNotifier extends ChangeNotifier {
     try {
       final savedToken = await StorageService.get(StorageKey.token);
       final savedUser = await StorageService.get(StorageKey.userData);
-      if (savedToken == null || savedUser == null) return;
+      if (savedToken == null || savedUser == null) {
+        // Remove the remaining half of a partial/corrupted session.
+        if (savedToken != null || savedUser != null) await _clearStorage();
+        return;
+      }
 
       token = savedToken;
       user = UserModel.fromJson(jsonDecode(savedUser) as Map<String, dynamic>);
@@ -24,23 +28,38 @@ class SessionNotifier extends ChangeNotifier {
     } catch (_) {
       // Storage unavailable (IndexedDB blocked, private mode, corrupted key).
       // Start unauthenticated rather than crashing.
-      try { await _clearStorage(); } catch (_) {}
+      try {
+        await _clearStorage();
+      } catch (_) {}
     }
   }
 
-  void onAuthentication(AuthResponse response) {
+  Future<void> onAuthentication(AuthResponse response) async {
+    try {
+      await StorageService.save(StorageKey.token, response.token);
+      await StorageService.save(
+        StorageKey.userData,
+        jsonEncode(response.user.toJson()),
+      );
+    } catch (_) {
+      try {
+        await _clearStorage();
+      } catch (_) {}
+      rethrow;
+    }
+
     user = response.user;
     token = response.token;
-    StorageService.save(StorageKey.token, response.token);
-    StorageService.save(StorageKey.userData, jsonEncode(response.user.toJson()));
     notifyListeners();
   }
 
-  void logout() {
+  Future<void> logout() async {
     user = null;
     token = null;
-    _clearStorage();
     notifyListeners();
+    try {
+      await _clearStorage();
+    } catch (_) {}
   }
 
   bool get isAuthenticated => user != null && token != null;

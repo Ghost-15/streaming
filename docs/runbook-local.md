@@ -128,7 +128,8 @@ ffmpeg -re -stream_loop -1 -i sample.mp3 -codec copy -f mp3 - \
       "http://localhost:8080/api/v1/streams/$STREAM_ID/audio"
 ```
 
-Open the stream from Flutter or download it with an authenticated curl:
+Open the stream from Flutter Web (`GET /audio` + MediaSource) or download it
+with an authenticated curl through the non-Web listener route:
 
 ```bash
 curl --no-buffer \
@@ -136,6 +137,10 @@ curl --no-buffer \
   "http://localhost:8080/api/v1/streams/$STREAM_ID/listen" \
   --output received.mp3
 ```
+
+The Flutter broadcaster uses ordered `POST /api/v1/streams/$STREAM_ID/push`
+requests with `Content-Type: audio/webm;codecs=opus`; the continuous PUT example
+above remains useful for a backend-only smoke test.
 
 Stopping the stream, closing either client or stopping Compose must return the
 audio gauges to zero. See `docs/streaming-lifecycle.md`.

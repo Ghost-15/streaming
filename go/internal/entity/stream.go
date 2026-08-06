@@ -12,13 +12,14 @@ const (
 
 // Stream represents a live audio broadcast session.
 type Stream struct {
-	ID            string       `json:"id"`
-	Title         string       `json:"title"`
-	BroadcasterID string       `json:"broadcaster_id"`
-	Status        StreamStatus `json:"status"`
-	StartedAt     time.Time    `json:"started_at"`
-	EndedAt       *time.Time   `json:"ended_at,omitempty"`
-	ListenerCount int          `json:"listener_count"`
+	ID              string       `json:"id"`
+	Title           string       `json:"title"`
+	BroadcasterID   string       `json:"broadcaster_id"`
+	Status          StreamStatus `json:"status"`
+	ActiveSessionID *string      `json:"active_session_id,omitempty"`
+	StartedAt       time.Time    `json:"started_at"`
+	EndedAt         *time.Time   `json:"ended_at,omitempty"`
+	ListenerCount   int          `json:"listener_count"`
 }
 
 func (s *Stream) IsLive() bool {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,11 +43,12 @@ type Config struct {
 // In development, it also loads a .env file if present.
 // Returns an error if any required variable is missing.
 func Load() (*Config, error) {
-	// In development, load .env file (ignored if missing in production).
-	_ = godotenv.Load()
-	_ = godotenv.Load("../.env")
+	// In development, load the nearest .env file from the current directory or
+	// one of its ancestors. This keeps local startup independent of whether the
+	// command is run from go/, go/cmd/server/, or another project subdirectory.
+	dotEnvDir := loadDotEnvFromAncestors()
 
-	metricsBearerFile := os.Getenv("METRICS_BEARER_TOKEN_FILE")
+	metricsBearerFile := resolveConfigFilePath(os.Getenv("METRICS_BEARER_TOKEN_FILE"), dotEnvDir)
 	metricsBearerToken, err := readSecretValue(metricsBearerFile, os.Getenv("METRICS_BEARER_TOKEN"))
 	if err != nil {
 		return nil, err
@@ -96,8 +98,8 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Port:                  getEnv("PORT", "8080"),
 		SupabaseDBURL:         os.Getenv("SUPABASE_DB_URL"),
-		JWTPrivateKeyPath:     os.Getenv("JWT_PRIVATE_KEY_PATH"),
-		JWTPublicKeyPath:      os.Getenv("JWT_PUBLIC_KEY_PATH"),
+		JWTPrivateKeyPath:     resolveConfigFilePath(os.Getenv("JWT_PRIVATE_KEY_PATH"), dotEnvDir),
+		JWTPublicKeyPath:      resolveConfigFilePath(os.Getenv("JWT_PUBLIC_KEY_PATH"), dotEnvDir),
 		OTELEndpoint:          getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 		OTELServiceNamespace:  getEnv("OTEL_SERVICE_NAMESPACE", "my-application-group"),
 		OTELDeploymentEnv:     getEnv("OTEL_DEPLOYMENT_ENVIRONMENT", "production"),
@@ -126,16 +128,23 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	required := map[string]string{
-		"SUPABASE_DB_URL":      c.SupabaseDBURL,
-		"JWT_PRIVATE_KEY_PATH": c.JWTPrivateKeyPath,
-		"JWT_PUBLIC_KEY_PATH":  c.JWTPublicKeyPath,
-		"CORS_ALLOWED_ORIGINS": c.CORSOrigins,
+	required := []struct {
+		key   string
+		value string
+	}{
+		{key: "SUPABASE_DB_URL", value: c.SupabaseDBURL},
+		{key: "JWT_PRIVATE_KEY_PATH", value: c.JWTPrivateKeyPath},
+		{key: "JWT_PUBLIC_KEY_PATH", value: c.JWTPublicKeyPath},
+		{key: "CORS_ALLOWED_ORIGINS", value: c.CORSOrigins},
 	}
-	for key, val := range required {
-		if val == "" {
-			return fmt.Errorf("config: missing required env var %s", key)
+	var missing []string
+	for _, item := range required {
+		if item.value == "" {
+			missing = append(missing, item.key)
 		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("config: missing required env vars: %s", strings.Join(missing, ", "))
 	}
 	if c.Env == "production" && c.MetricsBearerToken == "" {
 		return fmt.Errorf("config: missing METRICS_BEARER_TOKEN or METRICS_BEARER_TOKEN_FILE in production")
@@ -152,6 +161,78 @@ func (c *Config) validate() error {
 		return fmt.Errorf("config: PPROF_ADDR must bind to loopback in production")
 	}
 	return nil
+}
+
+func loadDotEnvFromAncestors() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	for {
+		dotEnvPath := filepath.Join(dir, ".env")
+		if info, statErr := os.Stat(dotEnvPath); statErr == nil && !info.IsDir() {
+			_ = godotenv.Load(dotEnvPath)
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+// resolveConfigFilePath makes local secret paths work from any project
+// subdirectory. Explicit absolute paths (including Docker secret mounts) are
+// unchanged. For relative paths, the current directory remains authoritative;
+// the .env directory and Go module directory are compatibility fallbacks.
+func resolveConfigFilePath(value, dotEnvDir string) string {
+	if value == "" || filepath.IsAbs(value) {
+		return value
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return value
+	}
+
+	bases := []string{workingDir}
+	if dotEnvDir != "" && dotEnvDir != workingDir {
+		bases = append(bases, dotEnvDir)
+	}
+	if moduleDir := findAncestorContaining(workingDir, "go.mod"); moduleDir != "" {
+		bases = append(bases, moduleDir)
+	}
+
+	seen := make(map[string]struct{}, len(bases))
+	for _, base := range bases {
+		candidate := filepath.Clean(filepath.Join(base, value))
+		if _, duplicate := seen[candidate]; duplicate {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+
+	return value
+}
+
+func findAncestorContaining(startDir, name string) string {
+	dir := startDir
+	for {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 func getEnv(key, fallback string) string {

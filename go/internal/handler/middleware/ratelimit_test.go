@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/time/rate"
 
 	"github.com/Ghost-15/streaming/internal/entity"
 )
@@ -85,5 +87,22 @@ func TestUserRateLimitMiddleware_Returns429ByUser(t *testing.T) {
 
 	if otherUser.Code != http.StatusOK {
 		t.Fatalf("other user status = %d, want 200", otherUser.Code)
+	}
+}
+
+func TestStreamDataRateLimit_AllowsMediaRecorderCadence(t *testing.T) {
+	limiter := newKeyedLimiter(
+		rate.Limit(streamDataRequestsPerMinute/60.0),
+		streamDataBurst,
+	).get("broadcaster-1")
+	startedAt := time.Now()
+
+	// Ten minutes at the Web client's two POSTs per second must not exhaust the
+	// media bucket. The generic 100 req/min bucket would fail this cadence.
+	for chunk := 0; chunk < 1200; chunk++ {
+		at := startedAt.Add(time.Duration(chunk) * 500 * time.Millisecond)
+		if !limiter.AllowN(at, 1) {
+			t.Fatalf("audio chunk %d was unexpectedly rate limited", chunk+1)
+		}
 	}
 }

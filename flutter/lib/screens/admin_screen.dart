@@ -54,8 +54,11 @@ class _AdminScreenState extends State<AdminScreen>
             subtitle: 'Gestion des utilisateurs et statistiques',
             actions: [
               IconButton(
-                icon: Icon(Icons.logout_rounded,
-                    size: 20, color: cs.onSurfaceVariant),
+                icon: Icon(
+                  Icons.logout_rounded,
+                  size: 20,
+                  color: cs.onSurfaceVariant,
+                ),
                 tooltip: 'Se déconnecter',
                 onPressed: () => session.logout(),
               ),
@@ -167,15 +170,13 @@ class _UserTile extends StatelessWidget {
                     user.fullName.trim().isNotEmpty
                         ? user.fullName
                         : user.email,
-                    style:
-                        tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     user.email,
-                    style: tt.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -185,8 +186,7 @@ class _UserTile extends StatelessWidget {
             const SizedBox(width: 8),
             if (user.isSuspended) ...[
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: cs.errorContainer,
                   borderRadius: BorderRadius.circular(6),
@@ -204,8 +204,11 @@ class _UserTile extends StatelessWidget {
             ],
             _RoleBadge(role: user.role),
             PopupMenuButton<_UserAction>(
-              icon: Icon(Icons.more_vert_rounded,
-                  size: 18, color: cs.onSurfaceVariant),
+              icon: Icon(
+                Icons.more_vert_rounded,
+                size: 18,
+                color: cs.onSurfaceVariant,
+              ),
               onSelected: (action) => _handleAction(context, action, user),
               itemBuilder: (_) => const [
                 PopupMenuItem(
@@ -243,8 +246,7 @@ class _UserTile extends StatelessWidget {
     );
   }
 
-  void _handleAction(
-      BuildContext context, _UserAction action, UserModel user) {
+  void _handleAction(BuildContext context, _UserAction action, UserModel user) {
     switch (action) {
       case _UserAction.changeRole:
         _showRoleDialog(context, user);
@@ -296,10 +298,10 @@ class _UserTile extends StatelessWidget {
   }
 
   String _roleLabel(Role role) => switch (role) {
-        Role.admin => 'Administrateur',
-        Role.diffuseur => 'Diffuseur',
-        _ => 'Auditeur',
-      };
+    Role.admin => 'Administrateur',
+    Role.diffuseur => 'Diffuseur',
+    _ => 'Auditeur',
+  };
 }
 
 enum _UserAction { changeRole, suspend, reactivate }
@@ -391,16 +393,16 @@ class _StatsTab extends StatelessWidget {
   }
 
   String _roleLabel(String role) => switch (role) {
-        'admin' => 'Administrateurs',
-        'diffuseur' => 'Diffuseurs',
-        _ => 'Auditeurs',
-      };
+    'admin' => 'Administrateurs',
+    'diffuseur' => 'Diffuseurs',
+    _ => 'Auditeurs',
+  };
 
   IconData _iconForRole(String role) => switch (role) {
-        'admin' => Icons.admin_panel_settings_rounded,
-        'diffuseur' => Icons.mic_rounded,
-        _ => Icons.headphones_rounded,
-      };
+    'admin' => Icons.admin_panel_settings_rounded,
+    'diffuseur' => Icons.mic_rounded,
+    _ => Icons.headphones_rounded,
+  };
 }
 
 class _StatCard extends StatelessWidget {
@@ -541,8 +543,11 @@ class _UnauthorizedView extends StatelessWidget {
                   color: cs.surfaceContainerHigh,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.lock_outline_rounded,
-                    size: 36, color: cs.onSurfaceVariant),
+                child: Icon(
+                  Icons.lock_outline_rounded,
+                  size: 36,
+                  color: cs.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 20),
               Text(

@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -30,8 +31,9 @@ func CORSMiddleware(origins string) gin.HandlerFunc {
 
 	cfg := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Authorization", "Content-Type"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "X-Stream-Session-ID"},
 		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 		AllowOriginFunc: func(origin string) bool {
 			if allowAllLocalhost && strings.HasPrefix(origin, "http://localhost:") {
 				fmt.Printf("[CORS] ✓ localhost wildcard: %s\n", origin)

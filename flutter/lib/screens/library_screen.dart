@@ -136,12 +136,14 @@ class _PlaylistTile extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Theme(
-          data: Theme.of(context).copyWith(
-            dividerColor: cs.outlineVariant.withValues(alpha: 0.4),
-          ),
+          data: Theme.of(
+            context,
+          ).copyWith(dividerColor: cs.outlineVariant.withValues(alpha: 0.4)),
           child: ExpansionTile(
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             childrenPadding: EdgeInsets.zero,
             leading: Container(
               width: 40,
@@ -150,8 +152,11 @@ class _PlaylistTile extends StatelessWidget {
                 color: cs.primaryContainer.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child:
-                  Icon(Icons.queue_music_rounded, size: 20, color: cs.primary),
+              child: Icon(
+                Icons.queue_music_rounded,
+                size: 20,
+                color: cs.primary,
+              ),
             ),
             title: Text(
               playlist.title,
@@ -165,8 +170,11 @@ class _PlaylistTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 PopupMenuButton<_PlaylistAction>(
-                  icon: Icon(Icons.more_vert_rounded,
-                      size: 18, color: cs.onSurfaceVariant),
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
                   onSelected: (action) => _handleAction(context, action),
                   itemBuilder: (_) => const [
                     PopupMenuItem(
@@ -223,13 +231,17 @@ class _PlaylistTile extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       child: Row(
                         children: [
-                          Icon(Icons.music_off_rounded,
-                              size: 15, color: cs.onSurfaceVariant),
+                          Icon(
+                            Icons.music_off_rounded,
+                            size: 15,
+                            color: cs.onSurfaceVariant,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Aucun titre dans cette playlist',
-                            style: tt.bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
@@ -246,9 +258,10 @@ class _PlaylistTile extends StatelessWidget {
                                 track: track,
                                 trailing: IconButton(
                                   icon: Icon(
-                                      Icons.remove_circle_outline_rounded,
-                                      size: 18,
-                                      color: cs.onSurfaceVariant),
+                                    Icons.remove_circle_outline_rounded,
+                                    size: 18,
+                                    color: cs.onSurfaceVariant,
+                                  ),
                                   tooltip: 'Retirer',
                                   onPressed: () => context
                                       .read<PlaylistNotifier>()
@@ -326,9 +339,11 @@ class _FavoritesTab extends StatelessWidget {
               return _TrackTile(
                 track: track,
                 trailing: IconButton(
-                  icon: Icon(Icons.favorite_rounded,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.error),
+                  icon: Icon(
+                    Icons.favorite_rounded,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                   tooltip: 'Retirer des favoris',
                   onPressed: () =>
                       context.read<FavoriteNotifier>().remove(track.id),
@@ -403,15 +418,14 @@ class _TrackTile extends StatelessWidget {
                 if (subtitle.isNotEmpty)
                   Text(
                     subtitle,
-                    style:
-                        tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
               ],
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );
@@ -464,8 +478,11 @@ class _StatusView extends StatelessWidget {
                   color: cs.errorContainer.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Icon(Icons.error_outline_rounded,
-                    size: 30, color: cs.error),
+                child: Icon(
+                  Icons.error_outline_rounded,
+                  size: 30,
+                  color: cs.error,
+                ),
               ),
               const SizedBox(height: 16),
               Text(

@@ -8,23 +8,19 @@ import 'package:streampulse/notifiers/admin_notifier.dart';
 // ── Fake ─────────────────────────────────────────────────────────────────────
 
 UserModel _user(String id, {Role role = Role.user}) => UserModel(
-      id: id,
-      email: '$id@test.com',
-      firstName: 'First',
-      lastName: 'Last',
-      role: role,
-    );
+  id: id,
+  email: '$id@test.com',
+  firstName: 'First',
+  lastName: 'Last',
+  role: role,
+);
 
 class _FakeAdminRepo extends AdminRepository {
   List<UserModel> users;
   AdminStats? stats;
   bool shouldThrow;
 
-  _FakeAdminRepo({
-    this.users = const [],
-    this.stats,
-    this.shouldThrow = false,
-  });
+  _FakeAdminRepo({this.users = const [], this.stats, this.shouldThrow = false});
 
   @override
   Future<({List<UserModel> users, int total})> listUsers({
@@ -49,10 +45,7 @@ class _FakeAdminRepo extends AdminRepository {
   Future<AdminStats> getStats() async {
     if (shouldThrow) throw Exception('network error');
     return stats ??
-        const AdminStats(
-          totalUsers: 3,
-          byRole: {'user': 2, 'admin': 1},
-        );
+        const AdminStats(totalUsers: 3, byRole: {'user': 2, 'admin': 1});
   }
 }
 

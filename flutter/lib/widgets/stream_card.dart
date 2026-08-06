@@ -97,11 +97,7 @@ class _CompactCard extends StatelessWidget {
                     ),
                     // LIVE badge
                     if (stream.isLive)
-                      const Positioned(
-                        top: 10,
-                        left: 10,
-                        child: _LiveBadge(),
-                      ),
+                      const Positioned(top: 10, left: 10, child: _LiveBadge()),
                     // Play button
                     Center(
                       child: Container(
@@ -130,7 +126,9 @@ class _CompactCard extends StatelessWidget {
                       bottom: 8,
                       right: 10,
                       child: _ListenerCount(
-                          count: stream.listenerCount, light: true),
+                        count: stream.listenerCount,
+                        light: true,
+                      ),
                     ),
                   ],
                 ),
@@ -222,16 +220,16 @@ class _RowCard extends StatelessWidget {
                             gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [
-                                accent,
-                                accent.withValues(alpha: 0.5),
-                              ],
+                              colors: [accent, accent.withValues(alpha: 0.5)],
                             ),
                           ),
                         ),
                         const Center(
-                          child: Icon(Icons.radio_rounded,
-                              color: Colors.white54, size: 26),
+                          child: Icon(
+                            Icons.radio_rounded,
+                            color: Colors.white54,
+                            size: 26,
+                          ),
                         ),
                       ],
                     ),
@@ -247,16 +245,16 @@ class _RowCard extends StatelessWidget {
                   children: [
                     Text(
                       stream.title,
-                      style:
-                          tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                      style: tt.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       stream.broadcasterName,
-                      style: tt.bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -292,8 +290,11 @@ class _RowCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Icon(Icons.play_arrow_rounded,
-                      color: cs.onPrimary, size: 22),
+                  child: Icon(
+                    Icons.play_arrow_rounded,
+                    color: cs.onPrimary,
+                    size: 22,
+                  ),
                 ),
               ),
             ],

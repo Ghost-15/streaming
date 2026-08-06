@@ -70,9 +70,13 @@ Le guide détaillé est dans [docs/runbook-local.md](docs/runbook-local.md).
 ## Protocole audio
 
 1. Un diffuseur crée un stream avec `POST /api/v1/streams`.
-2. Il ouvre `PUT /api/v1/streams/{id}/audio` avec un bearer JWT, un
-   `Content-Type: audio/mpeg` (ou autre `audio/*`) et un corps binaire continu.
-3. Les auditeurs ouvrent `GET /api/v1/streams/{id}/listen` avec leur bearer JWT.
+2. Le client Flutter Web capture le micro en WebM/Opus et envoie, dans l'ordre,
+   chaque blob `MediaRecorder` vers `POST /api/v1/streams/{id}/push`. Les clients
+   continus (FFmpeg) peuvent conserver `PUT /api/v1/streams/{id}/audio`.
+3. Flutter lit le direct public sur `GET /api/v1/streams/{id}/audio` et injecte
+   la réponse HTTP incrémentale dans `MediaSource`. `POST /listen` et `/leave`
+   enregistrent l'historique de l'utilisateur. Le GET authentifié `/listen`
+   reste disponible pour les clients non-Web.
 4. L’arrêt via `PUT /api/v1/streams/{id}/stop`, une déconnexion TCP, un timeout
    ou SIGTERM libère les channels, compteurs et goroutines.
 
@@ -87,9 +91,10 @@ ffmpeg -re -stream_loop -1 -i sample.mp3 -codec copy -f mp3 - \
       "$API_BASE_URL/streams/$STREAM_ID/audio"
 ```
 
-Le client Flutter démarre réellement `just_audio` sur la route GET avec le JWT
-en en-tête ; cette connexion réalise elle-même le join/leave métier. Les détails sont dans
-[docs/streaming-lifecycle.md](docs/streaming-lifecycle.md).
+Le lecteur Web conserve un buffer live borné, revient au bord du direct après
+une interruption et expose lecture/pause/arrêt via la Media Session du navigateur
+(touches multimédia et écran verrouillé quand le navigateur le permet). Les détails
+sont dans [docs/streaming-lifecycle.md](docs/streaming-lifecycle.md).
 
 ## Tests et performance
 

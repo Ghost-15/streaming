@@ -73,7 +73,8 @@ migrate:
 		psql $$SUPABASE_DB_URL -f migrations/006_user_suspend.sql && \
 		psql $$SUPABASE_DB_URL -f migrations/007_favorites.sql && \
 		psql $$SUPABASE_DB_URL -f migrations/008_listen_history_stream.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/009_listen_history_events.sql
+		psql $$SUPABASE_DB_URL -f migrations/009_listen_history_events.sql && \
+		psql $$SUPABASE_DB_URL -f migrations/010_reusable_stream_sessions.sql
 	@echo "Done."
 
 # ── Flutter ───────────────────────────────────────────────────────────────────

@@ -18,6 +18,9 @@ Options envisagées : WebRTC, WebSocket binaire, HLS (segments), HTTP chunked.
   Le navigateur capture le micro via `MediaRecorder` (WebM/Opus) et envoie des
   petits chunks (~1/s). Le serveur lit le corps, met en cache le **premier chunk**
   (segment d'init WebM contenant l'en-tête EBML/Tracks) puis appelle `Hub.Broadcast`.
+  Le contrat `PUT /api/v1/streams/:id/audio` reste disponible pour une source
+  binaire continue (par exemple FFmpeg). Les deux modes sont mutuellement
+  exclusifs pour un même stream.
 - **Diffusion** : `GET /api/v1/streams/:id/audio` (public — un élément `<audio>`
   ne peut pas poser d'en-tête `Authorization`). Le serveur enregistre un `Client`
   dans le `Hub`, envoie immédiatement le segment d'init en cache (pour les arrivants
@@ -30,7 +33,7 @@ Options envisagées : WebRTC, WebSocket binaire, HLS (segments), HTTP chunked.
 
 ### Positives
 - **Simplicité + démo-abilité** : lisible par n'importe quel client HTTP (`curl`,
-  `<audio>`, `just_audio`), aucune négociation ICE/SDP comme WebRTC.
+  `<audio>`, `MediaSource`), aucune négociation ICE/SDP comme WebRTC.
 - **Backpressure gérée** : `Hub.Broadcast` fait un envoi non bloquant (channel bufferisé) ;
   un auditeur lent voit ses paquets **droppés** sans bloquer le stream ni les autres.
 - **Arrivants tardifs** : le cache du segment d'init WebM leur permet d'initialiser
@@ -55,5 +58,6 @@ Options envisagées : WebRTC, WebSocket binaire, HLS (segments), HTTP chunked.
 ## Vérification
 Test d'intégration `handler.TestStreamingIntegration_BroadcastToListeners` :
 un diffuseur pousse un chunk, deux auditeurs connectés le reçoivent tous les deux ;
+`TestStreamingE2E_MediaRecorderPushToTwoListeners` couvre le contrat HTTP Web complet ;
 `TestStreamingIntegration_Disconnect` prouve la libération des ressources à la
 déconnexion ; `TestStreamHandler_Audio_LateJoiner` prouve la remise du segment d'init.

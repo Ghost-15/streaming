@@ -117,4 +117,34 @@ func TestRBACMiddleware_ValidAndForbidden(t *testing.T) {
 			t.Fatalf("missing token status = %d, want 401", w.Code)
 		}
 	})
+
+	t.Run("invalid bearer format", func(t *testing.T) {
+		r := newEngine(entity.RoleUser)
+		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req.Header.Set("Authorization", "not-a-bearer-token")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("invalid bearer status = %d, want 401", w.Code)
+		}
+	})
+
+	t.Run("malformed token", func(t *testing.T) {
+		r := newEngine(entity.RoleUser)
+		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req.Header.Set("Authorization", "Bearer invalid.token.here")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("malformed token status = %d, want 401", w.Code)
+		}
+	})
+}
+
+func TestGetClaimsWithoutMiddleware(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	claims, ok := middleware.GetClaims(c)
+	if ok || claims != nil {
+		t.Fatalf("GetClaims() = (%v, %t), want (nil, false)", claims, ok)
+	}
 }

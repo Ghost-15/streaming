@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,7 @@ type StreamHandler struct {
 	maxIngestSize int64
 	chunkSize     int
 	clientBuffer  int
+	controlMu     sync.Mutex
 }
 
 type StreamHandlerOption func(*StreamHandler)
@@ -75,6 +77,16 @@ type StartRequest struct {
 	Title string `json:"title" binding:"required,min=3,max=100"`
 }
 
+const maxBrowserAudioChunkSize int64 = 4 << 20
+
+func parseAudioContentType(value string) (string, error) {
+	mediaType, params, err := mime.ParseMediaType(value)
+	if err != nil || (!strings.HasPrefix(mediaType, "audio/") && mediaType != "application/octet-stream") {
+		return "", errors.New("Content-Type must be audio/* or application/octet-stream")
+	}
+	return mime.FormatMediaType(mediaType, params), nil
+}
+
 func mapStreamError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, usecase.ErrStreamInvalid):
@@ -83,9 +95,35 @@ func mapStreamError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
 	case errors.Is(err, usecase.ErrStreamForbidden):
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+	case errors.Is(err, usecase.ErrStreamSessionExpired):
+		c.JSON(http.StatusConflict, gin.H{"error": "broadcast session expired"})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
+}
+
+func mapStreamSessionError(c *gin.Context, err error) {
+	if errors.Is(err, streaming.ErrHubClosed) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})
+		return
+	}
+	c.JSON(http.StatusConflict, gin.H{"error": "broadcast session expired"})
+}
+
+// ListOwned returns every reusable live created by the authenticated
+// broadcaster, including offline ones.
+func (h *StreamHandler) ListOwned(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+	streams, err := h.useCase.ListOwned(c.Request.Context(), claims.UserID)
+	if err != nil {
+		mapStreamError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, streams)
 }
 
 // ListActive lists all currently live streams. This route is intentionally
@@ -122,8 +160,42 @@ func (h *StreamHandler) Start(c *gin.Context) {
 		mapStreamError(c, err)
 		return
 	}
+	if h.hub != nil && stream.ActiveSessionID != nil {
+		if err := h.hub.ActivateStreamSession(stream.ID, claims.UserID, *stream.ActiveSessionID); err != nil {
+			_ = h.useCase.End(c.Request.Context(), stream.ID, claims.UserID, *stream.ActiveSessionID)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})
+			return
+		}
+	}
 	middleware.Logger(c).Info().Str("stream_id", stream.ID).Msg("stream started")
 	c.JSON(http.StatusCreated, stream)
+}
+
+// Restart begins a new broadcast session on an existing persistent stream.
+func (h *StreamHandler) Restart(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+	h.controlMu.Lock()
+	defer h.controlMu.Unlock()
+	streamID := c.Param("id")
+	stream, err := h.useCase.Restart(c.Request.Context(), streamID, claims.UserID)
+	if err != nil {
+		mapStreamError(c, err)
+		return
+	}
+	// Replace the previous in-memory publisher only after ownership has been
+	// checked and the database has stored the new session.
+	if h.hub != nil && stream.ActiveSessionID != nil {
+		if err := h.hub.ActivateStreamSession(streamID, claims.UserID, *stream.ActiveSessionID); err != nil {
+			_ = h.useCase.End(c.Request.Context(), streamID, claims.UserID, *stream.ActiveSessionID)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, stream)
 }
 
 // Stop ends a live stream owned by the authenticated broadcaster.
@@ -133,15 +205,40 @@ func (h *StreamHandler) Stop(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
 		return
 	}
+	h.controlMu.Lock()
+	defer h.controlMu.Unlock()
 
 	streamID := c.Param("id")
-	if err := h.useCase.End(c.Request.Context(), streamID, claims.UserID); err != nil {
+	sessionID := c.GetHeader("X-Stream-Session-ID")
+	if err := h.useCase.End(c.Request.Context(), streamID, claims.UserID, sessionID); err != nil {
 		middleware.Logger(c).Warn().Err(err).Str("stream_id", streamID).Msg("stop stream failed")
 		mapStreamError(c, err)
 		return
 	}
 	if h.hub != nil {
-		h.hub.CloseStream(c.Param("id"))
+		// A mismatched session means a newer restart already owns the Hub. It
+		// must remain connected even if this older Stop completed late.
+		_ = h.hub.CloseStreamSession(streamID, claims.UserID, sessionID)
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// Delete permanently removes a reusable stream owned by the broadcaster.
+func (h *StreamHandler) Delete(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+	h.controlMu.Lock()
+	defer h.controlMu.Unlock()
+	streamID := c.Param("id")
+	if err := h.useCase.Delete(c.Request.Context(), streamID, claims.UserID); err != nil {
+		mapStreamError(c, err)
+		return
+	}
+	if h.hub != nil {
+		h.hub.CloseStream(streamID)
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -196,7 +293,8 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 		StreamID: streamID,
 		Send:     make(chan []byte, h.clientBuffer),
 	}
-	if err := h.hub.Register(client); err != nil {
+	initSegment, err := h.hub.RegisterWithInit(client)
+	if err != nil {
 		h.leaveDetached(streamID, claims.UserID)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
@@ -205,6 +303,12 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 		h.hub.Unregister(client)
 		h.leaveDetached(streamID, claims.UserID)
 	}()
+	currentType, active := h.hub.ContentType(streamID)
+	if !active {
+		c.JSON(http.StatusConflict, gin.H{"error": "audio source disconnected"})
+		return
+	}
+	contentType = currentType
 
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "no-store, no-transform")
@@ -212,6 +316,17 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Status(http.StatusOK)
 	c.Writer.Flush()
+	if len(initSegment) > 0 {
+		written, writeErr := c.Writer.Write(initSegment)
+		if written > 0 {
+			telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(written))
+			telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+		}
+		if writeErr != nil {
+			return
+		}
+		c.Writer.Flush()
+	}
 
 	idle := time.NewTimer(h.idleTimeout)
 	defer idle.Stop()
@@ -264,20 +379,24 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 		return
 	}
 	streamID := c.Param("id")
-	if err := h.useCase.CanBroadcast(c.Request.Context(), streamID, claims.UserID); err != nil {
+	sessionID := c.GetHeader("X-Stream-Session-ID")
+	if err := h.useCase.CanBroadcast(c.Request.Context(), streamID, claims.UserID, sessionID); err != nil {
 		mapStreamError(c, err)
 		return
 	}
+	if err := h.hub.AuthorizeStreamSession(streamID, claims.UserID, sessionID); err != nil {
+		mapStreamSessionError(c, err)
+		return
+	}
 
-	contentType := c.GetHeader("Content-Type")
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	if err != nil || (!strings.HasPrefix(mediaType, "audio/") && mediaType != "application/octet-stream") {
+	contentType, err := parseAudioContentType(c.GetHeader("Content-Type"))
+	if err != nil {
 		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "Content-Type must be audio/* or application/octet-stream"})
 		return
 	}
-	publisherCtx, err := h.hub.OpenPublisher(streamID, mediaType)
+	publisherCtx, err := h.hub.OpenOwnedPublisher(streamID, claims.UserID, sessionID, contentType)
 	if err != nil {
-		if errors.Is(err, streaming.ErrPublisherActive) {
+		if errors.Is(err, streaming.ErrPublisherActive) || errors.Is(err, streaming.ErrPublisherNotActive) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
@@ -308,8 +427,7 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 		if n > 0 {
 			// Cache the first chunk (WebM EBML header) so late-joining listeners
 			// on the public /audio path can initialise their browser decoder.
-			h.hub.SetInitSegment(streamID, buffer[:n])
-			h.hub.Broadcast(streamID, buffer[:n])
+			h.hub.BroadcastWithInit(streamID, buffer[:n])
 		}
 		if readErr == nil {
 			continue
@@ -331,6 +449,86 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 		c.JSON(http.StatusRequestTimeout, gin.H{"error": "audio ingestion idle timeout"})
 		return
 	}
+}
+
+// PushAudio accepts one bounded MediaRecorder blob. The first request opens a
+// chunked publisher session; later requests reuse it until the stream is
+// stopped. This is the browser-compatible counterpart to the continuous PUT
+// endpoint, since MediaRecorder exposes ordered blobs rather than a writable
+// HTTP request body.
+func (h *StreamHandler) PushAudio(c *gin.Context) {
+	claims, ok := middleware.GetClaims(c)
+	if !ok || claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+	if h.hub == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})
+		return
+	}
+
+	streamID := c.Param("id")
+	sessionID := c.GetHeader("X-Stream-Session-ID")
+	contentType, err := parseAudioContentType(c.GetHeader("Content-Type"))
+	if err != nil {
+		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": err.Error()})
+		return
+	}
+	publisherOpen := h.hub.OwnsChunkPublisher(streamID, claims.UserID, sessionID, contentType)
+	if !publisherOpen {
+		// Authorize the publisher once. Later blobs are tied to the same verified
+		// JWT owner and use only the Hub's in-memory session.
+		if err := h.useCase.CanBroadcast(c.Request.Context(), streamID, claims.UserID, sessionID); err != nil {
+			mapStreamError(c, err)
+			return
+		}
+		if err := h.hub.AuthorizeStreamSession(streamID, claims.UserID, sessionID); err != nil {
+			mapStreamSessionError(c, err)
+			return
+		}
+	}
+
+	limit := h.maxIngestSize
+	if limit <= 0 || limit > maxBrowserAudioChunkSize {
+		limit = maxBrowserAudioChunkSize
+	}
+	body := http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+	defer body.Close()
+	payload, err := io.ReadAll(body)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "audio chunk byte limit exceeded"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid audio chunk"})
+		return
+	}
+	if len(payload) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "audio chunk is empty"})
+		return
+	}
+
+	if !publisherOpen {
+		err = h.hub.OpenOwnedChunkPublisher(streamID, claims.UserID, sessionID, contentType)
+	}
+	if err != nil {
+		if errors.Is(err, streaming.ErrPublisherActive) || errors.Is(err, streaming.ErrPublisherFormatChanged) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	if _, _, err = h.hub.BroadcastOwnedChunk(streamID, claims.UserID, sessionID, contentType, payload); err != nil {
+		if errors.Is(err, streaming.ErrPublisherNotActive) || errors.Is(err, streaming.ErrPublisherFormatChanged) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (h *StreamHandler) leaveDetached(streamID, userID string) {
@@ -371,6 +569,29 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 	}
 	streamID := c.Param("id")
 
+	// A live stream is advertised before the browser has necessarily delivered
+	// its first MediaRecorder blob. Wait briefly so the response uses the exact
+	// publisher MIME type instead of committing an incorrect default header.
+	var contentType string
+	waitForPublisher := time.NewTimer(h.idleTimeout)
+	pollPublisher := time.NewTicker(25 * time.Millisecond)
+	defer waitForPublisher.Stop()
+	defer pollPublisher.Stop()
+	for {
+		if currentType, active := h.hub.ContentType(streamID); active {
+			contentType = currentType
+			break
+		}
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case <-waitForPublisher.C:
+			c.JSON(http.StatusConflict, gin.H{"error": "audio source is not connected"})
+			return
+		case <-pollPublisher.C:
+		}
+	}
+
 	connID := uuid.NewString()
 	if claims, ok := middleware.GetClaims(c); ok && claims != nil {
 		connID = claims.UserID
@@ -380,14 +601,20 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 		ID:       uuid.NewString(),
 		UserID:   connID,
 		StreamID: streamID,
-		Send:     make(chan []byte, 128),
+		Send:     make(chan []byte, h.clientBuffer),
 	}
-	if err := h.hub.Register(client); err != nil {
+	initSegment, err := h.hub.RegisterWithInit(client)
+	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 		return
 	}
 	defer h.hub.Unregister(client)
-	initSegment := h.hub.InitSegment(streamID)
+	currentType, active := h.hub.ContentType(streamID)
+	if !active {
+		c.JSON(http.StatusConflict, gin.H{"error": "audio source disconnected"})
+		return
+	}
+	contentType = currentType
 
 	// Prefer http.Flusher for real-time streaming; fall back to a no-op so the
 	// handler keeps working even when a middleware wraps the ResponseWriter with
@@ -397,10 +624,6 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 		flush = f.Flush
 	}
 
-	contentType, ok := h.hub.ContentType(streamID)
-	if !ok || contentType == "" {
-		contentType = "audio/webm; codecs=opus"
-	}
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "no-cache, no-store")
 	c.Header("X-Accel-Buffering", "no")
@@ -410,7 +633,14 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 	// Send cached init segment immediately so the browser can initialise its
 	// decoder even when the listener joins after the stream has started.
 	if len(initSegment) > 0 {
-		_, _ = c.Writer.Write(initSegment)
+		written, writeErr := c.Writer.Write(initSegment)
+		if written > 0 {
+			telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(written))
+			telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+		}
+		if writeErr != nil {
+			return
+		}
 		flush()
 	}
 
@@ -420,16 +650,36 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 		Msg("listener connected")
 
 	ctx := c.Request.Context()
+	idle := time.NewTimer(h.idleTimeout)
+	defer idle.Stop()
+	controller := http.NewResponseController(c.Writer)
 	for {
 		select {
 		case chunk, open := <-client.Send:
 			if !open {
 				return
 			}
-			if _, err := c.Writer.Write(chunk); err != nil {
+			if !idle.Stop() {
+				select {
+				case <-idle.C:
+				default:
+				}
+			}
+			idle.Reset(h.idleTimeout)
+			if h.writeTimeout > 0 {
+				_ = controller.SetWriteDeadline(time.Now().Add(h.writeTimeout))
+			}
+			written, err := c.Writer.Write(chunk)
+			if written > 0 {
+				telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(written))
+				telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+			}
+			if err != nil {
 				return
 			}
 			flush()
+		case <-idle.C:
+			return
 		case <-ctx.Done():
 			middleware.Logger(c).Info().
 				Str("stream_id", streamID).

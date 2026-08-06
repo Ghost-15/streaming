@@ -22,11 +22,6 @@ class MiniPlayer extends StatelessWidget {
     final stream = audio.currentStream!;
     final accent = _streamAccent(stream.id);
 
-    final progress = audio.duration.inMilliseconds > 0
-        ? (audio.position.inMilliseconds / audio.duration.inMilliseconds)
-            .clamp(0.0, 1.0)
-        : 0.0;
-
     return GestureDetector(
       onTap: () => _openFullPlayer(context),
       child: Container(
@@ -53,15 +48,17 @@ class MiniPlayer extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              LinearProgressIndicator(
-                value: progress > 0 ? progress.toDouble() : null,
-                backgroundColor: Colors.transparent,
-                color: accent,
-                minHeight: 2,
-              ),
+              if (audio.isLoading || audio.isBuffering)
+                LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  color: accent,
+                  minHeight: 2,
+                ),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
                     ClipRRect(
@@ -76,8 +73,11 @@ class MiniPlayer extends StatelessWidget {
                             colors: [accent, accent.withValues(alpha: 0.5)],
                           ),
                         ),
-                        child: const Icon(Icons.radio_rounded,
-                            color: Colors.white54, size: 20),
+                        child: const Icon(
+                          Icons.radio_rounded,
+                          color: Colors.white54,
+                          size: 20,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -88,43 +88,54 @@ class MiniPlayer extends StatelessWidget {
                         children: [
                           Text(
                             stream.title,
-                            style: tt.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                            style: tt.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             stream.broadcasterName,
-                            style: tt.bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    if (audio.isLoading || audio.isBuffering)
+                    if (audio.isLoading)
                       Padding(
                         padding: const EdgeInsets.all(10),
                         child: SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: cs.primary),
+                            strokeWidth: 2,
+                            color: cs.primary,
+                          ),
                         ),
                       )
                     else
                       IconButton(
                         icon: Icon(
-                          audio.isPlaying
+                          audio.isPlaying || audio.isBuffering
                               ? Icons.pause_rounded
                               : Icons.play_arrow_rounded,
                           size: 26,
                         ),
                         color: cs.onSurface,
-                        onPressed: () => audio.isPlaying
-                            ? context.read<AudioNotifier>().pause()
-                            : context.read<AudioNotifier>().resume(),
+                        onPressed: () {
+                          final notifier = context.read<AudioNotifier>();
+                          if (audio.isPlaying || audio.isBuffering) {
+                            notifier.pause();
+                          } else if (audio.isPaused) {
+                            notifier.resume();
+                          } else {
+                            notifier.playStream(stream);
+                          }
+                        },
                       ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 18),
@@ -223,8 +234,9 @@ class _FullPlayerSheet extends StatelessWidget {
                       const Spacer(),
                       Text(
                         'En cours de lecture',
-                        style: tt.labelLarge
-                            ?.copyWith(color: cs.onSurfaceVariant),
+                        style: tt.labelLarge?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                       const Spacer(),
                       const SizedBox(width: 48),
@@ -288,7 +300,9 @@ class _FullPlayerSheet extends StatelessWidget {
                               const SizedBox(height: 4),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 3),
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: cs.error,
                                   borderRadius: BorderRadius.circular(6),
@@ -307,8 +321,9 @@ class _FullPlayerSheet extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               stream.broadcasterName,
-                              style: tt.bodyMedium
-                                  ?.copyWith(color: cs.onSurfaceVariant),
+                              style: tt.bodyMedium?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -322,12 +337,12 @@ class _FullPlayerSheet extends StatelessWidget {
                                 : Icons.favorite_border_rounded,
                             color: isFavorited ? cs.error : cs.onSurfaceVariant,
                             onTap: () => isFavorited
-                                ? context
-                                    .read<FavoriteNotifier>()
-                                    .remove(stream.id)
-                                : context
-                                    .read<FavoriteNotifier>()
-                                    .add(stream.id),
+                                ? context.read<FavoriteNotifier>().remove(
+                                    stream.id,
+                                  )
+                                : context.read<FavoriteNotifier>().add(
+                                    stream.id,
+                                  ),
                           ),
                           _ActionBtn(
                             icon: Icons.playlist_add_rounded,
@@ -341,16 +356,10 @@ class _FullPlayerSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
 
-                  // Progress bar (only if stream has duration)
-                  if (audio.duration != Duration.zero) ...[
-                    _ProgressBar(audio: audio),
-                    const SizedBox(height: 24),
-                  ],
-
                   // Main controls
                   AudioControls(
-                    isPlaying: audio.isPlaying,
-                    isLoading: audio.isLoading || audio.isBuffering,
+                    isPlaying: audio.isPlaying || audio.isBuffering,
+                    isLoading: audio.isLoading,
                     onPlay: () => audio.isPaused
                         ? context.read<AudioNotifier>().resume()
                         : context.read<AudioNotifier>().playStream(stream),
@@ -370,38 +379,20 @@ class _FullPlayerSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Shuffle / Loop
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _ModeChip(
-                        icon: Icons.shuffle_rounded,
-                        label: 'Aléatoire',
-                        active: audio.isShuffled,
-                        onTap: () =>
-                            context.read<AudioNotifier>().toggleShuffle(),
+                      Icon(
+                        Icons.headphones_rounded,
+                        size: 12,
+                        color: cs.onSurfaceVariant,
                       ),
-                      const SizedBox(width: 12),
-                      _ModeChip(
-                        icon: Icons.repeat_rounded,
-                        label: 'Répéter',
-                        active: audio.isLooping,
-                        onTap: () =>
-                            context.read<AudioNotifier>().toggleLoop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.headphones_rounded,
-                          size: 12, color: cs.onSurfaceVariant),
                       const SizedBox(width: 4),
                       Text(
                         '${stream.listenerCount} auditeur${stream.listenerCount != 1 ? 's' : ''}',
-                        style: tt.labelSmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
+                        style: tt.labelSmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -416,102 +407,6 @@ class _FullPlayerSheet extends StatelessWidget {
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
-
-class _ProgressBar extends StatelessWidget {
-  final AudioNotifier audio;
-  const _ProgressBar({required this.audio});
-
-  String _fmt(Duration d) {
-    final m = d.inMinutes;
-    final s = d.inSeconds % 60;
-    return '$m:${s.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = audio.duration.inMilliseconds > 0
-        ? (audio.position.inMilliseconds / audio.duration.inMilliseconds)
-            .clamp(0.0, 1.0)
-        : 0.0;
-
-    return Column(
-      children: [
-        Slider(
-          value: progress.toDouble(),
-          onChanged: (v) => context.read<AudioNotifier>().seek(
-                Duration(
-                    milliseconds:
-                        (v * audio.duration.inMilliseconds).toInt()),
-              ),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(_fmt(audio.position),
-                style: Theme.of(context).textTheme.labelSmall),
-            Text(_fmt(audio.duration),
-                style: Theme.of(context).textTheme.labelSmall),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ModeChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _ModeChip({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: active
-              ? cs.primaryContainer.withValues(alpha: 0.4)
-              : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active ? cs.primary : cs.outlineVariant,
-            width: active ? 1.5 : 0.5,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: active ? cs.primary : cs.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight:
-                    active ? FontWeight.w600 : FontWeight.w400,
-                color: active ? cs.primary : cs.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _ActionBtn extends StatelessWidget {
   final IconData icon;
@@ -543,7 +438,8 @@ void _showPlaylistPicker(BuildContext context, String trackId) {
       title: const Text('Ajouter à une playlist'),
       content: playlists.playlists.isEmpty
           ? const Text(
-              'Aucune playlist disponible.\nCrée-en une depuis ta bibliothèque.')
+              'Aucune playlist disponible.\nCrée-en une depuis ta bibliothèque.',
+            )
           : SizedBox(
               width: double.maxFinite,
               child: ListView.builder(

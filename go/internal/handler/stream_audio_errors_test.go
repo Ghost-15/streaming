@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
 
+var testActiveSessionID = "session-1"
+
 func audioEngine(h *handler.StreamHandler, withClaims bool) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -28,6 +31,7 @@ func audioEngine(h *handler.StreamHandler, withClaims bool) *gin.Engine {
 	}
 	engine.GET("/streams/:id/listen", h.StreamAudio)
 	engine.PUT("/streams/:id/audio", h.IngestAudio)
+	engine.POST("/streams/:id/push", h.PushAudio)
 	return engine
 }
 
@@ -35,19 +39,92 @@ func audioRecorder(engine *gin.Engine, method, contentType string, body []byte) 
 	request := httptest.NewRequest(method, "/streams/stream-1/audio", bytes.NewReader(body))
 	if method == http.MethodGet {
 		request = httptest.NewRequest(method, "/streams/stream-1/listen", nil)
+	} else if method == http.MethodPost {
+		request = httptest.NewRequest(method, "/streams/stream-1/push", bytes.NewReader(body))
 	}
 	if contentType != "" {
 		request.Header.Set("Content-Type", contentType)
 	}
+	request.Header.Set("X-Stream-Session-ID", testActiveSessionID)
 	response := httptest.NewRecorder()
 	engine.ServeHTTP(response, request)
 	return response
 }
 
+func TestPushAudioValidationAndSessionReuse(t *testing.T) {
+	uc := usecase.NewStreamUseCase(ownedLiveRepo(), nil)
+	hub := streaming.NewHub()
+	h := handler.NewStreamHandler(uc, handler.WithAudioStreaming(hub, time.Minute, time.Second, time.Second, 4, 1024, 1))
+
+	response := audioRecorder(audioEngine(h, false), http.MethodPost, "audio/webm;codecs=opus", []byte{1})
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("missing claims status = %d", response.Code)
+	}
+	response = audioRecorder(audioEngine(handler.NewStreamHandler(uc), true), http.MethodPost, "audio/webm;codecs=opus", []byte{1})
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("missing hub status = %d", response.Code)
+	}
+	response = audioRecorder(audioEngine(h, true), http.MethodPost, "application/json", []byte{1})
+	if response.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("invalid media status = %d", response.Code)
+	}
+	response = audioRecorder(audioEngine(h, true), http.MethodPost, "audio/webm", nil)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("empty body status = %d", response.Code)
+	}
+	response = audioRecorder(audioEngine(h, true), http.MethodPost, "audio/webm", bytes.Repeat([]byte{1}, 8))
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized body status = %d", response.Code)
+	}
+
+	response = audioRecorder(audioEngine(h, true), http.MethodPost, "audio/webm;codecs=opus", []byte{1, 2})
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("first push status = %d, want 204", response.Code)
+	}
+	response = audioRecorder(audioEngine(h, true), http.MethodPost, "audio/webm;codecs=opus", []byte{3, 4})
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("reused push status = %d, want 204", response.Code)
+	}
+	response = audioRecorder(audioEngine(h, true), http.MethodPost, "audio/mpeg", []byte{5})
+	if response.Code != http.StatusConflict {
+		t.Fatalf("format change status = %d, want 409", response.Code)
+	}
+}
+
+func TestPushAudioAuthorizesPublisherOnlyOnce(t *testing.T) {
+	var lookups atomic.Int32
+	repo := ownedLiveRepo()
+	repo.FindByIDFn = func(_ context.Context, _ string) (*entity.Stream, error) {
+		lookups.Add(1)
+		return &entity.Stream{
+			ID:              "stream-1",
+			BroadcasterID:   "owner",
+			Status:          entity.StreamStatusLive,
+			ActiveSessionID: &testActiveSessionID,
+		}, nil
+	}
+	hub := streaming.NewHub()
+	h := handler.NewStreamHandler(
+		usecase.NewStreamUseCase(repo, nil),
+		handler.WithAudioStreaming(hub, time.Minute, time.Second, time.Second, 1<<20, 1024, 1),
+	)
+	engine := audioEngine(h, true)
+
+	for _, chunk := range [][]byte{{1, 2}, {3, 4}, {5, 6}} {
+		response := audioRecorder(engine, http.MethodPost, "audio/webm;codecs=opus", chunk)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("push status = %d, want 204", response.Code)
+		}
+	}
+	if got := lookups.Load(); got != 1 {
+		t.Fatalf("publisher authorization lookups = %d, want 1", got)
+	}
+}
+
 func ownedLiveRepo() *mock.MockStreamRepository {
 	return &mock.MockStreamRepository{
 		FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
-			return &entity.Stream{ID: "stream-1", BroadcasterID: "owner", Status: entity.StreamStatusLive}, nil
+			return &entity.Stream{ID: "stream-1", BroadcasterID: "owner", Status: entity.StreamStatusLive, ActiveSessionID: &testActiveSessionID}, nil
 		},
 		IncrementListenersFn: func(_ context.Context, _ string, _ int) error { return nil },
 	}
@@ -132,7 +209,7 @@ func TestIngestAudioValidationAndConflicts(t *testing.T) {
 func TestIngestAudioRejectsNonOwner(t *testing.T) {
 	repo := ownedLiveRepo()
 	repo.FindByIDFn = func(context.Context, string) (*entity.Stream, error) {
-		return &entity.Stream{ID: "stream-1", BroadcasterID: "someone-else", Status: entity.StreamStatusLive}, nil
+		return &entity.Stream{ID: "stream-1", BroadcasterID: "someone-else", Status: entity.StreamStatusLive, ActiveSessionID: &testActiveSessionID}, nil
 	}
 	hub := streaming.NewHub()
 	h := handler.NewStreamHandler(
@@ -142,5 +219,9 @@ func TestIngestAudioRejectsNonOwner(t *testing.T) {
 	response := audioRecorder(audioEngine(h, true), http.MethodPut, "audio/mpeg", nil)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("non-owner status = %d", response.Code)
+	}
+	response = audioRecorder(audioEngine(h, true), http.MethodPost, "audio/webm", []byte{1})
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("non-owner push status = %d", response.Code)
 	}
 }

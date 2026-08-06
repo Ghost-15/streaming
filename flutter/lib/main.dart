@@ -22,7 +22,9 @@ void main() async {
   usePathUrlStrategy();
 
   final sessionNotifier = SessionNotifier();
-  try { await sessionNotifier.init(); } catch (_) {}
+  try {
+    await sessionNotifier.init();
+  } catch (_) {}
   ApiService.onUnauthorized = sessionNotifier.logout;
   final router = buildRouter(sessionNotifier);
 

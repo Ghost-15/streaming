@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models/role.dart';
+import '../api/models/stream_model.dart';
+import '../notifiers/audio_notifier.dart';
 import '../notifiers/broadcaster_notifier.dart';
 import '../notifiers/session_notifier.dart';
 import '../widgets/page_header.dart';
@@ -17,9 +19,66 @@ class _BroadcasterScreenState extends State<BroadcasterScreen> {
   final _titleController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<SessionNotifier>().user;
+      if (user != null &&
+          (user.role == Role.diffuseur || user.role == Role.admin)) {
+        context.read<BroadcasterNotifier>().loadOwned();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
     super.dispose();
+  }
+
+  Future<void> _startLive() async {
+    final title = _titleController.text.trim();
+    if (title.isNotEmpty) {
+      // The mini-player persists in the studio. Stop it before opening the
+      // microphone so delayed speaker output cannot be captured and rebroadcast.
+      await context.read<AudioNotifier>().stop();
+      if (!mounted) return;
+    }
+    await context.read<BroadcasterNotifier>().startStream(title);
+    if (mounted && context.read<BroadcasterNotifier>().isStreaming) {
+      _titleController.clear();
+    }
+  }
+
+  Future<void> _restartLive(StreamModel stream) async {
+    await context.read<AudioNotifier>().stop();
+    if (!mounted) return;
+    await context.read<BroadcasterNotifier>().restartStream(stream);
+  }
+
+  Future<void> _deleteLive(StreamModel stream) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce live ?'),
+        content: Text(
+          '« ${stream.title} » sera supprimé définitivement. Cette action ne peut pas être annulée.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await context.read<BroadcasterNotifier>().deleteStream(stream);
+    }
   }
 
   @override
@@ -50,7 +109,6 @@ class _BroadcasterScreenState extends State<BroadcasterScreen> {
                 children: [
                   _LiveStatusCard(
                     state: broadcaster.state,
-                    listenerCount: broadcaster.listenerCount,
                     streamTitle: broadcaster.currentStream?.title,
                   ),
                   const SizedBox(height: 24),
@@ -74,12 +132,20 @@ class _BroadcasterScreenState extends State<BroadcasterScreen> {
                   else
                     _ToggleButton(
                       isStreaming: broadcaster.isStreaming,
-                      onStart: () => context
-                          .read<BroadcasterNotifier>()
-                          .startStream(_titleController.text.trim()),
+                      onStart: _startLive,
                       onStop: () =>
                           context.read<BroadcasterNotifier>().stopStream(),
                     ),
+                  if (!broadcaster.isStreaming) ...[
+                    const SizedBox(height: 32),
+                    _OwnedLivesSection(
+                      streams: broadcaster.ownedStreams,
+                      isLoading: broadcaster.isCatalogLoading,
+                      enabled: !broadcaster.isLoading,
+                      onRestart: _restartLive,
+                      onDelete: _deleteLive,
+                    ),
+                  ],
                   const SizedBox(height: 120),
                 ],
               ),
@@ -91,18 +157,97 @@ class _BroadcasterScreenState extends State<BroadcasterScreen> {
   }
 }
 
+class _OwnedLivesSection extends StatelessWidget {
+  final List<StreamModel> streams;
+  final bool isLoading;
+  final bool enabled;
+  final ValueChanged<StreamModel> onRestart;
+  final ValueChanged<StreamModel> onDelete;
+
+  const _OwnedLivesSection({
+    required this.streams,
+    required this.isLoading,
+    required this.enabled,
+    required this.onRestart,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Mes lives',
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Reprends un live existant avec le même lien, ou supprime-le définitivement.',
+          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        if (isLoading)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (streams.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Text('Aucun live enregistré pour le moment.'),
+          )
+        else
+          ...streams.map(
+            (stream) => Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                leading: Icon(
+                  stream.isLive ? Icons.podcasts_rounded : Icons.radio_rounded,
+                  color: stream.isLive ? cs.error : cs.primary,
+                ),
+                title: Text(
+                  stream.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(stream.isLive ? 'Session active' : 'Hors ligne'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Continuer ce live',
+                      onPressed: enabled ? () => onRestart(stream) : null,
+                      icon: const Icon(Icons.play_arrow_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Supprimer ce live',
+                      onPressed: enabled ? () => onDelete(stream) : null,
+                      icon: Icon(Icons.delete_outline_rounded, color: cs.error),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 // ── Live status card ──────────────────────────────────────────────────────────
 
 class _LiveStatusCard extends StatelessWidget {
   final BroadcasterState state;
-  final int listenerCount;
   final String? streamTitle;
 
-  const _LiveStatusCard({
-    required this.state,
-    required this.listenerCount,
-    this.streamTitle,
-  });
+  const _LiveStatusCard({required this.state, this.streamTitle});
 
   @override
   Widget build(BuildContext context) {
@@ -164,30 +309,6 @@ class _LiveStatusCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
-          if (isLive) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.headphones_rounded, size: 16, color: cs.primary),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$listenerCount auditeur${listenerCount != 1 ? 's' : ''}',
-                    style: tt.bodyMedium?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -216,9 +337,10 @@ class _PulsingDotState extends State<_PulsingDot>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -406,8 +528,11 @@ class _UnauthorizedView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: cs.outlineVariant, width: 0.8),
                 ),
-                child: Icon(Icons.lock_outline_rounded,
-                    size: 30, color: cs.onSurfaceVariant),
+                child: Icon(
+                  Icons.lock_outline_rounded,
+                  size: 30,
+                  color: cs.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 20),
               Text(

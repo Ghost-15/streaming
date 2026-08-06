@@ -49,48 +49,45 @@ GoRouter buildRouter(SessionNotifier session) => GoRouter(
           ScaffoldWithNavBar(navigationShell: shell),
       branches: [
         // Branch 0 — Accueil
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/',
-            pageBuilder: (ctx, state) => _page(ctx, state, const HomeScreen()),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const HomeScreen()),
+            ),
+          ],
+        ),
         // Branch 1 — Live (auditeurs)
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/player',
-            pageBuilder: (ctx, state) =>
-                _page(ctx, state, const AudioPlayerScreen()),
-            routes: [
-              GoRoute(
-                path: ':streamId',
-                pageBuilder: (ctx, state) => _page(
-                  ctx,
-                  state,
-                  AudioPlayerScreen(
-                    streamId: state.pathParameters['streamId'],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/player',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const AudioPlayerScreen()),
+            ),
+          ],
+        ),
         // Branch 2 — Studio (diffuseurs/admin)
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/broadcaster',
-            pageBuilder: (ctx, state) =>
-                _page(ctx, state, const BroadcasterScreen()),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/broadcaster',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const BroadcasterScreen()),
+            ),
+          ],
+        ),
         // Branch 3 — Bibliothèque
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/library',
-            pageBuilder: (ctx, state) =>
-                _page(ctx, state, const LibraryScreen()),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/library',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const LibraryScreen()),
+            ),
+          ],
+        ),
       ],
     ),
 

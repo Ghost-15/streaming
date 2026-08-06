@@ -14,11 +14,8 @@ PlaylistModel _playlist({String id = 'p-1', String title = 'Mix'}) =>
       createdAt: DateTime(2025),
     );
 
-TrackModel _track({String id = 't-1'}) => TrackModel(
-      id: id,
-      title: 'Track $id',
-      createdAt: DateTime(2025),
-    );
+TrackModel _track({String id = 't-1'}) =>
+    TrackModel(id: id, title: 'Track $id', createdAt: DateTime(2025));
 
 class _FakePlaylistRepo extends PlaylistRepository {
   List<PlaylistModel> data;
@@ -78,7 +75,12 @@ void main() {
     });
 
     test('load() transitions to loaded with data', () async {
-      final repo = _FakePlaylistRepo(data: [_playlist(), _playlist(id: 'p-2')]);
+      final repo = _FakePlaylistRepo(
+        data: [
+          _playlist(),
+          _playlist(id: 'p-2'),
+        ],
+      );
       final n = PlaylistNotifier(repo);
       await n.load();
       expect(n.status, LibraryStatus.loaded);

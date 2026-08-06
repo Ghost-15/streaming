@@ -28,18 +28,25 @@ class AudioControls extends StatelessWidget {
         children: [
           Semantics(
             button: true,
-            enabled: !isLoading,
+            enabled: true,
             label: 'Stop playback',
             child: SizedBox(
               width: 56,
               height: 56,
               child: Material(
                 color: colorScheme.primaryContainer,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
                 child: InkWell(
-                  onTap: isLoading ? null : onStop,
-                  customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  child: Icon(Icons.stop, color: colorScheme.onPrimaryContainer),
+                  onTap: onStop,
+                  customBorder: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Icon(
+                    Icons.stop,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
             ),
@@ -54,17 +61,23 @@ class AudioControls extends StatelessWidget {
               height: 72,
               child: Material(
                 color: colorScheme.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(36)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(36),
+                ),
                 elevation: 4,
                 child: InkWell(
                   onTap: isLoading ? null : (isPlaying ? onPause : onPlay),
-                  customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(36)),
+                  customBorder: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(36),
+                  ),
                   child: isLoading
                       ? SizedBox(
                           width: 32,
                           height: 32,
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              colorScheme.onPrimary,
+                            ),
                             strokeWidth: 2,
                           ),
                         )
@@ -87,11 +100,18 @@ class AudioControls extends StatelessWidget {
               height: 56,
               child: Material(
                 color: colorScheme.primaryContainer,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
                 child: InkWell(
                   onTap: isLoading ? null : () {},
-                  customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  child: Icon(Icons.skip_next, color: colorScheme.onPrimaryContainer),
+                  customBorder: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Icon(
+                    Icons.skip_next,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
             ),

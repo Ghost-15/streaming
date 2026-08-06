@@ -28,6 +28,7 @@ class ApiService {
     String? id,
     Map<String, dynamic>? data,
     Map<String, String>? queryParams,
+    Map<String, String> headers = const {},
     T Function(dynamic)? parser,
     bool notifyOnUnauthorized = true,
   }) async {
@@ -47,7 +48,8 @@ class ApiService {
       print('${httpMethod.name.toUpperCase()} : $url');
     }
 
-    final headers = {
+    final requestHeaders = {
+      ...headers,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -59,16 +61,20 @@ class ApiService {
     try {
       switch (httpMethod) {
         case HttpMethod.post:
-          response = await client.post(url, body: body, headers: headers);
+          response = await client.post(
+            url,
+            body: body,
+            headers: requestHeaders,
+          );
           break;
         case HttpMethod.put:
-          response = await client.put(url, body: body, headers: headers);
+          response = await client.put(url, body: body, headers: requestHeaders);
           break;
         case HttpMethod.delete:
-          response = await client.delete(url, headers: headers);
+          response = await client.delete(url, headers: requestHeaders);
           break;
         default:
-          response = await client.get(url, headers: headers);
+          response = await client.get(url, headers: requestHeaders);
       }
     } on http.ClientException catch (e) {
       throw ApiException(httpStatus: 0, message: 'Erreur réseau: $e');
@@ -101,6 +107,7 @@ class ApiService {
     required String uri,
     required Uint8List body,
     required String contentType,
+    Map<String, String> headers = const {},
   }) async {
     final url = Uri.parse('$baseUrl/$uri');
     final token = await StorageService.get(StorageKey.token);
@@ -108,6 +115,7 @@ class ApiService {
       url,
       body: body,
       headers: {
+        ...headers,
         'Content-Type': contentType,
         if (token != null) 'Authorization': 'Bearer $token',
       },
