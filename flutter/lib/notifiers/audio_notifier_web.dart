@@ -15,7 +15,9 @@ enum AudioPlaybackState { idle, loading, buffering, playing, paused, error }
 class AudioNotifier extends ChangeNotifier {
   static const _liveMimeType = 'audio/webm;codecs=opus';
   static const _startupTimeout = Duration(seconds: 12);
-  static const _maxLiveLatencySeconds = 2.5;
+  // A larger tolerance avoids aggressive live-edge seeks that can cause
+  // audible repetition on already-running streams across browsers.
+  static const _maxLiveLatencySeconds = 4.0;
   static const _retainedBufferedSeconds = 45.0;
   static const _maxBufferedSeconds = 75.0;
   static const _playbackSafetySeconds = 5.0;
@@ -593,6 +595,7 @@ class AudioNotifier extends ChangeNotifier {
   void _seekToLiveEdge({bool allowWhilePaused = false}) {
     final el = _el;
     if (el == null || (el.paused && !allowWhilePaused)) return;
+    if (!allowWhilePaused && el.readyState < 2) return;
     try {
       final buffered = el.buffered;
       if (buffered.length == 0) return;

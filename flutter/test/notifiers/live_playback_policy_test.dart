@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:streampulse/notifiers/live_playback_policy.dart';
 
 void main() {
@@ -64,5 +64,19 @@ void main() {
 
       expect(target, closeTo(10.05, 0.001));
     });
+
+    test('does not seek forward by a tiny amount near the live edge', () {
+      final target = liveSeekTarget(
+        currentTime: 74.4,
+        rangeStart: 30.5,
+        rangeEnd: 75.5,
+        maxLatency: 2.5,
+        edgeOffset: 0.75,
+      );
+
+      expect(target, isNull);
+    });
+
+
   });
 }

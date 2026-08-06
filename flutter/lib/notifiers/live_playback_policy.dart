@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 /// Returns a position near the live edge when playback needs to catch up.
 ///
@@ -31,5 +31,6 @@ double? liveSeekTarget({
 
   // Besides preventing audible repetition, this margin avoids tiny seeks that
   // can destabilise playback without producing a useful latency correction.
-  return target > currentTime + 0.05 ? target : null;
+  const minForwardSeekDeltaSeconds = 0.5;
+  return target > currentTime + minForwardSeekDeltaSeconds ? target : null;
 }
