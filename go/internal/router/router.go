@@ -55,6 +55,7 @@ func NewRouter(
 		v1.GET("/streams", streamH.ListActive)
 		// Public: browser <audio> cannot set Authorization headers
 		v1.GET("/streams/:id/audio", streamH.Audio)
+		v1.GET("/streams/:id/audio/ws", streamH.AudioSocket)
 	}
 
 	protected := r.Group("/api/v1")

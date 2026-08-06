@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/net/websocket"
 
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/handler"
@@ -17,13 +18,111 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
 
+var testWebMClusterID = []byte{0x1f, 0x43, 0xb6, 0x75}
+
+func testWebMCluster(payload string) []byte {
+	packet := append([]byte(nil), testWebMClusterID...)
+	return append(packet, []byte(payload)...)
+}
+
 // publicAudioEngine wires the public GET /audio listener route, mirroring the
 // real router group (browser <audio> connects here without authentication).
 func publicAudioEngine(h *handler.StreamHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/streams/:id/audio", h.Audio)
+	r.GET("/streams/:id/audio/ws", h.AudioSocket)
 	return r
+}
+
+func TestStreamingWebSocket_DeliversInitializationThenCluster(t *testing.T) {
+	hub := streaming.NewHub()
+	if err := hub.OpenChunkPublisher("s1", "audio/webm; codecs=opus"); err != nil {
+		t.Fatal(err)
+	}
+	initChunk := []byte("WEBM-INIT-BLOB")
+	hub.SetInitSegment("s1", initChunk)
+	srv := httptest.NewServer(publicAudioEngine(newPublicAudioHandler(hub)))
+	defer srv.Close()
+
+	wsURL := "ws" + srv.URL[len("http"):] + "/streams/s1/audio/ws"
+	conn, err := websocket.Dial(wsURL, "", srv.URL)
+	if err != nil {
+		t.Fatalf("websocket connect: %v", err)
+	}
+	defer conn.Close()
+
+	var gotInit []byte
+	if err := websocket.Message.Receive(conn, &gotInit); err != nil {
+		t.Fatalf("receive init blob: %v", err)
+	}
+	if !bytes.Equal(gotInit, initChunk) {
+		t.Fatalf("init blob = %q, want %q", gotInit, initChunk)
+	}
+
+	mediaChunk := testWebMCluster("ONE-COMPLETE-WEBM-CLUSTER")
+	hub.Broadcast("s1", mediaChunk)
+	var gotMedia []byte
+	if err := websocket.Message.Receive(conn, &gotMedia); err != nil {
+		t.Fatalf("receive media blob: %v", err)
+	}
+	if !bytes.Equal(gotMedia, mediaChunk) {
+		t.Fatalf("media blob = %q, want %q", gotMedia, mediaChunk)
+	}
+}
+
+func TestStreamingWebSocket_LateListenerResumesAtNextCluster(t *testing.T) {
+	hub := streaming.NewHub()
+	if err := hub.OpenChunkPublisher("s1", "audio/webm; codecs=opus"); err != nil {
+		t.Fatal(err)
+	}
+	hub.SetInitSegment("s1", []byte("WEBM-METADATA"))
+	srv := httptest.NewServer(publicAudioEngine(newPublicAudioHandler(hub)))
+	defer srv.Close()
+
+	wsURL := "ws" + srv.URL[len("http"):] + "/streams/s1/audio/ws"
+	conn, err := websocket.Dial(wsURL, "", srv.URL)
+	if err != nil {
+		t.Fatalf("websocket connect: %v", err)
+	}
+	defer conn.Close()
+
+	var initialization []byte
+	if err := websocket.Message.Receive(conn, &initialization); err != nil {
+		t.Fatalf("receive initialization: %v", err)
+	}
+
+	type received struct {
+		data []byte
+		err  error
+	}
+	receivedMedia := make(chan received, 1)
+	go func() {
+		var data []byte
+		err := websocket.Message.Receive(conn, &data)
+		receivedMedia <- received{data: data, err: err}
+	}()
+
+	hub.Broadcast("s1", []byte("continuation-without-cluster"))
+	select {
+	case got := <-receivedMedia:
+		t.Fatalf("received unaligned media %x (err=%v)", got.data, got.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	want := testWebMCluster("CURRENT-AUDIO")
+	hub.Broadcast("s1", want)
+	select {
+	case got := <-receivedMedia:
+		if got.err != nil {
+			t.Fatalf("receive aligned media: %v", got.err)
+		}
+		if !bytes.Equal(got.data, want) {
+			t.Fatalf("aligned media = %x, want %x", got.data, want)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for aligned WebM Cluster")
+	}
 }
 
 func newPublicAudioHandler(hub *streaming.Hub) *handler.StreamHandler {
@@ -155,9 +254,9 @@ func TestStreamHandler_Audio_LateJoiner(t *testing.T) {
 	}
 }
 
-// TestStreamingE2E_MediaRecorderPushToTwoListeners exercises the exact browser
-// contract: ordered POST /push blobs are relayed to two public GET /audio
-// responses, including the cached initial WebM segment.
+// TestStreamingE2E_MediaRecorderPushToTwoListeners exercises the browser
+// contract: metadata is separated from the first recorder blob, then both late
+// listeners resume from the next WebM Cluster sent through POST /push.
 func TestStreamingE2E_MediaRecorderPushToTwoListeners(t *testing.T) {
 	hub := streaming.NewHub()
 	h := handler.NewStreamHandler(
@@ -194,7 +293,8 @@ func TestStreamingE2E_MediaRecorderPushToTwoListeners(t *testing.T) {
 	}
 
 	initSegment := []byte("WEBM-INIT")
-	push(initSegment)
+	firstBlob := append(append([]byte{}, initSegment...), testWebMCluster("OLD-AUDIO")...)
+	push(firstBlob)
 	listeners := make([]*http.Response, 2)
 	for i := range listeners {
 		response, err := http.Get(srv.URL + "/streams/stream-1/audio")
@@ -212,7 +312,7 @@ func TestStreamingE2E_MediaRecorderPushToTwoListeners(t *testing.T) {
 		}
 	}
 
-	mediaChunk := []byte("WEBM-MEDIA")
+	mediaChunk := testWebMCluster("WEBM-MEDIA")
 	push(mediaChunk)
 	for i, response := range listeners {
 		got := make([]byte, len(mediaChunk))

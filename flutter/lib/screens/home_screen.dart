@@ -92,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (streams.isLoading)
               const _LoadingSliver()
             else if (streams.streams.isEmpty)
-              const SliverFillRemaining(child: _EmptyState())
+              const SliverToBoxAdapter(child: _EmptyState())
             else ...[
               if (!session.isAuthenticated) ...[
                 SliverToBoxAdapter(

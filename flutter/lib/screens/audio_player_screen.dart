@@ -69,7 +69,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 ),
               )
             else if (streams.streams.isEmpty)
-              const SliverFillRemaining(child: _EmptyState())
+              const SliverToBoxAdapter(child: _EmptyState())
             else
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),

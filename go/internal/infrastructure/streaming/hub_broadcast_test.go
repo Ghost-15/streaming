@@ -40,9 +40,16 @@ func TestHub_Broadcast_FullChannelDoesNotBlock(t *testing.T) {
 
 	select {
 	case <-done:
-		// Broadcast returned without blocking — the slow-listener packet was dropped.
+		// Broadcast returned without blocking and disconnected the slow listener;
+		// continuing after an arbitrary WebM byte loss would corrupt playback.
 	case <-time.After(time.Second):
 		t.Fatal("Broadcast blocked on a full channel")
+	}
+	if got := <-c.Send; string(got) != "first" {
+		t.Fatalf("buffered packet = %q, want first", got)
+	}
+	if _, open := <-c.Send; open {
+		t.Fatal("slow listener channel remained open after overflow")
 	}
 }
 

@@ -200,3 +200,29 @@ func TestHubOwnedChunkPublisherRejectsLateAndForeignChunks(t *testing.T) {
 		t.Fatal("stale stop closed the newer publisher session")
 	}
 }
+
+func TestHubCloseOwnedPublisherCannotCloseNewerSession(t *testing.T) {
+	hub := streaming.NewHub()
+	const contentType = "audio/webm; codecs=opus"
+	if err := hub.ActivateStreamSession("stream-A", "owner", "session-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hub.OpenOwnedPublisher("stream-A", "owner", "session-1", contentType); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hub.ActivateStreamSession("stream-A", "owner", "session-2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hub.OpenOwnedPublisher("stream-A", "owner", "session-2", contentType); err != nil {
+		t.Fatal(err)
+	}
+	if hub.CloseOwnedPublisher("stream-A", "owner", "session-1") {
+		t.Fatal("stale continuous publisher cleanup closed the newer session")
+	}
+	if _, active := hub.ContentType("stream-A"); !active {
+		t.Fatal("newer continuous publisher is no longer active")
+	}
+
+	hub.CloseStream("stream-A")
+}

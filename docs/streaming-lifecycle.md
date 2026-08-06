@@ -8,7 +8,9 @@ Le plan de données audio utilise HTTP derrière le reverse proxy HTTPS Render :
   `MediaRecorder` (4 Mio maximum par blob) ;
 - `PUT /api/v1/streams/:id/audio` conserve le contrat de corps continu pour
   FFmpeg et les producteurs non-Web ;
-- `GET /api/v1/streams/:id/audio` renvoie le live public utilisé par Flutter Web ;
+- `GET /api/v1/streams/:id/audio/ws` envoie à Flutter Web les octets WebM
+  ordonnés, avec une reprise alignée sur un élément `Cluster` ;
+- `GET /api/v1/streams/:id/audio` conserve le flux HTTP public de secours ;
 - `GET /api/v1/streams/:id/listen` fournit la variante authentifiée non-Web ;
 - le Hub effectue un fan-out non bloquant vers un channel borné par connexion.
 
@@ -35,6 +37,29 @@ Après un redémarrage du serveur, la première requête valide réhydrate cette
 autorisation depuis la BDD ; une reprise explicite est seule autorisée à
 remplacer une session révoquée.
 
+Le lecteur Web utilise une connexion WebSocket persistante, mais ne considère
+plus chaque blob `MediaRecorder` comme un segment autonome. Le Hub extrait du
+premier blob uniquement l'initialisation EBML/Info/Tracks située avant le
+premier élément `Cluster`. Un auditeur tardif reçoit ces métadonnées, puis le
+serveur ignore la fin du Cluster déjà commencé et reprend au Cluster suivant.
+Ainsi, aucun ancien son n'est rejoué et aucun fragment courant n'est raccordé
+au milieu d'un élément WebM.
+
+Le `MediaSource` donne toujours la priorité aux blobs entrants. Son historique
+n'est nettoyé que lorsque la fenêtre dépasse 75 secondes, puis 45 secondes sont
+conservées ; cela évite une opération `remove` à chaque blob. Un watchdog remet
+le lecteur à environ 0,75 seconde du direct, uniquement par un saut vers l'avant,
+et relance `play()` si les données continuent d'arriver alors que l'horloge audio
+n'avance plus. Le lecteur ne revient jamais sur un fragment déjà joué lorsque
+son horloge dépasse brièvement la fin du tampon. Une pause demandée explicitement
+par l'utilisateur reste, elle, respectée.
+
+Une fermeture WebSocket passagère déclenche une reconstruction complète du
+`MediaSource`, avec un délai progressif de 500 ms à 8 s, tandis que l'état du
+live est contrôlé par l'API. Cette reconstruction reprend sur un nouveau
+Cluster et évite de continuer avec un parseur WebM qui aurait perdu des octets.
+Un arrêt confirmé termine le `MediaSource`.
+
 ## Propagation de l’annulation
 
 | Événement | Effet |
@@ -44,7 +69,7 @@ remplacer une session révoquée.
 | Diffuseur Web arrête | le dernier blob est vidé, puis `/stop` ferme le publisher chunké et tous les auditeurs |
 | Stream arrêté | `Hub.CloseStream` annule l’ingestion et ferme tous les channels auditeurs |
 | SIGINT/SIGTERM | Le contexte racine est annulé, le Hub est fermé avant `http.Server.Shutdown`, puis l’arrêt est borné |
-| Client lent | Son channel borné ne bloque jamais le diffuseur ; le chunk est abandonné et métriqué |
+| Client lent | Son channel borné ne bloque jamais le diffuseur ; la connexion est fermée et reconstruite plutôt que de continuer après une perte d’octets |
 | BDD lente après déconnexion | Le leave utilise un timeout de 3 s et ne retient pas la connexion audio |
 
 Une copie immuable unique du chunk est partagée entre les channels. Le buffer
@@ -74,16 +99,25 @@ handlers posent à la place une deadline glissante avant chaque lecture/écritur
 - un stream n’accepte qu’un publisher actif ;
 - `CloseStream` annule le publisher et ferme chaque auditeur ;
 - `Shutdown` est idempotent et refuse les nouvelles connexions ;
-- un channel plein ne bloque pas le Hub ;
+- un channel plein ne bloque pas le Hub et déconnecte l’auditeur lent ;
 - un payload ingéré est reçu à l’identique par un auditeur HTTP ;
 - deux auditeurs publics reçoivent le même blob envoyé par `POST /push` ;
-- le cache du segment d’initialisation et son fan-out sont atomiques ;
+- le cache WebM exclut le premier Cluster et donc le son du début ;
+- une reprise tardive attend une frontière Cluster, même coupée entre uploads ;
 - une session arrêtée ne peut ni rouvrir un publisher ni envoyer un chunk ;
 - une reprise renouvelle la session tout en conservant l'identifiant du live ;
 - l’annulation auditeur ramène le delta BDD join/leave à zéro ;
-- `go test -race ./...` vérifie les accès concurrents.
+- `go test ./...` couvre le Hub, les sessions et les handlers audio ; le mode
+  `-race` peut être ajouté sur un environnement Go avec CGO activé.
 
 ## Limites connues
+
+La spécification `MediaRecorder` ne garantit pas qu'un blob produit par
+`timeslice` soit lisible isolément. L'alignement WebM corrige les arrivées
+tardives sur les navigateurs WebM/Opus pris en charge, mais une évolution vers
+WebRTC avec SFU reste la cible recommandée pour une diffusion multi-navigateurs,
+multi-répliques et plusieurs heures avec gestion native de la gigue et des
+pertes réseau. Les routes REST de cycle de vie resteraient inchangées.
 
 Le Hub est en mémoire : une réplique API ne partage pas ses publishers avec une
 autre. En production mono-nœud, c’est cohérent et simple. Un déploiement

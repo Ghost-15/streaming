@@ -1,38 +1,60 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:js_interop';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:web/web.dart' as web;
 
 import '../api/models/stream_model.dart';
 import '../api/repositories/stream_repository.dart';
+import 'live_playback_policy.dart';
 
 enum AudioPlaybackState { idle, loading, buffering, playing, paused, error }
 
 class AudioNotifier extends ChangeNotifier {
   static const _liveMimeType = 'audio/webm;codecs=opus';
   static const _startupTimeout = Duration(seconds: 12);
-  static const _maxLiveLatencySeconds = 2.0;
-  static const _retainedBufferedSeconds = 15.0;
-  static const _liveEdgeOffsetSeconds = 0.25;
+  static const _maxLiveLatencySeconds = 2.5;
+  static const _retainedBufferedSeconds = 45.0;
+  static const _maxBufferedSeconds = 75.0;
+  static const _playbackSafetySeconds = 5.0;
+  static const _liveEdgeOffsetSeconds = 0.75;
+  static const _watchdogInterval = Duration(seconds: 1);
+  static const _stalledPlaybackTimeout = Duration(seconds: 5);
+  static const _freshBlobWindow = Duration(seconds: 4);
+  static const _maxQueuedBlobs = 80;
+  static const _reconnectBackoff = <Duration>[
+    Duration(milliseconds: 500),
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+  ];
 
-  final http.Client _streamClient;
   final StreamRepository _repository;
   final Queue<Uint8List> _appendQueue = Queue<Uint8List>();
 
   web.HTMLAudioElement? _el;
   web.MediaSource? _mediaSource;
   web.SourceBuffer? _sourceBuffer;
-  StreamSubscription<List<int>>? _audioSubscription;
+  web.WebSocket? _socket;
   Timer? _startupTimer;
+  Timer? _playbackWatchdog;
+  Timer? _reconnectTimer;
   String? _objectUrl;
   String? _joinedStreamId;
   JSFunction? _pageHideHandler;
   bool _responseEnded = false;
   bool _tearingDown = false;
   bool _disposed = false;
+  bool _userPaused = false;
+  bool _autoResumeInFlight = false;
+  double _lastPlaybackPosition = 0;
+  DateTime _lastPlaybackProgressAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastBlobAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _receivedBlobCount = 0;
+  int _reconnectAttempt = 0;
   int _version = 0;
 
   AudioPlaybackState _playbackState = AudioPlaybackState.idle;
@@ -40,9 +62,8 @@ class AudioNotifier extends ChangeNotifier {
   StreamModel? _currentStream;
   String _errorMessage = '';
 
-  AudioNotifier({http.Client? streamClient, StreamRepository? repository})
-    : _streamClient = streamClient ?? http.Client(),
-      _repository = repository ?? const StreamRepository() {
+  AudioNotifier({StreamRepository? repository})
+    : _repository = repository ?? const StreamRepository() {
     _pageHideHandler = ((web.Event _) => _leaveJoinedStream()).toJS;
     web.window.addEventListener('pagehide', _pageHideHandler);
   }
@@ -62,6 +83,13 @@ class AudioNotifier extends ChangeNotifier {
     final v = ++_version;
     _leaveJoinedStream();
     _stopElement();
+    _userPaused = false;
+    _autoResumeInFlight = false;
+    _lastPlaybackPosition = 0;
+    _lastPlaybackProgressAt = DateTime.now();
+    _lastBlobAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _receivedBlobCount = 0;
+    _reconnectAttempt = 0;
 
     _playbackState = AudioPlaybackState.loading;
     _currentStream = stream;
@@ -90,12 +118,13 @@ class AudioNotifier extends ChangeNotifier {
     el.setAttribute('playsinline', '');
 
     _bindElementEvents(el, v);
+    _startPlaybackWatchdog(el, v);
     _configureMediaSession(stream);
     mediaSource.addEventListener(
       'sourceopen',
       ((web.Event _) {
         if (_version == v) {
-          unawaited(_openLiveResponse(stream.streamUrl, mediaSource, v));
+          unawaited(_openLiveSocket(stream.streamUrl, mediaSource, v));
         }
       }).toJS,
     );
@@ -149,9 +178,7 @@ class AudioNotifier extends ChangeNotifier {
     el.addEventListener(
       'waiting',
       ((web.Event _) {
-        if (_isCurrentElement(el, v) &&
-            !el.paused &&
-            _playbackState == AudioPlaybackState.playing) {
+        if (_isCurrentElement(el, v) && !_userPaused) {
           _setState(AudioPlaybackState.buffering);
         }
       }).toJS,
@@ -159,9 +186,7 @@ class AudioNotifier extends ChangeNotifier {
     el.addEventListener(
       'stalled',
       ((web.Event _) {
-        if (_isCurrentElement(el, v) &&
-            !el.paused &&
-            _playbackState == AudioPlaybackState.playing) {
+        if (_isCurrentElement(el, v) && !_userPaused) {
           _setState(AudioPlaybackState.buffering);
         }
       }).toJS,
@@ -171,6 +196,9 @@ class AudioNotifier extends ChangeNotifier {
       ((web.Event _) {
         if (_isCurrentElement(el, v) && !el.paused) {
           _startupTimer?.cancel();
+          _autoResumeInFlight = false;
+          _lastPlaybackPosition = el.currentTime;
+          _lastPlaybackProgressAt = DateTime.now();
           _setState(AudioPlaybackState.playing);
         }
       }).toJS,
@@ -181,7 +209,14 @@ class AudioNotifier extends ChangeNotifier {
         if (_isCurrentElement(el, v) &&
             _playbackState != AudioPlaybackState.idle &&
             _playbackState != AudioPlaybackState.error) {
-          _setState(AudioPlaybackState.paused);
+          if (_userPaused) {
+            _setState(AudioPlaybackState.paused);
+          } else {
+            debugPrint(
+              '[Listener] unexpected pause: ${_playbackDiagnostics(el)}',
+            );
+            _setState(AudioPlaybackState.buffering);
+          }
         }
       }).toJS,
     );
@@ -218,24 +253,16 @@ class AudioNotifier extends ChangeNotifier {
   bool _isCurrentElement(web.HTMLAudioElement el, int v) =>
       !_disposed && !_tearingDown && _version == v && _el == el;
 
-  Future<void> _openLiveResponse(
+  Future<void> _openLiveSocket(
     String url,
     web.MediaSource mediaSource,
     int v,
   ) async {
     try {
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await _streamClient.send(request);
-      if (_version != v) return;
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
-
-      final responseType = response.headers['content-type'] ?? _liveMimeType;
-      final mimeType = web.MediaSource.isTypeSupported(responseType)
-          ? responseType
-          : _liveMimeType;
-      final sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+      final sourceBuffer = mediaSource.addSourceBuffer(_liveMimeType);
+      // Late listeners resume from a current WebM Cluster after receiving the
+      // metadata segment. Sequence mode removes the publisher-uptime gap from
+      // the media timestamps and keeps the playback timeline contiguous.
       sourceBuffer.mode = 'sequence';
       _sourceBuffer = sourceBuffer;
 
@@ -252,27 +279,202 @@ class AudioNotifier extends ChangeNotifier {
         'error',
         ((web.Event _) {
           if (_version == v) {
+            debugPrint('[Listener] SourceBuffer error');
             _fail(v, 'Fragment audio invalide ou reçu dans le désordre');
           }
         }).toJS,
       );
 
-      _audioSubscription = response.stream.listen(
-        (bytes) {
-          if (_version != v || bytes.isEmpty) return;
-          _appendQueue.add(Uint8List.fromList(bytes));
-          _appendNext(v);
-        },
-        onError: (Object e) => _fail(v, 'Connexion au stream interrompue: $e'),
-        onDone: () {
-          if (_version != v) return;
-          _responseEnded = true;
-          _finishMediaSourceIfReady(v);
-        },
-        cancelOnError: true,
-      );
+      _connectLiveSocket(url, v);
     } catch (e) {
       _fail(v, 'Impossible de rejoindre le stream: $e');
+    }
+  }
+
+  void _connectLiveSocket(String url, int v) {
+    if (!_canReconnect(v) || _socket != null) return;
+    try {
+      final socket = web.WebSocket(_webSocketUrl(url));
+      socket.binaryType = 'arraybuffer';
+      _socket = socket;
+      socket.onopen = ((web.Event _) {
+        if (_isCurrentSocket(socket, v)) {
+          debugPrint('[Listener] WebSocket connected: ${socket.url}');
+        }
+      }).toJS;
+      socket.onmessage = ((web.MessageEvent event) {
+        if (!_isCurrentSocket(socket, v)) return;
+        final data = event.data;
+        if (data == null || !data.isA<JSArrayBuffer>()) {
+          _fail(v, 'Le serveur a envoyé un fragment audio non binaire');
+          return;
+        }
+        final bytes = (data as JSArrayBuffer).toDart.asUint8List();
+        if (bytes.isEmpty) return;
+        _lastBlobAt = DateTime.now();
+        _receivedBlobCount++;
+        _reconnectAttempt = 0;
+        if (_receivedBlobCount <= 3 || _receivedBlobCount % 20 == 0) {
+          debugPrint(
+            '[Listener] received WebM blob #$_receivedBlobCount: '
+            '${bytes.length} bytes queue=${_appendQueue.length}',
+          );
+        }
+        if (_appendQueue.length >= _maxQueuedBlobs) {
+          // MediaRecorder produces a dependent byte stream. Dropping one
+          // arbitrary message would corrupt every later append, so reconnect
+          // with a fresh MediaSource instead.
+          debugPrint('[Listener] append queue overflow; rebuilding playback');
+          _socket = null;
+          _closeSocket(socket, 'append queue overflow');
+          unawaited(_handleSocketClosed(v));
+          return;
+        }
+        _appendQueue.add(bytes);
+        _appendNext(v);
+      }).toJS;
+      socket.onerror = ((web.Event e) {
+        if (_isCurrentSocket(socket, v)) {
+          // Browsers report the useful close code through onclose. A temporary
+          // socket error must not destroy an otherwise healthy multi-hour
+          // listening session.
+          debugPrint('[Listener] WebSocket error; waiting for close: $e');
+        }
+      }).toJS;
+      socket.onclose = ((web.CloseEvent event) {
+        if (!_isCurrentSocket(socket, v)) return;
+        debugPrint(
+          '[Listener] WebSocket closed: code=${event.code} '
+          'reason=${event.reason} clean=${event.wasClean}',
+        );
+        _socket = null;
+        unawaited(_handleSocketClosed(v));
+      }).toJS;
+    } catch (e) {
+      debugPrint('[Listener] WebSocket connection failed: $e');
+      final stream = _currentStream;
+      if (stream != null) _schedulePipelineRestart(stream, v);
+    }
+  }
+
+  Future<void> _handleSocketClosed(int v) async {
+    if (!_canReconnect(v)) return;
+    if (_userPaused) {
+      ++_version;
+      _stopElement();
+      _setState(AudioPlaybackState.paused);
+      return;
+    }
+    _setState(AudioPlaybackState.buffering);
+
+    final blobsAtClose = _receivedBlobCount;
+    final streamId = _currentStream?.id;
+    if (streamId == null) return;
+    try {
+      var activeStreams = await _repository.getActive().timeout(
+        const Duration(seconds: 5),
+      );
+      if (!_canReconnect(v) || _receivedBlobCount != blobsAtClose) return;
+      var activeStream = _streamById(activeStreams, streamId);
+      if (activeStream == null) {
+        // Confirm an ended live twice so a short database/API transition does
+        // not terminate a listener which could otherwise reconnect.
+        await Future<void>.delayed(const Duration(seconds: 1));
+        if (!_canReconnect(v) || _receivedBlobCount != blobsAtClose) return;
+        activeStreams = await _repository.getActive().timeout(
+          const Duration(seconds: 5),
+        );
+        if (!_canReconnect(v) || _receivedBlobCount != blobsAtClose) return;
+        activeStream = _streamById(activeStreams, streamId);
+      }
+      if (activeStream != null) {
+        final previousSession = _currentStream?.activeSessionId ?? '';
+        final activeSession = activeStream.activeSessionId;
+        if (previousSession.isNotEmpty &&
+            activeSession.isNotEmpty &&
+            previousSession != activeSession) {
+          debugPrint(
+            '[Listener] stream restarted with a new session; rebuilding MSE',
+          );
+        } else {
+          debugPrint(
+            '[Listener] WebSocket interrupted; rebuilding MSE at a Cluster',
+          );
+        }
+        _schedulePipelineRestart(activeStream, v);
+        return;
+      }
+
+      debugPrint('[Listener] stream is no longer live; finishing playback');
+      _responseEnded = true;
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+      final socket = _socket;
+      _socket = null;
+      _closeSocket(socket, 'stream ended');
+      _finishMediaSourceIfReady(v);
+    } catch (e) {
+      // If the REST health check is unavailable, recover the media pipeline.
+      // A temporary control-plane outage must not terminate playback.
+      debugPrint('[Listener] live status check failed; rebuilding MSE: $e');
+      final stream = _currentStream;
+      if (stream != null) _schedulePipelineRestart(stream, v);
+    }
+  }
+
+  StreamModel? _streamById(List<StreamModel> streams, String streamId) {
+    for (final stream in streams) {
+      if (stream.id == streamId) return stream;
+    }
+    return null;
+  }
+
+  void _schedulePipelineRestart(StreamModel stream, int v) {
+    if (!_canReconnect(v) || _reconnectTimer?.isActive == true) return;
+    final index = math.min(_reconnectAttempt, _reconnectBackoff.length - 1);
+    final delay = _reconnectBackoff[index];
+    _reconnectAttempt++;
+    debugPrint(
+      '[Listener] rebuilding playback in ${delay.inMilliseconds}ms '
+      '(attempt $_reconnectAttempt)',
+    );
+    _reconnectTimer = Timer(delay, () {
+      _reconnectTimer = null;
+      if (!_canReconnect(v)) return;
+      unawaited(playStream(stream));
+    });
+  }
+
+  bool _canReconnect(int v) =>
+      !_disposed &&
+      !_tearingDown &&
+      !_responseEnded &&
+      _version == v &&
+      _el != null &&
+      _sourceBuffer != null;
+
+  String _webSocketUrl(String url) {
+    final uri = Uri.parse(url);
+    return uri
+        .replace(
+          scheme: uri.scheme == 'https' ? 'wss' : 'ws',
+          path: '${uri.path}/ws',
+        )
+        .toString();
+  }
+
+  bool _isCurrentSocket(web.WebSocket socket, int v) =>
+      !_disposed && !_tearingDown && _version == v && _socket == socket;
+
+  void _closeSocket(web.WebSocket? socket, String reason) {
+    if (socket == null || socket.readyState >= web.WebSocket.CLOSING) return;
+    try {
+      socket.close(1000, reason);
+    } catch (e) {
+      // Chromium may reject close() while the WebSocket handshake is still
+      // pending. Clearing our reference is enough for stale callbacks to be
+      // ignored; the browser will release the failed connection itself.
+      debugPrint('[Listener] WebSocket close ignored: $e');
     }
   }
 
@@ -280,28 +482,42 @@ class AudioNotifier extends ChangeNotifier {
     if (_version != v) return;
     final sourceBuffer = _sourceBuffer;
     if (sourceBuffer == null || sourceBuffer.updating) return;
-    if (_trimLiveBuffer(sourceBuffer)) return;
-    if (_appendQueue.isEmpty) {
-      _finishMediaSourceIfReady(v);
+    // Incoming audio always has priority over maintenance removals. Trimming
+    // before every append eventually starves the queue during long sessions.
+    if (_appendQueue.isNotEmpty) {
+      final bytes = _appendQueue.removeFirst();
+      try {
+        sourceBuffer.appendBuffer(bytes.toJS);
+      } catch (e) {
+        _fail(v, 'Impossible de mettre en mémoire le stream: $e');
+      }
       return;
     }
-
-    final bytes = _appendQueue.removeFirst();
-    try {
-      sourceBuffer.appendBuffer(bytes.toJS);
-    } catch (e) {
-      _fail(v, 'Impossible de mettre en mémoire le stream: $e');
-    }
+    if (_trimLiveBuffer(sourceBuffer)) return;
+    _finishMediaSourceIfReady(v);
   }
 
   bool _trimLiveBuffer(web.SourceBuffer sourceBuffer) {
     try {
       final buffered = sourceBuffer.buffered;
       if (buffered.length == 0) return false;
+      if (_appendQueue.length > 2) return false;
+      final bufferStart = buffered.start(0);
       final liveEnd = buffered.end(buffered.length - 1);
-      final removeEnd = liveEnd - _retainedBufferedSeconds;
-      if (removeEnd > buffered.start(0)) {
-        sourceBuffer.remove(0, removeEnd);
+      if (liveEnd - bufferStart < _maxBufferedSeconds) return false;
+      final desiredRemoveEnd = liveEnd - _retainedBufferedSeconds;
+      final el = _el;
+      final playbackSafeEnd = el == null || _userPaused
+          ? desiredRemoveEnd
+          : el.currentTime - _playbackSafetySeconds;
+      final removeEnd = math.min(desiredRemoveEnd, playbackSafeEnd);
+      if (removeEnd > bufferStart + 1) {
+        debugPrint(
+          '[Listener] trimming buffer: ${bufferStart.toStringAsFixed(1)}-'
+          '${removeEnd.toStringAsFixed(1)} live=${liveEnd.toStringAsFixed(1)} '
+          'current=${el?.currentTime.toStringAsFixed(1) ?? 'none'}',
+        );
+        sourceBuffer.remove(bufferStart, removeEnd);
         return true;
       }
     } catch (_) {
@@ -310,16 +526,96 @@ class AudioNotifier extends ChangeNotifier {
     return false;
   }
 
+  void _startPlaybackWatchdog(web.HTMLAudioElement el, int v) {
+    _playbackWatchdog?.cancel();
+    _playbackWatchdog = Timer.periodic(_watchdogInterval, (_) {
+      if (!_isCurrentElement(el, v) || _userPaused) return;
+      final now = DateTime.now();
+      final position = el.currentTime;
+      if ((position - _lastPlaybackPosition).abs() > 0.05) {
+        _lastPlaybackPosition = position;
+        _lastPlaybackProgressAt = now;
+        return;
+      }
+      final blobsAreFresh = now.difference(_lastBlobAt) <= _freshBlobWindow;
+      final playbackIsStalled =
+          now.difference(_lastPlaybackProgressAt) >= _stalledPlaybackTimeout;
+      if (!blobsAreFresh || !playbackIsStalled) return;
+
+      debugPrint(
+        '[Listener] playback watchdog recovery: ${_playbackDiagnostics(el)}',
+      );
+      _lastPlaybackProgressAt = now;
+      _seekToLiveEdge(allowWhilePaused: true);
+      unawaited(_recoverUnexpectedPause(el, v));
+    });
+  }
+
+  Future<void> _recoverUnexpectedPause(web.HTMLAudioElement el, int v) async {
+    if (_autoResumeInFlight || _userPaused || !_isCurrentElement(el, v)) return;
+    _autoResumeInFlight = true;
+    try {
+      _seekToLiveEdge(allowWhilePaused: true);
+      await el.play().toDart;
+      if (_isCurrentElement(el, v) && !el.paused) {
+        _lastPlaybackPosition = el.currentTime;
+        _lastPlaybackProgressAt = DateTime.now();
+        _setState(AudioPlaybackState.playing);
+      }
+    } catch (e) {
+      if (_isCurrentElement(el, v)) {
+        debugPrint('[Listener] automatic resume failed: $e');
+      }
+    } finally {
+      if (_version == v) _autoResumeInFlight = false;
+    }
+  }
+
+  String _playbackDiagnostics(web.HTMLAudioElement el) {
+    var buffered = 'none';
+    var bufferedAhead = 0.0;
+    try {
+      final ranges = el.buffered;
+      if (ranges.length > 0) {
+        final liveEnd = ranges.end(ranges.length - 1);
+        bufferedAhead = liveEnd - el.currentTime;
+        buffered =
+            '${ranges.start(0).toStringAsFixed(2)}-'
+            '${liveEnd.toStringAsFixed(2)}';
+      }
+    } catch (_) {}
+    return 'paused=${el.paused} current=${el.currentTime.toStringAsFixed(2)} '
+        'buffered=$buffered ahead=${bufferedAhead.toStringAsFixed(2)} '
+        'readyState=${el.readyState} queue=${_appendQueue.length} '
+        'sourceUpdating=${_sourceBuffer?.updating} socket=${_socket?.readyState}';
+  }
+
   void _seekToLiveEdge({bool allowWhilePaused = false}) {
     final el = _el;
     if (el == null || (el.paused && !allowWhilePaused)) return;
     try {
       final buffered = el.buffered;
       if (buffered.length == 0) return;
-      final liveEnd = buffered.end(buffered.length - 1);
-      if (liveEnd - el.currentTime > _maxLiveLatencySeconds) {
-        el.currentTime = liveEnd - _liveEdgeOffsetSeconds;
-      }
+      final lastRange = buffered.length - 1;
+      final liveStart = buffered.start(lastRange);
+      final liveEnd = buffered.end(lastRange);
+      final currentTime = el.currentTime;
+      final target = liveSeekTarget(
+        currentTime: currentTime,
+        rangeStart: liveStart,
+        rangeEnd: liveEnd,
+        maxLatency: _maxLiveLatencySeconds,
+        edgeOffset: _liveEdgeOffsetSeconds,
+      );
+      if (target == null) return;
+
+      debugPrint(
+        '[Listener] forward live seek: ${currentTime.toStringAsFixed(2)} -> '
+        '${target.toStringAsFixed(2)} buffered='
+        '${liveStart.toStringAsFixed(2)}-${liveEnd.toStringAsFixed(2)}',
+      );
+      el.currentTime = target;
+      _lastPlaybackPosition = target;
     } catch (_) {}
   }
 
@@ -337,6 +633,7 @@ class AudioNotifier extends ChangeNotifier {
 
   void _fail(int v, String message) {
     if (_version != v) return;
+    debugPrint('[Listener] playback failure: $message');
     // Invalidate callbacks bound to the failed element before tearing it down.
     ++_version;
     _errorMessage = message;
@@ -351,8 +648,14 @@ class AudioNotifier extends ChangeNotifier {
     _tearingDown = true;
     _startupTimer?.cancel();
     _startupTimer = null;
-    unawaited(_audioSubscription?.cancel());
-    _audioSubscription = null;
+    _playbackWatchdog?.cancel();
+    _playbackWatchdog = null;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempt = 0;
+    final socket = _socket;
+    _socket = null;
+    _closeSocket(socket, 'client stop');
     _appendQueue.clear();
     _responseEnded = false;
     _sourceBuffer = null;
@@ -377,6 +680,7 @@ class AudioNotifier extends ChangeNotifier {
     final el = _el;
     if (el == null) return;
     final v = _version;
+    _userPaused = true;
     el.pause();
     if (_isCurrentElement(el, v) &&
         _playbackState != AudioPlaybackState.idle &&
@@ -393,6 +697,7 @@ class AudioNotifier extends ChangeNotifier {
       return;
     }
     final v = _version;
+    _userPaused = false;
     _seekToLiveEdge(allowWhilePaused: true);
     try {
       await el.play().toDart;
@@ -406,6 +711,7 @@ class AudioNotifier extends ChangeNotifier {
 
   Future<void> stop() async {
     ++_version;
+    _userPaused = false;
     _stopElement();
     _leaveJoinedStream();
     _currentStream = null;
@@ -507,7 +813,6 @@ class AudioNotifier extends ChangeNotifier {
     _stopElement();
     _leaveJoinedStream();
     _clearMediaSession();
-    _streamClient.close();
     super.dispose();
   }
 }

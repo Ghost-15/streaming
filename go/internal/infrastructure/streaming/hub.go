@@ -45,7 +45,8 @@ type authorizedSession struct {
 type Hub struct {
 	mu              sync.RWMutex
 	streams         map[string]map[string]*Client
-	initSegments    map[string][]byte // streamID → first chunk (WebM header) for late joiners
+	initSegments    map[string][]byte // streamID → WebM metadata before the first Cluster
+	initCandidates  map[string][]byte // bounded metadata bytes until the first Cluster is found
 	userConnections map[string]int
 	publishers      map[string]publisher
 	sessions        map[string]authorizedSession
@@ -57,6 +58,7 @@ func NewHub() *Hub {
 	return &Hub{
 		streams:         make(map[string]map[string]*Client),
 		initSegments:    make(map[string][]byte),
+		initCandidates:  make(map[string][]byte),
 		userConnections: make(map[string]int),
 		publishers:      make(map[string]publisher),
 		sessions:        make(map[string]authorizedSession),
@@ -125,8 +127,8 @@ func (h *Hub) Register(client *Client) error {
 }
 
 // RegisterWithInit atomically registers a listener and snapshots the cached
-// media initialisation segment. This prevents a new listener from receiving
-// the first chunk once through Broadcast and a second time from the cache.
+// metadata segment. The shared lock defines whether the listener receives the
+// stream from its beginning or bootstraps later at a new Cluster boundary.
 func (h *Hub) RegisterWithInit(client *Client) ([]byte, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -164,9 +166,9 @@ func (h *Hub) RegisterWithInit(client *Client) ([]byte, error) {
 	return append([]byte(nil), h.initSegments[client.StreamID]...), nil
 }
 
-// SetInitSegment caches the first audio chunk for a stream (WebM EBML header +
-// Tracks element). Listeners who join after the stream started need it so the
-// browser can initialise its decoder. Only the first call per stream is kept.
+// SetInitSegment explicitly stores decoder metadata. Browser ingestion uses
+// cacheWebMInitializationLocked instead so media from the first recorder blob
+// is never mistaken for initialization data.
 func (h *Hub) SetInitSegment(streamID string, data []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -174,6 +176,28 @@ func (h *Hub) SetInitSegment(streamID string, data []byte) {
 		buf := make([]byte, len(data))
 		copy(buf, data)
 		h.initSegments[streamID] = buf
+		delete(h.initCandidates, streamID)
+	}
+}
+
+const maxWebMInitializationBytes = 1 << 20
+
+func (h *Hub) cacheWebMInitializationLocked(streamID string, data []byte) {
+	if _, ready := h.initSegments[streamID]; ready {
+		return
+	}
+	candidate := make([]byte, 0, len(h.initCandidates[streamID])+len(data))
+	candidate = append(candidate, h.initCandidates[streamID]...)
+	candidate = append(candidate, data...)
+	if initialization, found := webMInitializationPrefix(candidate); found {
+		h.initSegments[streamID] = initialization
+		delete(h.initCandidates, streamID)
+		return
+	}
+	if len(candidate) <= maxWebMInitializationBytes {
+		h.initCandidates[streamID] = candidate
+	} else {
+		delete(h.initCandidates, streamID)
 	}
 }
 
@@ -211,35 +235,40 @@ func (h *Hub) Unregister(client *Client) {
 
 // Broadcast sends data to all listeners of a stream.
 func (h *Hub) Broadcast(streamID string, data []byte) (delivered, dropped int) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.broadcastLocked(streamID, data)
 }
 
-// BroadcastWithInit atomically caches the first packet and fans it out. A
-// listener racing with the first browser upload therefore receives that packet
-// either from its queue or from RegisterWithInit, never from both.
+// BroadcastWithInit atomically extracts WebM decoder metadata and fans out the
+// original continuous bytes. The cached value never includes Cluster media.
 func (h *Hub) BroadcastWithInit(streamID string, data []byte) (delivered, dropped int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, already := h.initSegments[streamID]; !already {
-		h.initSegments[streamID] = append([]byte(nil), data...)
-	}
+	h.cacheWebMInitializationLocked(streamID, data)
 	return h.broadcastLocked(streamID, data)
 }
 
-// broadcastLocked requires either the Hub read or write lock.
+// broadcastLocked requires the Hub write lock. Losing arbitrary bytes corrupts
+// a dependent WebM stream, so a slow listener is disconnected instead of
+// receiving later data after a dropped packet.
 func (h *Hub) broadcastLocked(streamID string, data []byte) (delivered, dropped int) {
 	// One immutable copy detaches the packet from the broadcaster's reusable
 	// read buffer. All listener queues may safely share that same byte slice.
 	packet := append([]byte(nil), data...)
-	for _, client := range h.streams[streamID] {
+	listeners := h.streams[streamID]
+	for key, client := range listeners {
 		select {
 		case client.Send <- packet:
 			delivered++
 		default:
 			dropped++
+			delete(listeners, key)
+			h.disconnectLocked(client)
 		}
+	}
+	if len(listeners) == 0 {
+		delete(h.streams, streamID)
 	}
 	telemetry.AudioIngestBytesTotal.WithLabelValues(streamID).Add(float64(len(data)))
 	telemetry.AudioChunksTotal.WithLabelValues(streamID, "ingest").Inc()
@@ -275,6 +304,7 @@ func (h *Hub) OpenPublisher(streamID, contentType string) (context.Context, erro
 		startedAt:   time.Now(),
 	}
 	delete(h.initSegments, streamID)
+	delete(h.initCandidates, streamID)
 	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
 	return ctx, nil
 }
@@ -305,6 +335,7 @@ func (h *Hub) OpenOwnedPublisher(
 		startedAt:     time.Now(),
 	}
 	delete(h.initSegments, streamID)
+	delete(h.initCandidates, streamID)
 	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
 	return ctx, nil
 }
@@ -356,6 +387,7 @@ func (h *Hub) OpenOwnedChunkPublisher(streamID, broadcasterID, sessionID, conten
 		chunked:       true,
 	}
 	delete(h.initSegments, streamID)
+	delete(h.initCandidates, streamID)
 	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
 	return nil
 }
@@ -391,9 +423,7 @@ func (h *Hub) BroadcastOwnedChunk(
 	if current.contentType != contentType {
 		return 0, 0, ErrPublisherFormatChanged
 	}
-	if _, already := h.initSegments[streamID]; !already {
-		h.initSegments[streamID] = append([]byte(nil), data...)
-	}
+	h.cacheWebMInitializationLocked(streamID, data)
 	delivered, dropped = h.broadcastLocked(streamID, data)
 	return delivered, dropped, nil
 }
@@ -408,6 +438,7 @@ func (h *Hub) ClosePublisher(streamID string) {
 	listeners := h.streams[streamID]
 	delete(h.streams, streamID)
 	delete(h.initSegments, streamID)
+	delete(h.initCandidates, streamID)
 	for _, client := range listeners {
 		h.disconnectLocked(client)
 	}
@@ -418,6 +449,29 @@ func (h *Hub) ClosePublisher(streamID string) {
 	pub.cancel()
 	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(0)
 	telemetry.BroadcasterSessionDuration.Observe(time.Since(pub.startedAt).Seconds())
+}
+
+// CloseOwnedPublisher closes only the continuous publisher belonging to the
+// named broadcast session. A deferred cleanup from an older request must not
+// tear down a newer session which reused the stable stream ID.
+func (h *Hub) CloseOwnedPublisher(streamID, broadcasterID, sessionID string) bool {
+	h.mu.Lock()
+	pub, exists := h.publishers[streamID]
+	if !exists || pub.chunked || pub.broadcasterID != broadcasterID || pub.sessionID != sessionID {
+		h.mu.Unlock()
+		return false
+	}
+	delete(h.publishers, streamID)
+	listeners := h.streams[streamID]
+	delete(h.streams, streamID)
+	delete(h.initSegments, streamID)
+	delete(h.initCandidates, streamID)
+	for _, client := range listeners {
+		h.disconnectLocked(client)
+	}
+	h.mu.Unlock()
+	h.finishPublisher(streamID, pub, true)
+	return true
 }
 
 // ContentType returns the active publisher's media type and whether a publisher
@@ -478,6 +532,7 @@ func (h *Hub) closeStreamLocked(streamID string) (publisher, bool) {
 	listeners := h.streams[streamID]
 	delete(h.streams, streamID)
 	delete(h.initSegments, streamID)
+	delete(h.initCandidates, streamID)
 	for _, client := range listeners {
 		h.disconnectLocked(client)
 	}

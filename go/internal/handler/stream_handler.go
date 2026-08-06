@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/net/websocket"
 
 	"github.com/Ghost-15/streaming/internal/handler/middleware"
 	"github.com/Ghost-15/streaming/internal/infrastructure/streaming"
@@ -309,6 +310,10 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 		return
 	}
 	contentType = currentType
+	var clusterAligner *streaming.WebMClusterAligner
+	if len(initSegment) > 0 {
+		clusterAligner = &streaming.WebMClusterAligner{}
+	}
 
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "no-store, no-transform")
@@ -346,6 +351,12 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 				}
 			}
 			idle.Reset(h.idleTimeout)
+			if clusterAligner != nil {
+				packet = clusterAligner.Align(packet)
+				if len(packet) == 0 {
+					continue
+				}
+			}
 			if h.writeTimeout > 0 {
 				_ = controller.SetWriteDeadline(time.Now().Add(h.writeTimeout))
 			}
@@ -403,7 +414,7 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 		}
 		return
 	}
-	defer h.hub.ClosePublisher(streamID)
+	defer h.hub.CloseOwnedPublisher(streamID, claims.UserID, sessionID)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), h.maxDuration)
 	defer cancel()
@@ -425,8 +436,8 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 		_ = controller.SetReadDeadline(readDeadline)
 		n, readErr := body.Read(buffer)
 		if n > 0 {
-			// Cache the first chunk (WebM EBML header) so late-joining listeners
-			// on the public /audio path can initialise their browser decoder.
+			// Extract WebM metadata before the first Cluster so a late listener
+			// can initialize its decoder without replaying the first audio.
 			h.hub.BroadcastWithInit(streamID, buffer[:n])
 		}
 		if readErr == nil {
@@ -615,6 +626,10 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 		return
 	}
 	contentType = currentType
+	var clusterAligner *streaming.WebMClusterAligner
+	if len(initSegment) > 0 {
+		clusterAligner = &streaming.WebMClusterAligner{}
+	}
 
 	// Prefer http.Flusher for real-time streaming; fall back to a no-op so the
 	// handler keeps working even when a middleware wraps the ResponseWriter with
@@ -666,6 +681,12 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 				}
 			}
 			idle.Reset(h.idleTimeout)
+			if clusterAligner != nil {
+				chunk = clusterAligner.Align(chunk)
+				if len(chunk) == 0 {
+					continue
+				}
+			}
 			if h.writeTimeout > 0 {
 				_ = controller.SetWriteDeadline(time.Now().Add(h.writeTimeout))
 			}
@@ -685,6 +706,109 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 				Str("stream_id", streamID).
 				Str("conn_id", connID).
 				Msg("listener disconnected")
+			return
+		}
+	}
+}
+
+// AudioSocket transports the publisher's ordered WebM bytes in binary
+// messages. MediaRecorder blob boundaries are not assumed to be independently
+// decodable: late listeners receive metadata only, then resume on a Cluster.
+func (h *StreamHandler) AudioSocket(c *gin.Context) {
+	if h.hub == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})
+		return
+	}
+	streamID := c.Param("id")
+
+	waitForPublisher := time.NewTimer(h.idleTimeout)
+	pollPublisher := time.NewTicker(25 * time.Millisecond)
+	defer waitForPublisher.Stop()
+	defer pollPublisher.Stop()
+	for {
+		if _, active := h.hub.ContentType(streamID); active {
+			break
+		}
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case <-waitForPublisher.C:
+			c.JSON(http.StatusConflict, gin.H{"error": "audio source is not connected"})
+			return
+		case <-pollPublisher.C:
+		}
+	}
+
+	websocket.Handler(func(conn *websocket.Conn) {
+		h.serveAudioSocket(c.Request.Context(), conn, streamID)
+	}).ServeHTTP(c.Writer, c.Request)
+}
+
+func (h *StreamHandler) serveAudioSocket(ctx context.Context, conn *websocket.Conn, streamID string) {
+	defer conn.Close()
+	client := &streaming.Client{
+		ID:       uuid.NewString(),
+		UserID:   uuid.NewString(),
+		StreamID: streamID,
+		Send:     make(chan []byte, h.clientBuffer),
+	}
+	initSegment, err := h.hub.RegisterWithInit(client)
+	if err != nil {
+		return
+	}
+	defer h.hub.Unregister(client)
+	if _, active := h.hub.ContentType(streamID); !active {
+		return
+	}
+	var clusterAligner *streaming.WebMClusterAligner
+	if len(initSegment) > 0 {
+		clusterAligner = &streaming.WebMClusterAligner{}
+	}
+
+	send := func(payload []byte) error {
+		if h.writeTimeout > 0 {
+			_ = conn.SetWriteDeadline(time.Now().Add(h.writeTimeout))
+		}
+		if err := websocket.Message.Send(conn, payload); err != nil {
+			return err
+		}
+		telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(len(payload)))
+		telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+		return nil
+	}
+	if len(initSegment) > 0 {
+		if err := send(initSegment); err != nil {
+			return
+		}
+	}
+
+	idle := time.NewTimer(h.idleTimeout)
+	defer idle.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case chunk, open := <-client.Send:
+			if !open {
+				return
+			}
+			if !idle.Stop() {
+				select {
+				case <-idle.C:
+				default:
+				}
+			}
+			idle.Reset(h.idleTimeout)
+			if clusterAligner != nil {
+				chunk = clusterAligner.Align(chunk)
+				if len(chunk) == 0 {
+					continue
+				}
+			}
+			if err := send(chunk); err != nil {
+				return
+			}
+		case <-idle.C:
 			return
 		}
 	}
