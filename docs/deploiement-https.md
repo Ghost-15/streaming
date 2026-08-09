@@ -1,9 +1,9 @@
 # Déploiement Docker Hub vers Render
 
 La production StreamPulse utilise exclusivement Render. GitHub Actions construit
-l’image de l’API Go, la publie sur Docker Hub puis appelle un deploy hook
-Render. Render exécute le conteneur, fournit le reverse proxy public et gère
-automatiquement HTTPS.
+l’image de l’API Go, la publie sur Docker Hub puis demande à l’API Render de
+déployer le tag immuable correspondant au SHA Git. Render exécute le conteneur,
+fournit le reverse proxy public et gère automatiquement HTTPS.
 
 ## 1. Créer le dépôt Docker Hub
 
@@ -20,27 +20,28 @@ Variables :
 | `DOCKERHUB_USERNAME` | `mon-compte` |
 | `DOCKERHUB_REPOSITORY` | `mon-compte/streampulse-api` |
 | `API_DOMAIN` | `streampulse-api.onrender.com` ou domaine personnalisé |
+| `RENDER_SERVICE_ID` | identifiant `srv-...` du Web Service |
 
 Secrets :
 
 | Nom | Usage |
 | --- | --- |
 | `DOCKERHUB_TOKEN` | Publication de l’image |
-| `RENDER_DEPLOY_HOOK_URL` | Déclenchement du déploiement Render |
+| `RENDER_API_KEY` | déploiement, lecture du digest et rollback via l’API Render |
 
 ## 2. Créer le Web Service Render
 
 Dans Render, créer un Web Service à partir d’une image existante :
 
 ```text
-docker.io/mon-compte/streampulse-api:latest
+docker.io/mon-compte/streampulse-api:<sha-git>
 ```
 
 Si le dépôt Docker Hub est privé, enregistrer les identifiants du registre dans
 Render. Configurer :
 
 - health check : `/health` ;
-- auto-deploy Render depuis Git : désactivé, car le deploy hook est utilisé ;
+- auto-deploy Render : désactivé, car GitHub Actions déploie le tag SHA exact ;
 - une seule instance tant que le Hub audio reste en mémoire ;
 - région proche de la base PostgreSQL/Supabase.
 
@@ -79,10 +80,13 @@ openssl rsa -in private.pem -pubout -out public.pem
 
 Ne jamais committer ces deux fichiers.
 
-## 4. Créer le deploy hook
+## 4. Autoriser le déploiement prouvé
 
-Dans les paramètres du service Render, créer/copier le deploy hook puis
-l’enregistrer dans le secret GitHub `RENDER_DEPLOY_HOOK_URL`.
+Créer une clé API Render limitée au workspace concerné, l’enregistrer dans le
+secret GitHub `RENDER_API_KEY`, puis copier l’identifiant `srv-...` du service
+dans la variable GitHub `RENDER_SERVICE_ID`. La clé est nécessaire pour lire le
+digest réellement résolu par Render et pour exercer un rollback ; un deploy hook
+seul ne fournit pas ces preuves.
 
 Le workflow `.github/workflows/deploy.yml` suit cet ordre :
 
@@ -92,12 +96,15 @@ push main
   -> build go/Dockerfile
   -> push Docker Hub :<SHA Git>
   -> push Docker Hub :latest
-  -> POST RENDER_DEPLOY_HOOK_URL
-  -> Render tire :latest et remplace le service
+  -> POST API Render avec docker.io/...:<SHA Git>
+  -> attendre le statut live
+  -> comparer le digest BuildKit au digest résolu par Render
+  -> prouver health, redirection HTTP et certificat TLS
+  -> publier l’artefact production-evidence-<SHA Git>
 ```
 
-Le job Render dépend du job Docker Hub : le hook n’est jamais appelé si les
-tests, le build ou le push échouent. Les tags `v*` et les lancements manuels
+Le job Render dépend du job Docker Hub : l’API Render n’est jamais appelée si
+les tests, le build ou le push échouent. Les tags `v*` et les lancements manuels
 publient l’image, mais seul un push sur `main` déclenche Render.
 
 ## 5. HTTPS et domaine
@@ -125,31 +132,36 @@ Dans GitHub Actions :
 
 - `Verify release` doit réussir ;
 - `Publish immutable image to Docker Hub` doit réussir ;
-- `Trigger Render deployment` doit réussir.
+- `Deploy and prove Render production` doit réussir.
 
-Dans Docker Hub, vérifier les tags `latest` et le SHA complet. Dans Render,
-contrôler que le digest tiré correspond à la nouvelle image, puis consulter les
-logs et `/health`.
+Télécharger l’artefact `production-evidence-<sha>`. Il contient la réponse Render
+sanitisée (`image.ref` et `image.sha`), le `curl --verbose`, les en-têtes de
+redirection, le certificat, sa chaîne et le JSON exact de `/health`. Le job
+échoue si le digest tiré diffère du digest publié par BuildKit.
 
 ## 7. Rollback
 
-Chaque version reste disponible sur Docker Hub avec son SHA Git. Pour revenir à
-une version :
+Chaque version reste disponible sur Docker Hub avec son SHA Git. Le workflow
+manuel `Render rollback proof` demande l’identifiant d’un ancien déploiement et
+la confirmation `ROLLBACK_AND_RESTORE`. Il :
 
-1. sélectionner dans Render l’image
-   `mon-compte/streampulse-api:<ancien-sha>` ;
-2. lancer un déploiement manuel ;
-3. vérifier `/health` et les logs ;
-4. remettre `latest` après correction si nécessaire.
+1. mémorise la référence et le digest actuellement actifs ;
+2. appelle `POST /v1/services/{serviceId}/rollback` ;
+3. prouve le digest, le health check et TLS sur la version restaurée ;
+4. redéploie automatiquement la référence qui était active avant le test ;
+5. prouve cette restauration et publie les deux jeux d’artefacts.
 
-Le tag SHA est la preuve immuable ; `latest` sert uniquement au déploiement
-automatique courant.
+Cette opération provoque volontairement un changement temporaire de production.
+La lancer uniquement pendant une fenêtre annoncée et avec un ancien déploiement
+connu comme sain.
 
 ## 8. Observabilité et pprof
 
-Prometheus/Grafana restent disponibles dans la stack Docker locale. Pour la
-production, exporter les métriques vers un service compatible ou utiliser
-Grafana Cloud sans exposer publiquement `/metrics`.
+Prometheus/Grafana restent disponibles dans la stack Docker locale. En
+production, un Background Worker Render Grafana Alloy construit depuis
+`go/infra/alloy/Dockerfile` scrape `/metrics` avec le bearer token et effectue
+un remote write vers Grafana Cloud. Les logs et traces partent directement de
+l’API vers Loki et Tempo. Voir `docs/observability-rncp.md`.
 
 pprof doit rester désactivé sur Render : les profils peuvent contenir des
 informations internes et ne doivent pas être rendus publics.

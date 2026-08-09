@@ -1,0 +1,27 @@
+prometheus.scrape "streampulse_production" {
+  targets = [
+    {
+      "__address__" = sys.env("STREAMPULSE_API_HOST"),
+      "service"     = "streampulse-api",
+      "env"         = "production",
+    },
+  ]
+
+  scheme          = "https"
+  metrics_path    = "/metrics"
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+  bearer_token    = sys.env("METRICS_BEARER_TOKEN")
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USERNAME")
+      password = sys.env("GRAFANA_CLOUD_API_KEY")
+    }
+  }
+}

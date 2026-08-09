@@ -336,6 +336,10 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 	idle := time.NewTimer(h.idleTimeout)
 	defer idle.Stop()
 	controller := http.NewResponseController(c.Writer)
+	// A per-chunk deadline that remains expired when this handler returns makes
+	// net/http fail to write the terminating HTTP chunk. Clients then observe an
+	// unexpected EOF despite having received a successful audio response.
+	defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
 	for {
 		select {
 		case <-c.Request.Context().Done():
@@ -668,6 +672,7 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 	idle := time.NewTimer(h.idleTimeout)
 	defer idle.Stop()
 	controller := http.NewResponseController(c.Writer)
+	defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
 	for {
 		select {
 		case chunk, open := <-client.Send:

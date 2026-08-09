@@ -1,0 +1,29 @@
+File: streampulse-final.exe
+Build ID: <workspace>\.tools\streampulse-final.exe2026-08-09 17:13:14.3541593 +0200 CEST
+Type: cpu
+Time: 2026-08-09 17:18:30 CEST
+Duration: 30s, Total samples = 2.82s ( 9.40%)
+Showing nodes accounting for 2.51s, 89.01% of 2.82s total
+Dropped 141 nodes (cum <= 0.01s)
+Showing top 20 nodes out of 155
+      flat  flat%   sum%        cum   cum%
+     2.06s 73.05% 73.05%      2.06s 73.05%  runtime.cgocall
+     0.09s  3.19% 76.24%      0.09s  3.19%  crypto/internal/fips140/bigmod.addMulVVW (inline)
+     0.04s  1.42% 77.66%      0.04s  1.42%  runtime.(*mspan).divideByElemSize (inline)
+     0.03s  1.06% 78.72%      0.03s  1.06%  runtime.lock2.osyield.func1
+     0.03s  1.06% 79.79%      0.04s  1.42%  runtime.scanObjectsSmall
+     0.02s  0.71% 80.50%      0.11s  3.90%  crypto/internal/fips140/bigmod.(*Nat).montgomeryMul
+     0.02s  0.71% 81.21%      1.07s 37.94%  github.com/Ghost-15/streaming/internal/handler.(*StreamHandler).Audio
+     0.02s  0.71% 81.91%      0.03s  1.06%  go.opentelemetry.io/otel/sdk/trace.truncateAttr
+     0.02s  0.71% 82.62%      0.02s  0.71%  runtime.(*lfstack).push
+     0.02s  0.71% 83.33%      0.02s  0.71%  runtime.casgstatus.osyield.func4
+     0.02s  0.71% 84.04%      0.02s  0.71%  runtime.memmove
+     0.02s  0.71% 84.75%      0.02s  0.71%  runtime.nextFreeFast (inline)
+     0.02s  0.71% 85.46%      0.02s  0.71%  runtime.preemptM
+     0.02s  0.71% 86.17%      0.02s  0.71%  runtime.runqgrab.osyield.func1
+     0.02s  0.71% 86.88%      0.02s  0.71%  runtime.step
+     0.02s  0.71% 87.59%      0.02s  0.71%  runtime.sysUnusedOS
+     0.01s  0.35% 87.94%      0.02s  0.71%  fmt.(*pp).doPrintf
+     0.01s  0.35% 88.30%      2.16s 76.60%  internal/poll.(*FD).Write
+     0.01s  0.35% 88.65%      0.77s 27.30%  internal/poll.(*FD).Write.func2
+     0.01s  0.35% 89.01%      2.17s 76.95%  internal/poll.(*FD).execIO

@@ -29,7 +29,8 @@ test-ci:
 load-bench:
 	cd go && go test ./internal/infrastructure/streaming -run '^$$' -bench '^BenchmarkHubBroadcast$$' -benchmem -benchtime=2s
 
-# End-to-end test; requires STREAM_ID and LISTENER_TOKEN plus a live publisher.
+# End-to-end public audio test; requires STREAM_ID plus a live publisher.
+# Set LISTENER_TOKEN to exercise the authenticated /listen route instead.
 load-k6:
 	cd go && k6 run -e LISTENERS=$${LISTENERS:-10} -e BASE_URL=$${BASE_URL} -e STREAM_ID=$${STREAM_ID} -e LISTENER_TOKEN=$${LISTENER_TOKEN} loadtest/stream.js
 
