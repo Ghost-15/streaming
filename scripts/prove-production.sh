@@ -73,6 +73,16 @@ curl --fail --silent --show-error --verbose \
 jq -e '.status == "ok" and .service == "streampulse-api"' \
   "$evidence_dir/health.json" >/dev/null
 
+# Exercise a public, read-only business endpoint as a production smoke test.
+# Unlike /health, this crosses the HTTP handler, use case and persistence
+# layers, without creating or changing user data.
+smoke_url="${origin}/api/v1/streams"
+curl --fail --silent --show-error \
+  --connect-timeout 20 --max-time 120 \
+  "$smoke_url" \
+  >"$evidence_dir/active-streams.json"
+jq -e 'type == "array"' "$evidence_dir/active-streams.json" >/dev/null
+
 http_code="$(curl --silent --show-error \
   --max-redirs 0 --connect-timeout 20 --max-time 30 \
   --dump-header "$evidence_dir/http-redirect-headers.txt" \
@@ -106,6 +116,8 @@ cat >"$evidence_dir/summary.md" <<EOF
 - Render deploy: ${RENDER_DEPLOY_ID}
 - Render status: ${status}
 - Image digest: ${actual_digest}
+- Business smoke URL: ${smoke_url}
+- Business smoke result: valid JSON array
 - HTTP redirect status: ${http_code}
 - HTTP redirect location: ${redirect_location}
 - Health payload: \`$(jq -c . "$evidence_dir/health.json")\`

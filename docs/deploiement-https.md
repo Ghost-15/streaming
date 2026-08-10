@@ -99,9 +99,19 @@ push main
   -> POST API Render avec docker.io/...:<SHA Git>
   -> attendre le statut live
   -> comparer le digest BuildKit au digest résolu par Render
-  -> prouver health, redirection HTTP et certificat TLS
-  -> publier l’artefact production-evidence-<SHA Git>
+  -> prouver health, endpoint métier public, redirection HTTP et certificat TLS
+  -> en cas d'échec critique, restaurer et prouver la version live précédente
+  -> prouver Prometheus, Loki et Tempo sans rollback applicatif sur erreur de lecture
+  -> publier l'artefact production-evidence-<SHA Git>
 ```
+
+La version live et son digest sont mémorisés avant le déploiement. Un échec
+du statut Render, du digest, de `/health`, du smoke test `GET /api/v1/streams`,
+de la redirection HTTPS ou du certificat déclenche le rollback automatique vers
+cette version. La restauration est elle-même prouvée et le workflow reste en
+échec afin de bloquer la livraison. Une erreur de lecture Grafana ne déclenche
+pas ce rollback : elle invalide la preuve d'observabilité sans conclure que
+l'application est défectueuse.
 
 Le job Render dépend du job Docker Hub : l’API Render n’est jamais appelée si
 les tests, le build ou le push échouent. Les tags `v*` et les lancements manuels
