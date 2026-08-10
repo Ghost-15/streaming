@@ -1,17 +1,20 @@
-# streampulse
+# StreamPulse Flutter Web
 
-A new Flutter project.
+Client Web du direct audio StreamPulse. Le diffuseur capture le microphone avec
+`MediaRecorder` (WebM/Opus) et envoie des blobs ordonnés à l'API Go. Le lecteur
+consomme la réponse HTTP chunked avec `MediaSource` et expose les commandes
+système via Media Session.
 
-## Getting Started
+## Vérification
 
-This project is a starting point for a Flutter application.
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter build web --release
+```
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Les implémentations Web sont chargées par exports conditionnels. Les tests VM
+utilisent des notifiers de repli ; le build Web valide les interops navigateur
+réels. Chrome/Edge est recommandé pour WebM/Opus + MediaSource. Firefox peut
+lire le flux mais ne fournit pas toujours les commandes Media Session.

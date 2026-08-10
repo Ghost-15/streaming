@@ -1,0 +1,27 @@
+File: streampulse-final.exe
+Build ID: <workspace>\.tools\streampulse-final.exe2026-08-09 17:13:14.3541593 +0200 CEST
+Type: inuse_space
+Time: 2026-08-09 17:21:49 CEST
+Showing nodes accounting for 24310.73kB, 94.06% of 25846.87kB total
+Showing top 20 nodes out of 112
+      flat  flat%   sum%        cum   cum%
+ 5134.05kB 19.86% 19.86%  5134.05kB 19.86%  bufio.NewWriterSize (inline)
+ 4112.02kB 15.91% 35.77%  4112.02kB 15.91%  bufio.NewReaderSize
+ 2563.47kB  9.92% 45.69%  2563.47kB  9.92%  runtime.mallocgc
+ 1762.94kB  6.82% 52.51%  1762.94kB  6.82%  runtime/pprof.StartCPUProfile
+ 1510.95kB  5.85% 58.36%  1510.95kB  5.85%  github.com/Ghost-15/streaming/internal/infrastructure/streaming.(*Hub).cacheWebMInitializationLocked
+ 1024.93kB  3.97% 62.32%  2049.16kB  7.93%  github.com/Ghost-15/streaming/internal/handler.(*StreamHandler).Audio
+ 1024.69kB  3.96% 66.29%  1024.69kB  3.96%  slices.Grow[go.shape.[]go.opentelemetry.io/otel/attribute.KeyValue,go.shape.struct { Key go.opentelemetry.io/otel/attribute.Key; Value go.opentelemetry.io/otel/attribute.Value }] (inline)
+ 1024.34kB  3.96% 70.25%  1024.34kB  3.96%  net/textproto.MIMEHeader.Set
+  516.01kB  2.00% 72.25%   516.01kB  2.00%  github.com/Ghost-15/streaming/internal/infrastructure/streaming.(*Hub).broadcastLocked
+  513.69kB  1.99% 74.23%   513.69kB  1.99%  golang.org/x/text/internal/language.map.init.1
+  513.31kB  1.99% 76.22%   513.31kB  1.99%  encoding/json.typeFields
+     513kB  1.98% 78.20%      513kB  1.98%  github.com/ugorji/go/codec.helperEncDriverBincBytes.fastpathEList
+  512.25kB  1.98% 80.19%   512.25kB  1.98%  github.com/rs/zerolog.Logger.With
+  512.23kB  1.98% 82.17%  1536.92kB  5.95%  go.opentelemetry.io/otel/sdk/trace.(*tracer).newRecordingSpan
+  512.17kB  1.98% 84.15%   512.17kB  1.98%  net/http.Header.Clone (inline)
+  512.17kB  1.98% 86.13%   512.17kB  1.98%  net/textproto.readMIMEHeader
+  512.16kB  1.98% 88.11%   512.16kB  1.98%  net/http.(*Request).WithContext
+  512.12kB  1.98% 90.09%   512.12kB  1.98%  github.com/gin-gonic/gin.(*Engine).allocateContext
+  512.12kB  1.98% 92.08%  3076.29kB 11.90%  net/http.(*conn).readRequest
+  512.11kB  1.98% 94.06%   512.11kB  1.98%  net.newFD

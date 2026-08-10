@@ -1,0 +1,67 @@
+groups:
+  - name: streampulse-alerts
+    rules:
+      - alert: StreamPulseHigh5xxRate
+        expr: |
+          sum(rate(streampulse_api_request_duration_seconds_count{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(streampulse_api_request_duration_seconds_count[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: streampulse-api
+        annotations:
+          summary: "5xx error rate is above 5%"
+          description: "More than 5% of API requests returned a 5xx status during the last 5 minutes."
+
+      - alert: StreamPulseHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(streampulse_api_request_duration_seconds_bucket[5m]))
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: streampulse-api
+        annotations:
+          summary: "API p95 latency is above 500 ms"
+          description: "The API p95 latency stayed above 500 ms during the last 5 minutes."
+
+      - alert: StreamPulseDisconnectSpike
+        expr: rate(streampulse_listener_disconnect_total[5m]) * 60 > 20
+        for: 5m
+        labels:
+          severity: warning
+          service: streampulse-api
+        annotations:
+          summary: "Listener disconnect spike"
+          description: "More than 20 listener disconnects per minute were observed during the last 5 minutes."
+
+      - alert: StreamPulseAudioDrops
+        expr: |
+          sum(rate(streampulse_audio_dropped_chunks_total[5m]))
+          /
+          clamp_min(sum(rate(streampulse_audio_chunks_total{direction="egress"}[5m])), 0.001)
+          > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          service: streampulse-api
+        annotations:
+          summary: "More than 1% of audio chunks are dropped"
+          description: "Listener buffers are saturated; inspect CPU, network throughput and slow clients."
+
+      - alert: StreamPulsePublisherWithoutListeners
+        expr: |
+          sum(streampulse_audio_broadcasters) > 0
+          and
+          sum(streampulse_listeners_per_stream) == 0
+        for: 10m
+        labels:
+          severity: info
+          service: streampulse-api
+        annotations:
+          summary: "Audio is being ingested without listeners"
+          description: "A publisher has sent audio for ten minutes without an active listener."

@@ -1,0 +1,18 @@
+﻿{
+    "started_at_utc":  "2026-08-09T15:15:15+00:00",
+    "completed_at_utc":  "2026-08-09T15:23:16.2340775+00:00",
+    "target":  "http://127.0.0.1:8080",
+    "scope":  "local instrumented process; not Render production",
+    "k6_version":  "v2.1.0",
+    "pprof_module":  "github.com/google/pprof@ef3492d7dac3",
+    "source_revision":  "00845c556ca59abeba3fabc7ca6e321978c2aa7a+working-tree",
+    "binary_sha256":  "fa67f39820f4c2d88d80f5c033811d6959b53290b922bd6e46a0ee2721412d12",
+    "source_payload_kbit_s":  {
+        "10_listeners":  127.660,
+        "100_listeners":  128.730,
+        "500_listeners":  129.655
+    },
+    "go_version":  "go1.26.1 windows/amd64",
+    "windows_version":  "Microsoft Windows NT 10.0.22631.0",
+    "cpu":  "Intel64 Family 6 Model 142 Stepping 9, GenuineIntel"
+}

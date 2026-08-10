@@ -15,12 +15,12 @@ import (
 
 // supabaseUserRepo implements repository.UserRepository using pgx + Supabase PostgreSQL.
 type supabaseUserRepo struct {
-	db *pgxpool.Pool
+	db pgxDB
 }
 
 // NewUserRepo returns a UserRepository backed by Supabase.
 func NewUserRepo(db *pgxpool.Pool) repository.UserRepository {
-	return &supabaseUserRepo{db: db}
+	return &supabaseUserRepo{db: poolOrNil(db)}
 }
 
 const userColumns = `id, email, password_hash, first_name, last_name, role, created_at, suspended_at`

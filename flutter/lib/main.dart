@@ -8,6 +8,7 @@ import 'api/repositories/playlist_repository.dart';
 import 'api/repositories/stream_repository.dart';
 import 'config/router.dart';
 import 'config/theme.dart';
+import 'services/api_service.dart';
 import 'notifiers/admin_notifier.dart';
 import 'notifiers/audio_notifier.dart';
 import 'notifiers/broadcaster_notifier.dart';
@@ -16,11 +17,15 @@ import 'notifiers/playlist_notifier.dart';
 import 'notifiers/session_notifier.dart';
 import 'notifiers/stream_notifier.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
 
   final sessionNotifier = SessionNotifier();
+  try {
+    await sessionNotifier.init();
+  } catch (_) {}
+  ApiService.onUnauthorized = sessionNotifier.logout;
   final router = buildRouter(sessionNotifier);
 
   runApp(
@@ -59,6 +64,7 @@ class StreamPulseApp extends StatelessWidget {
       title: 'StreamPulse',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.dark,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

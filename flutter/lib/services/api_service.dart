@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -17,6 +16,9 @@ class ApiService {
 
   ApiService._internal();
 
+  // Called on HTTP 401 (except when notifyOnUnauthorized is false).
+  static void Function()? onUnauthorized;
+
   final client = http.Client();
   final baseUrl = AppConfig.apiBaseUrl;
 
@@ -26,7 +28,9 @@ class ApiService {
     String? id,
     Map<String, dynamic>? data,
     Map<String, String>? queryParams,
+    Map<String, String> headers = const {},
     T Function(dynamic)? parser,
+    bool notifyOnUnauthorized = true,
   }) async {
     Uri url = Uri.parse('$baseUrl/$uri');
 
@@ -44,7 +48,8 @@ class ApiService {
       print('${httpMethod.name.toUpperCase()} : $url');
     }
 
-    final headers = {
+    final requestHeaders = {
+      ...headers,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -56,16 +61,20 @@ class ApiService {
     try {
       switch (httpMethod) {
         case HttpMethod.post:
-          response = await client.post(url, body: body, headers: headers);
+          response = await client.post(
+            url,
+            body: body,
+            headers: requestHeaders,
+          );
           break;
         case HttpMethod.put:
-          response = await client.put(url, body: body, headers: headers);
+          response = await client.put(url, body: body, headers: requestHeaders);
           break;
         case HttpMethod.delete:
-          response = await client.delete(url, headers: headers);
+          response = await client.delete(url, headers: requestHeaders);
           break;
         default:
-          response = await client.get(url, headers: headers);
+          response = await client.get(url, headers: requestHeaders);
       }
     } on http.ClientException catch (e) {
       throw ApiException(httpStatus: 0, message: 'Erreur réseau: $e');
@@ -82,11 +91,40 @@ class ApiService {
         return decoded as T;
       case HttpStatus.noContent:
         return null as T;
+      case HttpStatus.unauthorized:
+        if (notifyOnUnauthorized) ApiService.onUnauthorized?.call();
+        throw ApiException(httpStatus: 401, message: response.body);
       default:
         throw ApiException(
           httpStatus: response.statusCode,
           message: response.body,
         );
+    }
+  }
+
+  // POST binary data (audio chunks).
+  Future<void> rawPost({
+    required String uri,
+    required Uint8List body,
+    required String contentType,
+    Map<String, String> headers = const {},
+  }) async {
+    final url = Uri.parse('$baseUrl/$uri');
+    final token = await StorageService.get(StorageKey.token);
+    final response = await client.post(
+      url,
+      body: body,
+      headers: {
+        ...headers,
+        'Content-Type': contentType,
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        httpStatus: response.statusCode,
+        message: response.body,
+      );
     }
   }
 }

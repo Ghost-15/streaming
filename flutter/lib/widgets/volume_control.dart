@@ -41,15 +41,15 @@ class _VolumeControlState extends State<VolumeControl> {
       label: 'Volume control',
       onIncrease: _currentVolume < 1.0
           ? () => setState(() {
-                _currentVolume = (_currentVolume + 0.1).clamp(0.0, 1.0);
-                widget.onVolumeChanged(_currentVolume);
-              })
+              _currentVolume = (_currentVolume + 0.1).clamp(0.0, 1.0);
+              widget.onVolumeChanged(_currentVolume);
+            })
           : null,
       onDecrease: _currentVolume > 0.0
           ? () => setState(() {
-                _currentVolume = (_currentVolume - 0.1).clamp(0.0, 1.0);
-                widget.onVolumeChanged(_currentVolume);
-              })
+              _currentVolume = (_currentVolume - 0.1).clamp(0.0, 1.0);
+              widget.onVolumeChanged(_currentVolume);
+            })
           : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,7 +80,10 @@ class _VolumeControlState extends State<VolumeControl> {
           ),
           Padding(
             padding: const EdgeInsets.only(left: 8, top: 4),
-            child: Text('Volume: $volumePercent%', style: Theme.of(context).textTheme.bodySmall),
+            child: Text(
+              'Volume: $volumePercent%',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
         ],
       ),

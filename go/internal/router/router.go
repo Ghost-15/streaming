@@ -23,6 +23,7 @@ func NewRouter(
 	playlistH *handler.PlaylistHandler,
 	adminH *handler.AdminHandler,
 	favoriteH *handler.FavoriteHandler,
+	recommendationH *handler.RecommendationHandler,
 ) *gin.Engine {
 	pubKeyBytes, err := os.ReadFile(cfg.JWTPublicKeyPath)
 	if err != nil {
@@ -52,6 +53,9 @@ func NewRouter(
 		}
 
 		v1.GET("/streams", streamH.ListActive)
+		// Public: browser <audio> cannot set Authorization headers
+		v1.GET("/streams/:id/audio", streamH.Audio)
+		v1.GET("/streams/:id/audio/ws", streamH.AudioSocket)
 	}
 
 	protected := r.Group("/api/v1")
@@ -62,13 +66,18 @@ func NewRouter(
 	))
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
-		protected.GET("/streams/:id/listen", streamH.Listen)
+		protected.GET("/streams/:id/listen", streamH.StreamAudio)
+		protected.POST("/streams/:id/listen", streamH.Listen)
+		protected.POST("/streams/:id/leave", streamH.Leave)
 
 		diffuseur := protected.Group("/")
 		diffuseur.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
 		{
+			diffuseur.GET("/streams/mine", streamH.ListOwned)
 			diffuseur.POST("/streams", streamH.Start)
+			diffuseur.PUT("/streams/:id/start", streamH.Restart)
 			diffuseur.PUT("/streams/:id/stop", streamH.Stop)
+			diffuseur.DELETE("/streams/:id", streamH.Delete)
 		}
 
 		protected.GET("/playlists", playlistH.List)
@@ -84,6 +93,19 @@ func NewRouter(
 		protected.GET("/favorites", favoriteH.List)
 		protected.POST("/favorites", favoriteH.Add)
 		protected.DELETE("/favorites/:trackID", favoriteH.Remove)
+
+		protected.GET("/recommendations", recommendationH.List)
+	}
+
+	// MediaRecorder sends two short audio requests per second. Keep this data
+	// plane outside the 100 req/min business-API limiter, otherwise its token
+	// bucket is eventually exhausted and a healthy live is stopped by a 429.
+	media := r.Group("/api/v1")
+	media.Use(middleware.RBACMiddleware(publicKey, entity.RoleDiffuseur, entity.RoleAdmin))
+	media.Use(middleware.StreamDataRateLimitMiddleware())
+	{
+		media.POST("/streams/:id/push", streamH.PushAudio)
+		media.PUT("/streams/:id/audio", streamH.IngestAudio)
 	}
 
 	admin := r.Group("/api/v1/admin")

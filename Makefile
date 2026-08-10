@@ -1,4 +1,4 @@
-.PHONY: dev build test lint vet clean docker-build migrate help
+.PHONY: dev build test lint vet clean docker-build migrate flutter-dev flutter-run flutter-test flutter-build-apk flutter-build-web load-bench load-k6 profile-cpu help
 
 COVERAGE_THRESHOLD ?= 80
 
@@ -19,10 +19,24 @@ test:
 	cd go && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
 	go tool cover -func=coverage.out | tail -1
 
-# Run tests and enforce 80% coverage threshold (CI gate)
+# Run tests and enforce 80% coverage threshold (CI gate).
+# Mock packages (test helpers) are excluded from the coverage measurement.
 test-ci:
-	cd go && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
+	cd go && go test $$(go list ./... | grep -v '/mock$$') -coverprofile=../coverage.out -covermode=atomic
 	go tool cover -func=coverage.out | awk -v min="$(COVERAGE_THRESHOLD)" '/total/{if ($$3+0 < min) { print "Coverage below " min "%: " $$3; exit 1 } else { print "Coverage OK: " $$3 " >= " min "%" }}'
+
+# Reproducible in-process fan-out benchmark at 10, 100 and 500 listeners.
+load-bench:
+	cd go && go test ./internal/infrastructure/streaming -run '^$$' -bench '^BenchmarkHubBroadcast$$' -benchmem -benchtime=2s
+
+# End-to-end public audio test; requires STREAM_ID plus a live publisher.
+# Set LISTENER_TOKEN to exercise the authenticated /listen route instead.
+load-k6:
+	cd go && k6 run -e LISTENERS=$${LISTENERS:-10} -e BASE_URL=$${BASE_URL} -e STREAM_ID=$${STREAM_ID} -e LISTENER_TOKEN=$${LISTENER_TOKEN} loadtest/stream.js
+
+# Capture CPU, heap and goroutine profiles from a local PPROF_ENABLED API.
+profile-cpu:
+	cd go && PPROF_BASE_URL=$${PPROF_BASE_URL:-http://127.0.0.1:6060} sh loadtest/capture-pprof.sh
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 
@@ -58,10 +72,20 @@ migrate:
 		psql $$SUPABASE_DB_URL -f migrations/004_alter_users_and_playlist_tracks.sql && \
 		psql $$SUPABASE_DB_URL -f migrations/005_playlist_track_count.sql && \
 		psql $$SUPABASE_DB_URL -f migrations/006_user_suspend.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/007_favorites.sql
+		psql $$SUPABASE_DB_URL -f migrations/007_favorites.sql && \
+		psql $$SUPABASE_DB_URL -f migrations/008_listen_history_stream.sql && \
+		psql $$SUPABASE_DB_URL -f migrations/009_listen_history_events.sql && \
+		psql $$SUPABASE_DB_URL -f migrations/010_reusable_stream_sessions.sql
 	@echo "Done."
 
 # ── Flutter ───────────────────────────────────────────────────────────────────
+
+# Read API_BASE_URL and FLUTTER_WEB_PORT from .env, pass to flutter via --dart-define
+flutter-dev:
+	@export $$(grep -v '^#' .env | grep -E '^(API_BASE_URL|FLUTTER_WEB_PORT)=' | xargs) && \
+		cd flutter && flutter run -d chrome \
+			--web-port=$${FLUTTER_WEB_PORT:-3001} \
+			--dart-define=API_BASE_URL=$${API_BASE_URL:-http://localhost:8080/api/v1}
 
 flutter-run:
 	cd flutter && flutter run
@@ -73,7 +97,9 @@ flutter-build-apk:
 	cd flutter && flutter build apk --release
 
 flutter-build-web:
-	cd flutter && flutter build web --release
+	@export $$(grep -v '^#' .env | grep -E '^API_BASE_URL=' | xargs) && \
+		cd flutter && flutter build web --release \
+			--dart-define=API_BASE_URL=$${API_BASE_URL:-http://localhost:8080/api/v1}
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 

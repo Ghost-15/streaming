@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../services/api_service.dart';
 import '../../config/app_config.dart';
 import '../models/stream_model.dart';
@@ -14,29 +16,42 @@ class StreamRepository extends ModelRepository<StreamModel> {
         final list = res is List ? res : (res['data'] as List);
         return list.map<StreamModel>((e) {
           final stream = StreamModel.fromJson(e as Map<String, dynamic>);
-          return stream.streamUrl.isEmpty
-              ? stream.copyWith(
-                  streamUrl:
-                      '${AppConfig.apiBaseUrl}/streams/${stream.id}/listen',
-                )
-              : stream;
+          return stream.copyWith(
+            streamUrl: '${AppConfig.apiBaseUrl}/streams/${stream.id}/audio',
+          );
         }).toList();
       },
     );
   }
 
-  Future<StreamModel> joinStream(String id) {
+  Future<List<StreamModel>> getOwned() {
     return ApiService().request(
+      uri: 'streams/mine',
+      parser: (res) {
+        final list = res is List ? res : (res['data'] as List);
+        return list.map<StreamModel>((e) {
+          final stream = StreamModel.fromJson(e as Map<String, dynamic>);
+          return stream.copyWith(
+            streamUrl: '${AppConfig.apiBaseUrl}/streams/${stream.id}/audio',
+          );
+        }).toList();
+      },
+    );
+  }
+
+  Future<void> joinStream(String id) {
+    return ApiService().request<dynamic>(
+      httpMethod: HttpMethod.post,
       uri: 'streams/$id/listen',
-      parser: (_) => StreamModel(
-        id: id,
-        title: 'Stream',
-        broadcasterId: '',
-        broadcasterName: '',
-        streamUrl: '${AppConfig.apiBaseUrl}/streams/$id/listen',
-        isLive: true,
-        createdAt: DateTime.now(),
-      ),
+      notifyOnUnauthorized: false,
+    );
+  }
+
+  Future<void> leaveStream(String id) {
+    return ApiService().request<dynamic>(
+      httpMethod: HttpMethod.post,
+      uri: 'streams/$id/leave',
+      notifyOnUnauthorized: false,
     );
   }
 
@@ -49,10 +64,42 @@ class StreamRepository extends ModelRepository<StreamModel> {
     );
   }
 
-  Future<void> stopStream(String id) {
+  Future<void> stopStream(String id, String sessionId) {
     return ApiService().request(
       httpMethod: HttpMethod.put,
       uri: 'streams/$id/stop',
+      headers: {'X-Stream-Session-ID': sessionId},
+    );
+  }
+
+  Future<StreamModel> restartStream(String id) {
+    return ApiService().request(
+      httpMethod: HttpMethod.put,
+      uri: 'streams/$id/start',
+      parser: (res) => StreamModel.fromJson(
+        res,
+      ).copyWith(streamUrl: '${AppConfig.apiBaseUrl}/streams/$id/audio'),
+    );
+  }
+
+  Future<void> deleteStream(String id) {
+    return ApiService().request(
+      httpMethod: HttpMethod.delete,
+      uri: 'streams/$id',
+    );
+  }
+
+  Future<void> pushChunk(
+    String id,
+    String sessionId,
+    Uint8List chunk,
+    String contentType,
+  ) {
+    return ApiService().rawPost(
+      uri: 'streams/$id/push',
+      body: chunk,
+      contentType: contentType,
+      headers: {'X-Stream-Session-ID': sessionId},
     );
   }
 }

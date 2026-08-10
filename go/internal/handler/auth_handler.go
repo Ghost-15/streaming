@@ -23,8 +23,11 @@ func NewAuthHandler(uc usecase.AuthUseCase) *AuthHandler {
 
 // RegisterRequest is the JSON body for POST /auth/register.
 type RegisterRequest struct {
-	Email    string `json:"email"    binding:"required,email"`
-	Password string `json:"password" binding:"required,min=8"`
+	Email     string `json:"email"      binding:"required,email"`
+	Password  string `json:"password"   binding:"required,min=8"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Role      string `json:"role"`
 }
 
 // LoginRequest is the JSON body for POST /auth/login.
@@ -51,7 +54,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password)
+	token, user, err := h.useCase.Register(c.Request.Context(), req.Email, req.Password, req.FirstName, req.LastName, req.Role)
 	if err != nil {
 		middleware.Logger(c).Error().Err(err).Msg("register failed")
 		// Sentinel error check for email already registered

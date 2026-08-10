@@ -84,6 +84,12 @@ Services:
 - API: http://localhost:8080
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000
+- pprof (loopback only): http://127.0.0.1:6060/debug/pprof/
+
+Grafana provisions the RNCP dashboard automatically from
+`go/infra/grafana/dashboards/streampulse.json`. See
+`docs/observability-rncp.md` for the dashboard panels, PromQL queries, alert
+rules, and Grafana Cloud import guidance.
 
 ## Health And Metrics
 
@@ -108,6 +114,36 @@ curl -H "Authorization: Bearer ${token}" http://localhost:8080/metrics
 Expected result: `/health` returns `200`, `/metrics` without a bearer token
 returns `401` when the token is configured, and `/metrics` with the token
 returns Prometheus text output.
+
+## Real Audio Smoke Test
+
+Create a stream with a Diffuseur JWT, then keep a real-time source connected:
+
+```bash
+ffmpeg -re -stream_loop -1 -i sample.mp3 -codec copy -f mp3 - \
+  | curl --no-buffer -X PUT \
+      -H "Authorization: Bearer $BROADCASTER_TOKEN" \
+      -H "Content-Type: audio/mpeg" \
+      --data-binary @- \
+      "http://localhost:8080/api/v1/streams/$STREAM_ID/audio"
+```
+
+Open the stream from Flutter Web (`GET /audio` + MediaSource) or download it
+with an authenticated curl through the non-Web listener route:
+
+```bash
+curl --no-buffer \
+  -H "Authorization: Bearer $LISTENER_TOKEN" \
+  "http://localhost:8080/api/v1/streams/$STREAM_ID/listen" \
+  --output received.mp3
+```
+
+The Flutter broadcaster uses ordered `POST /api/v1/streams/$STREAM_ID/push`
+requests with `Content-Type: audio/webm;codecs=opus`; the continuous PUT example
+above remains useful for a backend-only smoke test.
+
+Stopping the stream, closing either client or stopping Compose must return the
+audio gauges to zero. See `docs/streaming-lifecycle.md`.
 
 ## Tests And Coverage
 

@@ -6,6 +6,7 @@ import '../api/models/user_model.dart';
 import '../notifiers/admin_notifier.dart';
 import '../notifiers/session_notifier.dart';
 import '../widgets/loading_indicator.dart';
+import '../widgets/page_header.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -38,32 +39,54 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionNotifier>();
+    final cs = Theme.of(context).colorScheme;
 
     if (session.user?.role != Role.admin) {
       return const _UnauthorizedView();
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Panel'),
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: const [
-            Tab(icon: Icon(Icons.people), text: 'Users'),
-            Tab(icon: Icon(Icons.bar_chart), text: 'Stats'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabs,
-        children: const [_UsersTab(), _StatsTab()],
+      body: Column(
+        children: [
+          PageHeader(
+            icon: Icons.admin_panel_settings_rounded,
+            title: 'Administration',
+            subtitle: 'Gestion des utilisateurs et statistiques',
+            actions: [
+              IconButton(
+                icon: Icon(
+                  Icons.logout_rounded,
+                  size: 20,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: 'Se déconnecter',
+                onPressed: () => session.logout(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TabBar(
+            controller: _tabs,
+            tabs: const [
+              Tab(icon: Icon(Icons.people_rounded), text: 'Utilisateurs'),
+              Tab(icon: Icon(Icons.bar_chart_rounded), text: 'Statistiques'),
+            ],
+            indicatorPadding: const EdgeInsets.symmetric(horizontal: 16),
+            dividerColor: cs.outlineVariant,
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              children: const [_UsersTab(), _StatsTab()],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Users tab ───────────────────────────────────────────────────────────────
+// ── Users tab ─────────────────────────────────────────────────────────────────
 
 class _UsersTab extends StatelessWidget {
   const _UsersTab();
@@ -73,24 +96,22 @@ class _UsersTab extends StatelessWidget {
     final admin = context.watch<AdminNotifier>();
 
     if (admin.usersStatus == AdminStatus.loading) {
-      return const LoadingIndicator(message: 'Loading users...');
+      return const LoadingIndicator(message: 'Chargement des utilisateurs…');
     }
-
     if (admin.usersStatus == AdminStatus.error) {
       return _ErrorView(
         message: admin.error,
         onRetry: () => context.read<AdminNotifier>().loadUsers(),
       );
     }
-
     if (admin.users.isEmpty) {
-      return const Center(child: Text('No users found'));
+      return const Center(child: Text('Aucun utilisateur trouvé'));
     }
 
     return RefreshIndicator(
       onRefresh: () => context.read<AdminNotifier>().loadUsers(),
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         itemCount: admin.users.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (_, i) => _UserTile(user: admin.users[i]),
@@ -105,53 +126,116 @@ class _UserTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final initial = user.firstName.isNotEmpty
+        ? user.firstName[0].toUpperCase()
+        : user.email[0].toUpperCase();
 
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: colorScheme.primaryContainer,
-          child: Text(
-            user.email.substring(0, 1).toUpperCase(),
-            style: TextStyle(color: colorScheme.onPrimaryContainer),
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+            spreadRadius: -3,
           ),
-        ),
-        title: Text(user.email),
-        subtitle: Text(
-          user.isSuspended
-              ? 'Suspendu'
-              : (user.fullName.trim().isEmpty ? '-' : user.fullName),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
           children: [
-            _RoleBadge(role: user.role),
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: cs.primaryContainer,
+              child: Text(
+                initial,
+                style: tt.titleSmall?.copyWith(
+                  color: cs.onPrimaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user.fullName.trim().isNotEmpty
+                        ? user.fullName
+                        : user.email,
+                    style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    user.email,
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(width: 8),
+            if (user.isSuspended) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Suspendu',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: cs.onErrorContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            _RoleBadge(role: user.role),
             PopupMenuButton<_UserAction>(
+              icon: Icon(
+                Icons.more_vert_rounded,
+                size: 18,
+                color: cs.onSurfaceVariant,
+              ),
               onSelected: (action) => _handleAction(context, action, user),
-              itemBuilder: (_) => [
-                const PopupMenuItem(
+              itemBuilder: (_) => const [
+                PopupMenuItem(
                   value: _UserAction.changeRole,
                   child: ListTile(
-                    leading: Icon(Icons.manage_accounts),
-                    title: Text('Change role'),
+                    leading: Icon(Icons.manage_accounts_rounded),
+                    title: Text('Changer le rôle'),
                     contentPadding: EdgeInsets.zero,
+                    dense: true,
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: _UserAction.suspend,
                   child: ListTile(
-                    leading: Icon(Icons.block),
-                    title: Text('Suspend'),
+                    leading: Icon(Icons.block_rounded),
+                    title: Text('Suspendre'),
                     contentPadding: EdgeInsets.zero,
+                    dense: true,
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: _UserAction.reactivate,
                   child: ListTile(
-                    leading: Icon(Icons.check_circle_outline),
-                    title: Text('Reactivate'),
+                    leading: Icon(Icons.check_circle_outline_rounded),
+                    title: Text('Réactiver'),
                     contentPadding: EdgeInsets.zero,
+                    dense: true,
                   ),
                 ),
               ],
@@ -181,34 +265,43 @@ class _UserTile extends StatelessWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('Change role — ${user.email}'),
+          title: Text('Rôle — ${user.email}'),
           content: RadioGroup<Role>(
             groupValue: selected,
             onChanged: (v) => setDialogState(() => selected = v!),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [Role.user, Role.diffuseur, Role.admin].map((r) {
-                return RadioListTile<Role>(title: Text(r.apiValue), value: r);
+                return RadioListTile<Role>(
+                  title: Text(_roleLabel(r)),
+                  value: r,
+                );
               }).toList(),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+              child: const Text('Annuler'),
             ),
             FilledButton(
               onPressed: () {
                 admin.updateRole(user.id, selected);
                 Navigator.pop(ctx);
               },
-              child: const Text('Confirm'),
+              child: const Text('Confirmer'),
             ),
           ],
         ),
       ),
     );
   }
+
+  String _roleLabel(Role role) => switch (role) {
+    Role.admin => 'Administrateur',
+    Role.diffuseur => 'Diffuseur',
+    _ => 'Auditeur',
+  };
 }
 
 enum _UserAction { changeRole, suspend, reactivate }
@@ -219,23 +312,37 @@ class _RoleBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     final (bg, fg) = switch (role) {
-      Role.admin => (colorScheme.error, colorScheme.onError),
-      Role.diffuseur => (colorScheme.primary, colorScheme.onPrimary),
-      _ => (colorScheme.surfaceContainerHighest, colorScheme.onSurfaceVariant),
+      Role.admin => (cs.error, cs.onError),
+      Role.diffuseur => (cs.primary, cs.onPrimary),
+      _ => (cs.surfaceContainerHighest, cs.onSurfaceVariant),
     };
 
-    return Chip(
-      label: Text(role.apiValue, style: TextStyle(color: fg, fontSize: 11)),
-      backgroundColor: bg,
-      padding: EdgeInsets.zero,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        switch (role) {
+          Role.admin => 'Admin',
+          Role.diffuseur => 'Diffuseur',
+          _ => 'Auditeur',
+        },
+        style: TextStyle(
+          fontSize: 10,
+          color: fg,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
     );
   }
 }
 
-// ── Stats tab ────────────────────────────────────────────────────────────────
+// ── Stats tab ─────────────────────────────────────────────────────────────────
 
 class _StatsTab extends StatelessWidget {
   const _StatsTab();
@@ -245,9 +352,8 @@ class _StatsTab extends StatelessWidget {
     final admin = context.watch<AdminNotifier>();
 
     if (admin.statsStatus == AdminStatus.loading) {
-      return const LoadingIndicator(message: 'Loading stats...');
+      return const LoadingIndicator(message: 'Chargement des statistiques…');
     }
-
     if (admin.statsStatus == AdminStatus.error) {
       return _ErrorView(
         message: admin.error,
@@ -257,25 +363,25 @@ class _StatsTab extends StatelessWidget {
 
     final stats = admin.stats;
     if (stats == null) {
-      return const Center(child: Text('No data'));
+      return const Center(child: Text('Aucune donnée disponible'));
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _StatCard(
-            label: 'Total users',
+            label: 'Utilisateurs au total',
             value: '${stats.totalUsers}',
-            icon: Icons.group,
+            icon: Icons.group_rounded,
           ),
           const SizedBox(height: 12),
           ...stats.byRole.entries.map(
             (e) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _StatCard(
-                label: e.key,
+                label: _roleLabel(e.key),
                 value: '${e.value}',
                 icon: _iconForRole(e.key),
               ),
@@ -286,10 +392,16 @@ class _StatsTab extends StatelessWidget {
     );
   }
 
+  String _roleLabel(String role) => switch (role) {
+    'admin' => 'Administrateurs',
+    'diffuseur' => 'Diffuseurs',
+    _ => 'Auditeurs',
+  };
+
   IconData _iconForRole(String role) => switch (role) {
-    'admin' => Icons.admin_panel_settings,
-    'diffuseur' => Icons.mic,
-    _ => Icons.person,
+    'admin' => Icons.admin_panel_settings_rounded,
+    'diffuseur' => Icons.mic_rounded,
+    _ => Icons.headphones_rounded,
   };
 }
 
@@ -306,24 +418,60 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.14),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: cs.primary.withValues(alpha: 0.05),
+            blurRadius: 16,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            Icon(icon, size: 32, color: colorScheme.primary),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: cs.primary.withValues(alpha: 0.15),
+                  width: 1,
+                ),
+              ),
+              child: Icon(icon, size: 24, color: cs.primary),
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    label,
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 2),
                   Text(
                     value,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    style: tt.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ],
@@ -336,7 +484,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ── Shared ───────────────────────────────────────────────────────────────────
+// ── Shared ────────────────────────────────────────────────────────────────────
 
 class _ErrorView extends StatelessWidget {
   final String message;
@@ -346,24 +494,26 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: Theme.of(context).colorScheme.error,
+            Icon(Icons.error_outline_rounded, size: 48, color: cs.error),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
             ),
-            const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Réessayer'),
             ),
           ],
         ),
@@ -377,9 +527,43 @@ class _UnauthorizedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Panel')),
-      body: const Center(child: Text('Access restricted to admins.')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.lock_outline_rounded,
+                  size: 36,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Accès restreint',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Cette page est réservée aux administrateurs.',
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

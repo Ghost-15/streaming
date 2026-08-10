@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -16,11 +18,36 @@ import (
 // Sprint 1 — US-015.
 func CORSMiddleware(origins string) gin.HandlerFunc {
 	parsed := parseOrigins(origins)
+	fmt.Printf("[CORS] allowed origins: %v\n", parsed)
+
+	// Check if "http://localhost" (no port) is listed — acts as wildcard for all localhost ports.
+	allowAllLocalhost := false
+	for _, o := range parsed {
+		if o == "http://localhost" {
+			allowAllLocalhost = true
+			break
+		}
+	}
+
 	cfg := cors.Config{
-		AllowOrigins:     parsed,
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
-		AllowHeaders:     []string{"Authorization", "Content-Type"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "X-Stream-Session-ID"},
 		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+		AllowOriginFunc: func(origin string) bool {
+			if allowAllLocalhost && strings.HasPrefix(origin, "http://localhost:") {
+				fmt.Printf("[CORS] ✓ localhost wildcard: %s\n", origin)
+				return true
+			}
+			for _, o := range parsed {
+				if o == origin {
+					fmt.Printf("[CORS] ✓ allowed: %s\n", origin)
+					return true
+				}
+			}
+			fmt.Printf("[CORS] ✗ blocked: %s\n", origin)
+			return false
+		},
 	}
 	return cors.New(cfg)
 }

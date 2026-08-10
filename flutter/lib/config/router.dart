@@ -10,12 +10,10 @@ import '../screens/broadcaster_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/register_screen.dart';
+import '../widgets/nav_shell.dart';
 
-Page<dynamic> buildPage(
-  BuildContext context,
-  GoRouterState state,
-  Widget child,
-) {
+Page<dynamic> _page(BuildContext context, GoRouterState state, Widget child) {
   if (kIsWeb) return NoTransitionPage(child: child);
   return MaterialPage(child: child);
 }
@@ -23,7 +21,7 @@ Page<dynamic> buildPage(
 String _homeForRole(Role role) => switch (role) {
   Role.admin => '/admin',
   Role.diffuseur => '/broadcaster',
-  _ => '/library',
+  _ => '/',
 };
 
 GoRouter buildRouter(SessionNotifier session) => GoRouter(
@@ -34,7 +32,7 @@ GoRouter buildRouter(SessionNotifier session) => GoRouter(
     final authenticated = session.isAuthenticated;
     final loc = state.matchedLocation;
 
-    if (authenticated && loc == '/login') {
+    if (authenticated && (loc == '/login' || loc == '/register')) {
       return _homeForRole(session.user!.role);
     }
 
@@ -46,45 +44,64 @@ GoRouter buildRouter(SessionNotifier session) => GoRouter(
     return null;
   },
   routes: [
-    GoRoute(
-      path: '/',
-      pageBuilder: (context, state) =>
-          buildPage(context, state, const HomeScreen()),
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, shell) =>
+          ScaffoldWithNavBar(navigationShell: shell),
+      branches: [
+        // Branch 0 — Accueil
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const HomeScreen()),
+            ),
+          ],
+        ),
+        // Branch 1 — Live (auditeurs)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/player',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const AudioPlayerScreen()),
+            ),
+          ],
+        ),
+        // Branch 2 — Studio (diffuseurs/admin)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/broadcaster',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const BroadcasterScreen()),
+            ),
+          ],
+        ),
+        // Branch 3 — Bibliothèque
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/library',
+              pageBuilder: (ctx, state) =>
+                  _page(ctx, state, const LibraryScreen()),
+            ),
+          ],
+        ),
+      ],
     ),
+
     GoRoute(
       path: '/login',
-      pageBuilder: (context, state) =>
-          buildPage(context, state, const LoginScreen()),
+      pageBuilder: (ctx, state) => _page(ctx, state, const LoginScreen()),
     ),
     GoRoute(
-      path: '/broadcaster',
-      pageBuilder: (context, state) =>
-          buildPage(context, state, const BroadcasterScreen()),
+      path: '/register',
+      pageBuilder: (ctx, state) => _page(ctx, state, const RegisterScreen()),
     ),
     GoRoute(
       path: '/admin',
-      pageBuilder: (context, state) =>
-          buildPage(context, state, const AdminScreen()),
-    ),
-    GoRoute(
-      path: '/library',
-      pageBuilder: (context, state) =>
-          buildPage(context, state, const LibraryScreen()),
-    ),
-    GoRoute(
-      path: '/player',
-      pageBuilder: (context, state) =>
-          buildPage(context, state, const AudioPlayerScreen()),
-      routes: [
-        GoRoute(
-          path: ':streamId',
-          pageBuilder: (context, state) => buildPage(
-            context,
-            state,
-            AudioPlayerScreen(streamId: state.pathParameters['streamId']),
-          ),
-        ),
-      ],
+      pageBuilder: (ctx, state) => _page(ctx, state, const AdminScreen()),
     ),
   ],
 );

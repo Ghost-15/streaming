@@ -1,0 +1,27 @@
+File: streampulse-final.exe
+Build ID: <workspace>\.tools\streampulse-final.exe2026-08-09 17:13:14.3541593 +0200 CEST
+Type: inuse_space
+Time: 2026-08-09 17:19:01 CEST
+Showing nodes accounting for 8473.91kB, 100% of 8473.91kB total
+Showing top 20 nodes out of 80
+      flat  flat%   sum%        cum   cum%
+ 2051.24kB 24.21% 24.21%  2051.24kB 24.21%  runtime.mallocgc
+ 1646.52kB 19.43% 43.64%  1646.52kB 19.43%  github.com/Ghost-15/streaming/internal/infrastructure/streaming.(*Hub).cacheWebMInitializationLocked
+ 1184.27kB 13.98% 57.61%  1184.27kB 13.98%  runtime/pprof.StartCPUProfile
+    1027kB 12.12% 69.73%     1027kB 12.12%  bufio.NewWriterSize
+  513.69kB  6.06% 75.79%   513.69kB  6.06%  golang.org/x/text/internal/language.map.init.1
+  513.31kB  6.06% 81.85%   513.31kB  6.06%  encoding/json.typeFields
+     513kB  6.05% 87.91%      513kB  6.05%  github.com/ugorji/go/codec.helperEncDriverBincBytes.fastpathEList
+  512.88kB  6.05% 93.96%   512.88kB  6.05%  github.com/Ghost-15/streaming/internal/handler.(*StreamHandler).Audio
+  512.01kB  6.04%   100%   512.01kB  6.04%  bytes.(*Buffer).ReadBytes
+         0     0%   100%   513.31kB  6.06%  encoding/json.(*encodeState).marshal
+         0     0%   100%   513.31kB  6.06%  encoding/json.(*encodeState).reflectValue
+         0     0%   100%   513.31kB  6.06%  encoding/json.Marshal
+         0     0%   100%   513.31kB  6.06%  encoding/json.cachedTypeFields
+         0     0%   100%   513.31kB  6.06%  encoding/json.newStructEncoder (inline)
+         0     0%   100%   513.31kB  6.06%  encoding/json.newTypeEncoder
+         0     0%   100%   513.31kB  6.06%  encoding/json.typeEncoder
+         0     0%   100%   513.31kB  6.06%  encoding/json.typeEncoder.OnceValue[go.shape.func].func3 (inline)
+         0     0%   100%   513.31kB  6.06%  encoding/json.typeEncoder.func1
+         0     0%   100%   513.31kB  6.06%  encoding/json.typeEncoder.typeEncoder.OnceValue[go.shape.func].func3.func4
+         0     0%   100%   513.31kB  6.06%  encoding/json.valueEncoder

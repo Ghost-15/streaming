@@ -7,8 +7,10 @@ class AdminStats {
   factory AdminStats.fromJson(Map<String, dynamic> json) {
     return AdminStats(
       totalUsers: json['total_users'] as int? ?? 0,
-      byRole: (json['by_role'] as Map<String, dynamic>?)
-              ?.map((k, v) => MapEntry(k, v as int)) ??
+      byRole:
+          (json['by_role'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, v as int),
+          ) ??
           {},
     );
   }

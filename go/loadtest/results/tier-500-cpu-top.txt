@@ -1,0 +1,29 @@
+File: streampulse-final.exe
+Build ID: <workspace>\.tools\streampulse-final.exe2026-08-09 17:13:14.3541593 +0200 CEST
+Type: cpu
+Time: 2026-08-09 17:21:18 CEST
+Duration: 30s, Total samples = 6.56s (21.87%)
+Showing nodes accounting for 5.81s, 88.57% of 6.56s total
+Dropped 211 nodes (cum <= 0.03s)
+Showing top 20 nodes out of 103
+      flat  flat%   sum%        cum   cum%
+     5.07s 77.29% 77.29%      5.09s 77.59%  runtime.cgocall
+     0.09s  1.37% 78.66%      0.09s  1.37%  crypto/internal/fips140/bigmod.addMulVVW
+     0.07s  1.07% 79.73%      0.07s  1.07%  runtime.semasleep
+     0.05s  0.76% 80.49%      0.15s  2.29%  runtime.lock2
+     0.05s  0.76% 81.25%      0.05s  0.76%  runtime.lock2.osyield.func1
+     0.05s  0.76% 82.01%      0.05s  0.76%  runtime.runqgrab.osyield.func1
+     0.05s  0.76% 82.77%      0.05s  0.76%  runtime.scanObject
+     0.05s  0.76% 83.54%      3.55s 54.12%  syscall.WSASend
+     0.04s  0.61% 84.15%      0.12s  1.83%  github.com/prometheus/client_golang/prometheus.(*MetricVec).GetMetricWithLabelValues
+     0.03s  0.46% 84.60%      4.49s 68.45%  github.com/Ghost-15/streaming/internal/handler.(*StreamHandler).Audio
+     0.03s  0.46% 85.06%      0.06s  0.91%  github.com/prometheus/client_golang/prometheus.(*MetricVec).hashLabelValues
+     0.03s  0.46% 85.52%      0.05s  0.76%  net/http.(*response).SetWriteDeadline
+     0.03s  0.46% 85.98%      3.71s 56.55%  net/http.checkConnErrorWriter.Write
+     0.03s  0.46% 86.43%      0.06s  0.91%  runtime.scanObjectsSmall
+     0.03s  0.46% 86.89%      0.08s  1.22%  runtime.selectgo
+     0.03s  0.46% 87.35%      0.04s  0.61%  sync.(*Pool).Put
+     0.02s   0.3% 87.65%      1.21s 18.45%  github.com/gin-gonic/gin.(*responseWriter).Flush
+     0.02s   0.3% 87.96%      0.12s  1.83%  github.com/prometheus/client_golang/prometheus.(*CounterVec).GetMetricWithLabelValues (inline)
+     0.02s   0.3% 88.26%      1.19s 18.14%  net/http.(*chunkWriter).flush
+     0.02s   0.3% 88.57%      0.09s  1.37%  runtime.(*Pinner).Pin

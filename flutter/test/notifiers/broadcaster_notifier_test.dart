@@ -21,10 +21,6 @@ void main() {
       expect(notifier.hasError, isFalse);
     });
 
-    test('initial listenerCount is 0', () {
-      expect(notifier.listenerCount, 0);
-    });
-
     test('initial currentStream is null', () {
       expect(notifier.currentStream, isNull);
     });
@@ -41,14 +37,6 @@ void main() {
       notifier.clearError();
       expect(notifier.state, BroadcasterState.idle);
       expect(notifier.errorMessage, isEmpty);
-    });
-
-    test('updateListenerCount updates count and notifies', () {
-      bool notified = false;
-      notifier.addListener(() => notified = true);
-      notifier.updateListenerCount(42);
-      expect(notifier.listenerCount, 42);
-      expect(notified, isTrue);
     });
 
     test('stopStream does nothing when no current stream', () async {

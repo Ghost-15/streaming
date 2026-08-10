@@ -12,10 +12,33 @@ permissions:
 env:
   GO_VERSION: "1.25"
   GOTOOLCHAIN: local
-  # Set to "80" to enforce the coverage gate once the baseline is ready.
-  COVERAGE_MIN: "0"
+  # Coverage gate enforced at 80% (mock helper packages excluded from the measure).
+  COVERAGE_MIN: "80"
 
 jobs:
+  observability-config:
+    name: Observability configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate dashboard JSON
+        run: |
+          jq empty go/infra/grafana/dashboards/streampulse.json
+      - name: Validate Prometheus configuration and alerts
+        run: |
+          TOKEN_FILE="$RUNNER_TEMP/metrics_bearer_token"
+          printf '%s' 'ci-validation-token' > "$TOKEN_FILE"
+          docker run --rm --entrypoint /bin/promtool \
+            -v "$PWD/go/infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$PWD/go/infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            -v "$TOKEN_FILE:/run/secrets/metrics_bearer_token:ro" \
+            prom/prometheus:v3.5.0 \
+            check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint /bin/promtool \
+            -v "$PWD/go/infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            prom/prometheus:v3.5.0 \
+            check rules /etc/prometheus/alerts.yml
+
   go-lint:
     name: Go Lint
     runs-on: ubuntu-latest
@@ -44,7 +67,8 @@ jobs:
           cache-dependency-path: go/go.sum
       - name: Run tests with race detector and coverage
         working-directory: go
-        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+        # Exclude mock helper packages from the coverage measurement.
+        run: go test $(go list ./... | grep -v '/mock$') -race -coverprofile=coverage.out -covermode=atomic
       - name: Report coverage
         id: coverage
         working-directory: go
