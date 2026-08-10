@@ -112,7 +112,7 @@ jobs:
         run: bash scripts/prove-production.sh
       - name: Upload rollback and restore evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rollback-evidence-${{ github.run_id }}
           path: |
