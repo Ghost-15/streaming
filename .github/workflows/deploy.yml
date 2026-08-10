@@ -96,11 +96,22 @@ jobs:
             --header "Authorization: Bearer ${RENDER_API_KEY}" \
             --header "Accept: application/json" \
             "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?status=live&limit=1")"
-          current="$(jq -cer '.[0].deploy' <<<"$live")"
+          current="$(jq -c '.[0].deploy // empty' <<<"$live")"
+          if [[ -z "$current" ]]; then
+            jq -nc \
+              '{available: false, reason: "no-live-deployment", message: "First production deployment has no rollback target"}' \
+              >production-evidence/before-deploy.json
+            echo "available=false" >>"$GITHUB_OUTPUT"
+            echo "deploy-id=" >>"$GITHUB_OUTPUT"
+            echo "image-digest=" >>"$GITHUB_OUTPUT"
+            echo "::notice::No live Render deployment exists yet; continuing without an automatic rollback target."
+            exit 0
+          fi
           current_id="$(jq -er '.id' <<<"$current")"
           current_digest="$(jq -er '.image.sha' <<<"$current")"
-          jq '{id, status, trigger, createdAt, startedAt, finishedAt, image: (.image | {ref, sha})}' \
+          jq '{available: true, id, status, trigger, createdAt, startedAt, finishedAt, image: (.image | {ref, sha})}' \
             <<<"$current" >production-evidence/before-deploy.json
+          echo "available=true" >>"$GITHUB_OUTPUT"
           echo "deploy-id=${current_id}" >>"$GITHUB_OUTPUT"
           echo "image-digest=${current_digest}" >>"$GITHUB_OUTPUT"
       - name: Trigger immutable Render image deployment
@@ -137,7 +148,7 @@ jobs:
         run: bash scripts/prove-production.sh
       - name: Restore previous production version after a critical proof failure
         id: automatic_rollback
-        if: ${{ steps.production_proof.outcome == 'failure' }}
+        if: ${{ steps.production_proof.outcome == 'failure' && steps.before.outputs.available == 'true' }}
         env:
           FAILED_DEPLOY_ID: ${{ steps.render.outputs.deploy-id }}
           PREVIOUS_DEPLOY_ID: ${{ steps.before.outputs.deploy-id }}
@@ -233,6 +244,7 @@ jobs:
           ROLLBACK_OUTCOME: ${{ steps.automatic_rollback.outcome }}
           ROLLBACK_PROOF_OUTCOME: ${{ steps.rollback_proof.outcome }}
           OBSERVABILITY_PROOF_OUTCOME: ${{ steps.observability_proof.outcome }}
+          PREVIOUS_DEPLOY_AVAILABLE: ${{ steps.before.outputs.available }}
         shell: bash
         run: |
           set -euo pipefail
@@ -247,7 +259,8 @@ jobs:
             --arg automaticRollback "$ROLLBACK_OUTCOME" \
             --arg rollbackProof "$ROLLBACK_PROOF_OUTCOME" \
             --arg observabilityProof "$OBSERVABILITY_PROOF_OUTCOME" \
-            '{timestamp: $timestamp, commitSha: $commitSha, runId: $runId, steps: {capture: $capture, deploy: $deploy, productionProof: $productionProof, automaticRollback: $automaticRollback, rollbackProof: $rollbackProof, observabilityProof: $observabilityProof}}' \
+            --arg previousDeployAvailable "$PREVIOUS_DEPLOY_AVAILABLE" \
+            '{timestamp: $timestamp, commitSha: $commitSha, runId: $runId, previousDeployAvailable: ($previousDeployAvailable == "true"), steps: {capture: $capture, deploy: $deploy, productionProof: $productionProof, automaticRollback: $automaticRollback, rollbackProof: $rollbackProof, observabilityProof: $observabilityProof}}' \
             >production-evidence/workflow-outcomes.json
       - name: Upload production evidence
         if: always()
@@ -261,6 +274,16 @@ jobs:
           retention-days: 90
       - name: Fail delivery after automatic rollback
         if: ${{ always() && steps.production_proof.outcome == 'failure' }}
+        env:
+          PREVIOUS_DEPLOY_AVAILABLE: ${{ steps.before.outputs.available }}
+          ROLLBACK_OUTCOME: ${{ steps.automatic_rollback.outcome }}
+          ROLLBACK_PROOF_OUTCOME: ${{ steps.rollback_proof.outcome }}
         run: |
-          echo "Critical production proof failed. The previous production version was restored and proved when recovery succeeded." >&2
+          if [[ "$PREVIOUS_DEPLOY_AVAILABLE" != "true" ]]; then
+            echo "::error::Critical production proof failed, but no previous live deployment existed for rollback."
+          elif [[ "$ROLLBACK_OUTCOME" == "success" && "$ROLLBACK_PROOF_OUTCOME" == "success" ]]; then
+            echo "::error::Critical production proof failed. The previous production version was restored and proved."
+          else
+            echo "::error::Critical production proof failed and restoration was not successfully proved. Manual intervention is required."
+          fi
           exit 1
