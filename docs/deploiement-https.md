@@ -113,6 +113,11 @@ cette version. La restauration est elle-même prouvée et le workflow reste en
 pas ce rollback : elle invalide la preuve d'observabilité sans conclure que
 l'application est défectueuse.
 
+Lors du tout premier déploiement, l'API Render ne retourne encore aucune version
+`live`. Ce cas n'est pas bloquant : le déploiement continue, mais aucun rollback
+automatique n'est possible tant qu'une première version saine n'existe pas. Un
+échec critique est alors signalé explicitement pour intervention manuelle.
+
 Le job Render dépend du job Docker Hub : l’API Render n’est jamais appelée si
 les tests, le build ou le push échouent. Les tags `v*` et les lancements manuels
 publient l’image, mais seul un push sur `main` déclenche Render.
