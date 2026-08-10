@@ -196,6 +196,7 @@ jobs:
             >production-evidence/automatic-rollback.json
           echo "deploy-id=${recovery_deploy_id}" >>"$GITHUB_OUTPUT"
       - name: Prove previous production version was restored
+        id: rollback_proof
         if: ${{ always() && steps.production_proof.outcome == 'failure' && steps.automatic_rollback.outputs.deploy-id != '' }}
         env:
           PRODUCTION_ORIGIN: https://${{ vars.API_DOMAIN }}
@@ -206,6 +207,7 @@ jobs:
           EVIDENCE_DIR: production-evidence/automatic-rollback
         run: bash scripts/prove-production.sh
       - name: Prove production metrics, logs and traces
+        id: observability_proof
         if: ${{ steps.production_proof.outcome == 'success' }}
         env:
           GRAFANA_PROMETHEUS_QUERY_URL: ${{ vars.GRAFANA_PROMETHEUS_QUERY_URL }}
@@ -222,13 +224,40 @@ jobs:
           # Allow one Alloy scrape/remote-write cycle and OTLP batch export.
           sleep 45
           bash scripts/prove-observability.sh
+      - name: Record production workflow outcomes
+        if: always()
+        env:
+          CAPTURE_OUTCOME: ${{ steps.before.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.render.outcome }}
+          PRODUCTION_PROOF_OUTCOME: ${{ steps.production_proof.outcome }}
+          ROLLBACK_OUTCOME: ${{ steps.automatic_rollback.outcome }}
+          ROLLBACK_PROOF_OUTCOME: ${{ steps.rollback_proof.outcome }}
+          OBSERVABILITY_PROOF_OUTCOME: ${{ steps.observability_proof.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p production-evidence
+          jq -nc \
+            --arg timestamp "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --arg commitSha "$GITHUB_SHA" \
+            --arg runId "$GITHUB_RUN_ID" \
+            --arg capture "$CAPTURE_OUTCOME" \
+            --arg deploy "$DEPLOY_OUTCOME" \
+            --arg productionProof "$PRODUCTION_PROOF_OUTCOME" \
+            --arg automaticRollback "$ROLLBACK_OUTCOME" \
+            --arg rollbackProof "$ROLLBACK_PROOF_OUTCOME" \
+            --arg observabilityProof "$OBSERVABILITY_PROOF_OUTCOME" \
+            '{timestamp: $timestamp, commitSha: $commitSha, runId: $runId, steps: {capture: $capture, deploy: $deploy, productionProof: $productionProof, automaticRollback: $automaticRollback, rollbackProof: $rollbackProof, observabilityProof: $observabilityProof}}' \
+            >production-evidence/workflow-outcomes.json
       - name: Upload production evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: production-evidence-${{ github.sha }}
           path: production-evidence/
-          if-no-files-found: error
+          # Never hide the original deployment failure with a secondary
+          # artifact error. workflow-outcomes.json should normally exist.
+          if-no-files-found: warn
           retention-days: 90
       - name: Fail delivery after automatic rollback
         if: ${{ always() && steps.production_proof.outcome == 'failure' }}
