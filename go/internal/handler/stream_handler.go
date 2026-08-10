@@ -278,7 +278,7 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 	}
 
 	streamID := c.Param("id")
-	contentType, publishing := h.hub.ContentType(streamID)
+	_, publishing := h.hub.ContentType(streamID)
 	if !publishing {
 		c.JSON(http.StatusConflict, gin.H{"error": "audio source is not connected"})
 		return
@@ -309,7 +309,7 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "audio source disconnected"})
 		return
 	}
-	contentType = currentType
+	contentType := currentType
 	var clusterAligner *streaming.WebMClusterAligner
 	if len(initSegment) > 0 {
 		clusterAligner = &streaming.WebMClusterAligner{}
@@ -426,7 +426,7 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 	defer stopPublisher()
 
 	body := http.MaxBytesReader(c.Writer, c.Request.Body, h.maxIngestSize)
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	stopBody := context.AfterFunc(ctx, func() { _ = body.Close() })
 	defer stopBody()
 
@@ -508,7 +508,7 @@ func (h *StreamHandler) PushAudio(c *gin.Context) {
 		limit = maxBrowserAudioChunkSize
 	}
 	body := http.MaxBytesReader(c.Writer, c.Request.Body, limit)
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	payload, err := io.ReadAll(body)
 	if err != nil {
 		var maxBytesErr *http.MaxBytesError
@@ -587,14 +587,12 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 	// A live stream is advertised before the browser has necessarily delivered
 	// its first MediaRecorder blob. Wait briefly so the response uses the exact
 	// publisher MIME type instead of committing an incorrect default header.
-	var contentType string
 	waitForPublisher := time.NewTimer(h.idleTimeout)
 	pollPublisher := time.NewTicker(25 * time.Millisecond)
 	defer waitForPublisher.Stop()
 	defer pollPublisher.Stop()
 	for {
-		if currentType, active := h.hub.ContentType(streamID); active {
-			contentType = currentType
+		if _, active := h.hub.ContentType(streamID); active {
 			break
 		}
 		select {
@@ -629,7 +627,7 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "audio source disconnected"})
 		return
 	}
-	contentType = currentType
+	contentType := currentType
 	var clusterAligner *streaming.WebMClusterAligner
 	if len(initSegment) > 0 {
 		clusterAligner = &streaming.WebMClusterAligner{}
@@ -750,7 +748,7 @@ func (h *StreamHandler) AudioSocket(c *gin.Context) {
 }
 
 func (h *StreamHandler) serveAudioSocket(ctx context.Context, conn *websocket.Conn, streamID string) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	client := &streaming.Client{
 		ID:       uuid.NewString(),
 		UserID:   uuid.NewString(),

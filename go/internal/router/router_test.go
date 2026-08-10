@@ -64,7 +64,7 @@ func TestNewRouter(t *testing.T) {
 	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
 
 	t.Run("health ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
@@ -73,7 +73,7 @@ func TestNewRouter(t *testing.T) {
 	})
 
 	t.Run("public streams accessible without token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/streams", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/streams", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
@@ -82,7 +82,7 @@ func TestNewRouter(t *testing.T) {
 	})
 
 	t.Run("protected route rejects missing token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/playlists", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/playlists", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 		if w.Code != http.StatusUnauthorized {
@@ -91,7 +91,7 @@ func TestNewRouter(t *testing.T) {
 	})
 
 	t.Run("browser audio push route is protected", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/streams/s1/push", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/streams/s1/push", nil)
 		req.Header.Set("Content-Type", "audio/webm;codecs=opus")
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)

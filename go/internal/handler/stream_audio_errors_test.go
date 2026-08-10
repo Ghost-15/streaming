@@ -3,6 +3,7 @@ package handler_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -36,12 +37,16 @@ func audioEngine(h *handler.StreamHandler, withClaims bool) *gin.Engine {
 }
 
 func audioRecorder(engine *gin.Engine, method, contentType string, body []byte) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, "/streams/stream-1/audio", bytes.NewReader(body))
-	if method == http.MethodGet {
-		request = httptest.NewRequest(method, "/streams/stream-1/listen", nil)
-	} else if method == http.MethodPost {
-		request = httptest.NewRequest(method, "/streams/stream-1/push", bytes.NewReader(body))
+	target := "/streams/stream-1/audio"
+	requestBody := io.Reader(bytes.NewReader(body))
+	switch method {
+	case http.MethodGet:
+		target = "/streams/stream-1/listen"
+		requestBody = nil
+	case http.MethodPost:
+		target = "/streams/stream-1/push"
 	}
+	request := httptest.NewRequestWithContext(context.Background(), method, target, requestBody)
 	if contentType != "" {
 		request.Header.Set("Content-Type", contentType)
 	}

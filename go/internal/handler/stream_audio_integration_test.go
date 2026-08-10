@@ -56,7 +56,7 @@ func TestAudioIngestFanoutAndListenerCancellation(t *testing.T) {
 	defer server.Close()
 
 	audioReader, audioWriter := io.Pipe()
-	ingestRequest, err := http.NewRequest(http.MethodPut, server.URL+"/streams/stream-1/audio", audioReader)
+	ingestRequest, err := http.NewRequestWithContext(t.Context(), http.MethodPut, server.URL+"/streams/stream-1/audio", audioReader)
 	if err != nil {
 		t.Fatal(err)
 	}

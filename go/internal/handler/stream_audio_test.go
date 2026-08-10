@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -132,6 +133,15 @@ func newPublicAudioHandler(hub *streaming.Hub) *handler.StreamHandler {
 	)
 }
 
+func getTestResponse(t *testing.T, url string) (*http.Response, error) {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return http.DefaultClient.Do(request)
+}
+
 // TestStreamingIntegration_BroadcastToListeners is the end-to-end proof on the
 // public audio path: two listeners connect and both receive a broadcast chunk.
 func TestStreamingIntegration_BroadcastToListeners(t *testing.T) {
@@ -142,12 +152,12 @@ func TestStreamingIntegration_BroadcastToListeners(t *testing.T) {
 	srv := httptest.NewServer(publicAudioEngine(newPublicAudioHandler(hub)))
 	defer srv.Close()
 
-	resp1, err := http.Get(srv.URL + "/streams/s1/audio")
+	resp1, err := getTestResponse(t, srv.URL+"/streams/s1/audio")
 	if err != nil {
 		t.Fatalf("listener 1 connect: %v", err)
 	}
 	defer resp1.Body.Close()
-	resp2, err := http.Get(srv.URL + "/streams/s1/audio")
+	resp2, err := getTestResponse(t, srv.URL+"/streams/s1/audio")
 	if err != nil {
 		t.Fatalf("listener 2 connect: %v", err)
 	}
@@ -196,7 +206,7 @@ func TestStreamingIntegration_IdleTimeoutEndsWithCleanHTTPBody(t *testing.T) {
 	srv := httptest.NewServer(publicAudioEngine(h))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/streams/s1/audio")
+	resp, err := getTestResponse(t, srv.URL+"/streams/s1/audio")
 	if err != nil {
 		t.Fatalf("listener connect: %v", err)
 	}
@@ -227,7 +237,7 @@ func TestStreamingIntegration_Disconnect(t *testing.T) {
 	srv := httptest.NewServer(publicAudioEngine(newPublicAudioHandler(hub)))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/streams/s1/audio")
+	resp, err := getTestResponse(t, srv.URL+"/streams/s1/audio")
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -265,25 +275,24 @@ func TestStreamHandler_Audio_LateJoiner(t *testing.T) {
 	hub.SetInitSegment("s1", initChunk)
 
 	// Late joiner connects and should immediately get the cached init segment.
-	resp, err := http.Get(srv.URL + "/streams/s1/audio")
+	requestCtx, cancelRequest := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancelRequest()
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, srv.URL+"/streams/s1/audio", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	defer resp.Body.Close()
 
 	buf := make([]byte, len(initChunk))
-	done := make(chan error, 1)
-	go func() { _, e := io.ReadFull(resp.Body, buf); done <- e }()
-	select {
-	case e := <-done:
-		if e != nil {
-			t.Fatalf("read init: %v", e)
-		}
-		if string(buf) != string(initChunk) {
-			t.Fatalf("late joiner got %q, want init %q", buf, initChunk)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("late joiner timed out waiting for init segment")
+	if _, err := io.ReadFull(resp.Body, buf); err != nil {
+		t.Fatalf("read init: %v", err)
+	}
+	if string(buf) != string(initChunk) {
+		t.Fatalf("late joiner got %q, want init %q", buf, initChunk)
 	}
 }
 
@@ -309,7 +318,7 @@ func TestStreamingE2E_MediaRecorderPushToTwoListeners(t *testing.T) {
 
 	push := func(payload []byte) {
 		t.Helper()
-		request, err := http.NewRequest(http.MethodPost, srv.URL+"/streams/stream-1/push", bytes.NewReader(payload))
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+"/streams/stream-1/push", bytes.NewReader(payload))
 		if err != nil {
 			t.Fatalf("create push request: %v", err)
 		}
@@ -330,7 +339,7 @@ func TestStreamingE2E_MediaRecorderPushToTwoListeners(t *testing.T) {
 	push(firstBlob)
 	listeners := make([]*http.Response, 2)
 	for i := range listeners {
-		response, err := http.Get(srv.URL + "/streams/stream-1/audio")
+		response, err := getTestResponse(t, srv.URL+"/streams/stream-1/audio")
 		if err != nil {
 			t.Fatalf("listener %d connect: %v", i+1, err)
 		}

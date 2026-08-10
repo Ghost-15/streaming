@@ -26,9 +26,12 @@ jobs:
           jq empty go/infra/grafana/dashboards/streampulse.json
       - name: Validate Prometheus configuration and alerts
         run: |
+          TOKEN_FILE="$RUNNER_TEMP/metrics_bearer_token"
+          printf '%s' 'ci-validation-token' > "$TOKEN_FILE"
           docker run --rm --entrypoint /bin/promtool \
             -v "$PWD/go/infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
             -v "$PWD/go/infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            -v "$TOKEN_FILE:/run/secrets/metrics_bearer_token:ro" \
             prom/prometheus:v3.5.0 \
             check config /etc/prometheus/prometheus.yml
           docker run --rm --entrypoint /bin/promtool \

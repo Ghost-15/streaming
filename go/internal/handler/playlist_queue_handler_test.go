@@ -49,7 +49,9 @@ func TestPlaylistHandler_ReorderTracks(t *testing.T) {
 			userID: "owner-1",
 			body:   map[string]interface{}{"track_ids": []string{"t2", "t1"}},
 			repoSetup: func(r *mock.MockPlaylistRepository) {
-				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Playlist, error) { return queuePlaylistFixture("owner-1"), nil }
+				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Playlist, error) {
+					return queuePlaylistFixture("owner-1"), nil
+				}
 				r.ReorderTracksFn = func(_ context.Context, _ string, _ []string) error { return nil }
 			},
 			wantStatus: http.StatusNoContent,
@@ -61,7 +63,9 @@ func TestPlaylistHandler_ReorderTracks(t *testing.T) {
 			userID: "intruder",
 			body:   map[string]interface{}{"track_ids": []string{"t2", "t1"}},
 			repoSetup: func(r *mock.MockPlaylistRepository) {
-				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Playlist, error) { return queuePlaylistFixture("owner-1"), nil }
+				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Playlist, error) {
+					return queuePlaylistFixture("owner-1"), nil
+				}
 			},
 			wantStatus: http.StatusForbidden,
 		},
@@ -96,7 +100,9 @@ func TestPlaylistHandler_NextTrack(t *testing.T) {
 			name:   "success",
 			userID: "owner-1",
 			repoSetup: func(r *mock.MockPlaylistRepository) {
-				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Playlist, error) { return queuePlaylistFixture("owner-1"), nil }
+				r.FindByIDFn = func(_ context.Context, _ string) (*entity.Playlist, error) {
+					return queuePlaylistFixture("owner-1"), nil
+				}
 				r.RemoveTrackFn = func(_ context.Context, _, _ string) error { return nil }
 			},
 			wantStatus: http.StatusOK,

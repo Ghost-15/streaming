@@ -22,7 +22,7 @@ func TestCORSMiddleware(t *testing.T) {
 	r.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	// Preflight request exercises the CORS logic.
-	req := httptest.NewRequest(http.MethodOptions, "/ping", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/ping", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.Header.Set("Access-Control-Request-Method", "GET")
 	w := httptest.NewRecorder()
@@ -39,7 +39,7 @@ func TestMetricsMiddleware(t *testing.T) {
 	r.Use(middleware.MetricsMiddleware())
 	r.GET("/ping", func(c *gin.Context) { c.String(http.StatusOK, "pong") })
 
-	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ping", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -88,7 +88,7 @@ func TestRBACMiddleware_ValidAndForbidden(t *testing.T) {
 
 	t.Run("valid role passes", func(t *testing.T) {
 		r := newEngine(entity.RoleUser, entity.RoleAdmin)
-		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 		req.Header.Set("Authorization", "Bearer "+signToken(t, key, entity.RoleUser))
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -99,7 +99,7 @@ func TestRBACMiddleware_ValidAndForbidden(t *testing.T) {
 
 	t.Run("wrong role forbidden", func(t *testing.T) {
 		r := newEngine(entity.RoleAdmin)
-		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 		req.Header.Set("Authorization", "Bearer "+signToken(t, key, entity.RoleUser))
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -110,7 +110,7 @@ func TestRBACMiddleware_ValidAndForbidden(t *testing.T) {
 
 	t.Run("missing token", func(t *testing.T) {
 		r := newEngine(entity.RoleUser)
-		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		if w.Code != http.StatusUnauthorized {
@@ -120,7 +120,7 @@ func TestRBACMiddleware_ValidAndForbidden(t *testing.T) {
 
 	t.Run("invalid bearer format", func(t *testing.T) {
 		r := newEngine(entity.RoleUser)
-		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 		req.Header.Set("Authorization", "not-a-bearer-token")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -131,7 +131,7 @@ func TestRBACMiddleware_ValidAndForbidden(t *testing.T) {
 
 	t.Run("malformed token", func(t *testing.T) {
 		r := newEngine(entity.RoleUser)
-		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 		req.Header.Set("Authorization", "Bearer invalid.token.here")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)

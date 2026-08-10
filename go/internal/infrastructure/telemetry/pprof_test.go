@@ -14,14 +14,14 @@ func TestPprofServerUsesIsolatedExplicitMux(t *testing.T) {
 		t.Fatalf("Addr = %q", server.Addr)
 	}
 	for _, path := range []string{"/debug/pprof/", "/debug/pprof/goroutine?debug=1"} {
-		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
 		response := httptest.NewRecorder()
 		server.Handler.ServeHTTP(response, request)
 		if response.Code != http.StatusOK {
 			t.Fatalf("%s status = %d, want 200", path, response.Code)
 		}
 	}
-	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil)
 	response := httptest.NewRecorder()
 	server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound {
