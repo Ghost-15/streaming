@@ -1,0 +1,18 @@
+﻿{
+    "timestamp_utc":  "2026-08-09T15:23:16.2340775+00:00",
+    "target":  "http://127.0.0.1:8080",
+    "listeners":  500,
+    "listener_path":  "audio",
+    "source_payload_kbit_s":  129.655436562,
+    "cpu_p95_percent_of_one_core":  27.23028948664129,
+    "rss_max_bytes":  77918208,
+    "dropped_chunks":  0,
+    "dropped_chunks_percent_of_ingest":  0,
+    "k6_checks_percent":  100,
+    "k6_failed_requests_percent":  0,
+    "k6_http_duration_p95_ms":  83703.15107,
+    "k6_exit_code":  0,
+    "k6_thresholds_ok":  true,
+    "goroutines_after_rest":  17,
+    "rest_seconds":  35
+}

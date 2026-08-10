@@ -17,6 +17,37 @@ d'environnement de demonstration :
 Cette approche evite les clics non traces dans l'interface Cloud et permet de
 montrer au jury que l'observabilite fait partie du projet.
 
+## Collecte de production sur Render
+
+L'API envoie directement les logs a Loki et les traces OTLP a Tempo. Les
+metriques Prometheus utilisent un modele pull : il faut donc un second service,
+et pas seulement importer le dashboard. Creer un Background Worker Render avec :
+
+- Dockerfile : `go/infra/alloy/Dockerfile` (contexte de build : racine du depot) ;
+- `STREAMPULSE_API_HOST` : hostname Render de l'API, sans `https://` ;
+- `METRICS_BEARER_TOKEN` : meme valeur que sur le Web Service API ;
+- `GRAFANA_CLOUD_PROMETHEUS_URL` : endpoint remote write Grafana Cloud ;
+- `GRAFANA_CLOUD_PROMETHEUS_USERNAME` : identifiant de l'instance Metrics ;
+- `GRAFANA_CLOUD_API_KEY` : token limite a l'ecriture de metriques.
+
+Alloy scrape `https://<host>/metrics` toutes les 15 secondes et ajoute les
+labels `service="streampulse-api"` et `env="production"`. Le job de deploiement
+attend ensuite un cycle d'export et execute `scripts/prove-observability.sh`.
+Il echoue si l'un des trois constats manque : cible Prometheus `up == 1`, log
+Loki de production, trace Tempo de production. L'artefact conserve uniquement
+les labels, timestamps et identifiants de trace, jamais le contenu des logs.
+
+Variables GitHub requises pour la lecture de preuve :
+
+- `GRAFANA_PROMETHEUS_QUERY_URL` (base terminee par `/api/prom`) ;
+- `GRAFANA_LOKI_QUERY_URL` ;
+- `GRAFANA_TEMPO_QUERY_URL` (base terminee par `/tempo`).
+
+Secrets GitHub requis : les couples username/token de lecture
+`GRAFANA_PROMETHEUS_*`, `GRAFANA_LOKI_*` et `GRAFANA_TEMPO_*` utilises par le
+workflow. Ils peuvent provenir d'une seule Access Policy Grafana Cloud avec les
+scopes de lecture adaptes.
+
 ## Dashboard livre
 
 Dashboard : `StreamPulse - RNCP Observability`

@@ -14,8 +14,17 @@ et octets alloués. Il ne mesure pas la pile TLS ou le réseau.
 
 ## 2. Test k6 de bout en bout
 
-Prérequis : k6, FFmpeg, curl, une API HTTPS, un stream live et deux JWT (rôle
-Diffuseur pour la source, User pour les auditeurs).
+Prérequis : k6, FFmpeg, curl, une API HTTPS, un stream live et un JWT Diffuseur
+pour la source. Le scénario utilise par défaut la route publique `/audio`, ce
+qui représente le lecteur Web réel et évite de réutiliser artificiellement un
+seul utilisateur soumis au rate limit sur 500 connexions. Pour tester la route
+authentifiée `/listen`, fournir un JWT User avec `LISTENER_TOKEN`.
+
+Les connexions sont établies sur une rampe déterministe de 10 secondes afin de
+ne pas confondre le backlog TCP de la machine cliente avec la capacité de
+diffusion. Toutes restent ouvertes : le palier demandé est donc bien atteint
+simultanément pendant le flux. La rampe peut être ajustée avec
+`START_RAMP_SECONDS` pour un environnement de production documenté.
 
 Terminal A :
 
@@ -28,6 +37,19 @@ ffmpeg -re -stream_loop -1 -i sample.mp3 -codec copy -f mp3 - \
       "$BASE_URL/streams/$STREAM_ID/audio"
 ```
 
+Sans fichier audio, `loadtest/publisher.js` produit un flux binaire déterministe
+au débit par défaut de 128 kbit/s, suffisant pour mesurer le transport (il n'est
+pas destiné à être décodé par un lecteur) :
+
+```bash
+k6 run \
+  -e BASE_URL="$BASE_URL" \
+  -e STREAM_ID="$STREAM_ID" \
+  -e STREAM_SESSION_ID="$STREAM_SESSION_ID" \
+  -e BROADCASTER_TOKEN="$BROADCASTER_TOKEN" \
+  loadtest/publisher.js
+```
+
 Terminal B :
 
 ```bash
@@ -36,13 +58,26 @@ k6 run \
   -e LISTENERS=10 \
   -e BASE_URL="$BASE_URL" \
   -e STREAM_ID="$STREAM_ID" \
-  -e LISTENER_TOKEN="$LISTENER_TOKEN" \
   loadtest/stream.js
 ```
 
-Répéter avec `LISTENERS=100`, puis `500`. Arrêter FFmpeg après au moins 60 s ;
-les requêtes se terminent après le timeout d’inactivité du serveur. Conserver
-la sortie k6 et exporter simultanément les panels Grafana.
+Sous PowerShell, le runner collecte simultanément k6, les métriques runtime et,
+si son URL loopback est fournie, pprof :
+
+```powershell
+cd go
+.\loadtest\run-tier.ps1 `
+  -Listeners 10 `
+  -BaseUrl $env:BASE_URL `
+  -StreamId $env:STREAM_ID `
+  -MetricsBearerToken $env:METRICS_BEARER_TOKEN `
+  -PprofBaseUrl http://127.0.0.1:6060
+```
+
+Répéter avec `-Listeners 100`, puis `500`. Arrêter FFmpeg après au moins 60 s ;
+les requêtes se terminent après le timeout d’inactivité du serveur. Le runner
+attend ensuite le repos, calcule CPU p95, RSS max, taux de drops, checks k6 et
+goroutines, puis génère `loadtest/results/summary.md`.
 
 Critères :
 
@@ -60,8 +95,8 @@ PowerShell :
 
 ```powershell
 cd go
-.\loadtest\capture-pprof.ps1 -CpuSeconds 30
-go tool pprof -http=:0 .\loadtest\results\cpu.pb.gz
+.\loadtest\capture-pprof.ps1 -CpuSeconds 30 -Prefix tier-10
+pprof -http=:0 .\loadtest\results\tier-10-cpu.pb.gz
 ```
 
 Linux/macOS :
@@ -76,5 +111,7 @@ En production Render, pprof reste désactivé et ne doit jamais être exposé pa
 le service public.
 
 Les profils binaires sont ignorés par Git, car ils peuvent contenir des
-informations sensibles. Le rapport synthétique et les commandes, eux, restent
-versionnés dans `docs/performance-couts.md`.
+informations sensibles. Le script produit aussi des rapports pprof `cpu-top`
+et `heap-top` dont le chemin de workspace est anonymisé. Ces rapports et les
+sorties JSON/CSV/log/Markdown de `loadtest/results/` sont versionnables et
+constituent la preuve reproductible.

@@ -82,22 +82,39 @@ service média/CDN ; recalculer alors le coût d’egress réel.
 Pour chaque palier 10/100/500 :
 
 1. démarrer une source `ffmpeg -re` à bitrate connu ;
-2. lancer `go/loadtest/stream.js` pendant au moins 60 s ;
-3. capturer 30 s de CPU, puis heap et goroutines ;
-4. exporter les métriques Grafana et la sortie k6 ;
+2. lancer `go/loadtest/run-tier.ps1` pendant au moins 60 s ;
+3. capturer 30 s de pprof sur une instance locale ou de staging privée ;
+4. échantillonner `/metrics` et conserver la sortie k6 ;
 5. arrêter la source et attendre `STREAM_IDLE_TIMEOUT` ;
 6. vérifier le retour des gauges auditeurs/publisher à zéro et l’absence de
    goroutines résiduelles.
 
-Les profils ne sont pas committés. Le tableau ci-dessous est à remplir avec une
-preuve exécutée sur l’hôte de production, car un benchmark local ne peut pas
-inventer CPU, RAM, TLS ou latence réseau de cette machine.
+Les profils ne sont pas committés. Render ne rend pas le port pprof loopback
+accessible : CPU, RSS, drops et goroutines de production proviennent donc de
+Prometheus/Grafana, tandis que les profils pprof sont capturés sur le même
+binaire dans une instance locale ou de staging privée. Ne jamais présenter un
+profil local comme un profil du processus Render.
 
-| Palier | CPU p95 | RSS max | Drops | k6 checks | Goroutines après repos |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 10 | à mesurer | à mesurer | à mesurer | à mesurer | à mesurer |
-| 100 | à mesurer | à mesurer | à mesurer | à mesurer | à mesurer |
-| 500 | à mesurer | à mesurer | à mesurer | à mesurer | à mesurer |
+Exécution réelle le 9 août 2026 sur le binaire Go instrumenté local, Windows
+amd64, Go 1.26.1, k6 2.1.0. Les connexions ont été établies sur 10 secondes,
+le flux source a duré 60 secondes, le profil CPU 30 secondes et la période de
+repos 35 secondes. La source visait 128 kbit/s et a effectivement livré entre
+127,66 et 129,66 kbit/s selon le palier. Le p95 HTTP correspond à la durée
+volontaire d'une connexion audio longue, pas à une latence de requête classique.
+
+| Palier | Source | CPU p95 (% d'un cœur) | RSS max | Drops | Checks k6 | Requêtes échouées | Durée HTTP p95 | Goroutines après repos |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 127,66 kbit/s | 6,06 % | 35,47 Mio | 0 % | 100 % | 0 % | 83,282 s | 17 |
+| 100 | 128,73 kbit/s | 10,08 % | 42,75 Mio | 0 % | 100 % | 0 % | 84,036 s | 17 |
+| 500 | 129,66 kbit/s | 27,23 % | 74,31 Mio | 0 % | 100 % | 0 % | 83,703 s | 17 |
+
+Les trois paliers satisfont les seuils. Les résultats détaillés sont dans
+[`go/loadtest/results/summary.md`](../go/loadtest/results/summary.md) et les
+rapports pprof versionnables suivent le format
+`go/loadtest/results/tier-{10,100,500}-{cpu,heap}-top.txt`. Les profils bruts
+`.pb.gz` restent volontairement ignorés par Git. Cette mesure est une preuve
+locale reproductible du même binaire ; elle ne constitue ni une mesure TLS ni
+une mesure de l'instance Render.
 
 ## Seuils de décision
 

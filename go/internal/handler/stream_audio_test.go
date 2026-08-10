@@ -184,6 +184,39 @@ func TestStreamingIntegration_BroadcastToListeners(t *testing.T) {
 	}
 }
 
+func TestStreamingIntegration_IdleTimeoutEndsWithCleanHTTPBody(t *testing.T) {
+	hub := streaming.NewHub()
+	if err := hub.OpenChunkPublisher("s1", "audio/mpeg"); err != nil {
+		t.Fatal(err)
+	}
+	h := handler.NewStreamHandler(
+		usecase.NewStreamUseCase(&mock.MockStreamRepository{}, nil),
+		handler.WithAudioStreaming(hub, time.Minute, 80*time.Millisecond, 10*time.Millisecond, 1<<20, 1024, 64),
+	)
+	srv := httptest.NewServer(publicAudioEngine(h))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/streams/s1/audio")
+	if err != nil {
+		t.Fatalf("listener connect: %v", err)
+	}
+	defer resp.Body.Close()
+
+	deadline := time.Now().Add(time.Second)
+	for hub.ListenerCount("s1") != 1 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	hub.Broadcast("s1", []byte("LIVEAUDIO"))
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body after idle timeout: %v", err)
+	}
+	if string(body) != "LIVEAUDIO" {
+		t.Fatalf("body = %q, want LIVEAUDIO", body)
+	}
+}
+
 // TestStreamingIntegration_Disconnect verifies the Hub releases a listener
 // (goroutine + channel) when the client disconnects.
 func TestStreamingIntegration_Disconnect(t *testing.T) {
