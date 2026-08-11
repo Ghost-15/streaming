@@ -32,18 +32,38 @@ func (r *supabaseRecommendationRepo) RecommendStreams(ctx context.Context, userI
 		limit = 10
 	}
 
+	// Primary: collaborative filtering — live streams popular with other users
+	// that the requesting user has not yet joined.
+	// Fallback: when no collaborative data exists (new user, solo demo), return
+	// all live streams ordered by listener count so the section is always shown.
 	const q = `
-		SELECT s.id, s.title, s.broadcaster_id, s.status, s.started_at, s.ended_at, s.listener_count
-		FROM listen_history lh
-		JOIN streams s ON s.id = lh.stream_id
-		WHERE lh.event_type = 'join'
-		  AND s.status = 'live'
-		  AND lh.stream_id NOT IN (
-		      SELECT stream_id FROM listen_history
-		      WHERE user_id = $1 AND event_type = 'join' AND stream_id IS NOT NULL
-		  )
-		GROUP BY s.id, s.title, s.broadcaster_id, s.status, s.started_at, s.ended_at, s.listener_count
-		ORDER BY COUNT(DISTINCT lh.user_id) DESC
+		WITH collab AS (
+		    SELECT s.id, s.title, s.broadcaster_id, s.status,
+		           s.started_at, s.ended_at, s.listener_count,
+		           COUNT(DISTINCT lh.user_id) AS score
+		    FROM listen_history lh
+		    JOIN streams s ON s.id = lh.stream_id
+		    WHERE lh.event_type = 'join'
+		      AND s.status = 'live'
+		      AND lh.stream_id NOT IN (
+		          SELECT stream_id FROM listen_history
+		          WHERE user_id = $1 AND event_type = 'join'
+		            AND stream_id IS NOT NULL
+		      )
+		    GROUP BY s.id, s.title, s.broadcaster_id, s.status,
+		             s.started_at, s.ended_at, s.listener_count
+		),
+		fallback AS (
+		    SELECT s.id, s.title, s.broadcaster_id, s.status,
+		           s.started_at, s.ended_at, s.listener_count,
+		           s.listener_count AS score
+		    FROM streams s
+		    WHERE s.status = 'live'
+		      AND NOT EXISTS (SELECT 1 FROM collab)
+		)
+		SELECT id, title, broadcaster_id, status, started_at, ended_at, listener_count
+		FROM (SELECT * FROM collab UNION ALL SELECT * FROM fallback) combined
+		ORDER BY score DESC, started_at DESC
 		LIMIT $2`
 
 	rows, queryErr := r.db.Query(ctx, q, userID, limit)

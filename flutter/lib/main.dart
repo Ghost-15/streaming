@@ -14,6 +14,7 @@ import 'notifiers/audio_notifier.dart';
 import 'notifiers/broadcaster_notifier.dart';
 import 'notifiers/favorite_notifier.dart';
 import 'notifiers/playlist_notifier.dart';
+import 'notifiers/recommendation_notifier.dart';
 import 'notifiers/session_notifier.dart';
 import 'notifiers/stream_notifier.dart';
 
@@ -47,6 +48,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => FavoriteNotifier(const FavoriteRepository()),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => RecommendationNotifier(const StreamRepository()),
         ),
       ],
       child: StreamPulseApp(router: router),
