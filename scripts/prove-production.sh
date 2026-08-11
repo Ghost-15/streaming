@@ -60,7 +60,7 @@ jq '{id, status, trigger, createdAt, startedAt, finishedAt, image: (.image | {re
   <<<"$deploy_json" >"$evidence_dir/render-deploy.json"
 actual_digest="$(jq -er '.image.sha' <<<"$deploy_json")"
 if [[ "$actual_digest" != "$EXPECTED_IMAGE_DIGEST" ]]; then
-  echo "Render image digest mismatch: expected ${EXPECTED_IMAGE_DIGEST}, got ${actual_digest}" >&2
+  echo "Render runtime image digest mismatch: expected ${EXPECTED_IMAGE_DIGEST}, got ${actual_digest}" >&2
   exit 1
 fi
 
@@ -115,7 +115,7 @@ cat >"$evidence_dir/summary.md" <<EOF
 - Render service: ${RENDER_SERVICE_ID}
 - Render deploy: ${RENDER_DEPLOY_ID}
 - Render status: ${status}
-- Image digest: ${actual_digest}
+- Runtime image manifest digest: ${actual_digest}
 - Business smoke URL: ${smoke_url}
 - Business smoke result: valid JSON array
 - HTTP redirect status: ${http_code}

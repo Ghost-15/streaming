@@ -98,7 +98,8 @@ push main
   -> push Docker Hub :latest
   -> POST API Render avec docker.io/...:<SHA Git>
   -> attendre le statut live
-  -> comparer le digest BuildKit au digest résolu par Render
+  -> résoudre dans l'index OCI BuildKit le manifeste Linux/amd64 déployable
+  -> comparer ce digest de manifeste au digest résolu par Render
   -> prouver health, endpoint métier public, redirection HTTP et certificat TLS
   -> en cas d'échec critique, restaurer et prouver la version live précédente
   -> prouver Prometheus, Loki et Tempo sans rollback applicatif sur erreur de lecture
@@ -151,8 +152,10 @@ Dans GitHub Actions :
 
 Télécharger l’artefact `production-evidence-<sha>`. Il contient la réponse Render
 sanitisée (`image.ref` et `image.sha`), le `curl --verbose`, les en-têtes de
-redirection, le certificat, sa chaîne et le JSON exact de `/health`. Le job
-échoue si le digest tiré diffère du digest publié par BuildKit.
+redirection, le certificat, sa chaîne et le JSON exact de `/health`. BuildKit
+publie un index OCI qui contient le manifeste Linux/amd64 et les attestations
+SBOM/provenance. Le job résout ce manifeste d'exécution puis échoue si son digest
+diffère du digest tiré par Render.
 
 ## 7. Rollback
 
