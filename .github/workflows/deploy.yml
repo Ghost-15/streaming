@@ -267,7 +267,7 @@ jobs:
           GRAFANA_TEMPO_API_KEY: ${{ secrets.GRAFANA_TEMPO_API_KEY }}
           EVIDENCE_DIR: production-evidence/observability
         run: |
-          # Allow one Alloy scrape/remote-write cycle and OTLP batch export.
+          # Allow the API's OTLP metrics and trace batch exporters to flush.
           sleep 45
           bash scripts/prove-observability.sh
       - name: Record production workflow outcomes

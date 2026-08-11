@@ -9,7 +9,7 @@ import (
 	"github.com/Ghost-15/streaming/internal/infrastructure/telemetry"
 )
 
-// MetricsMiddleware records HTTP request duration in the Prometheus histogram.
+// MetricsMiddleware records HTTP duration for Prometheus and direct OTLP export.
 // Sprint 3 — US-010. Must be registered after RouterEngine.Use(ZerologMiddleware).
 func MetricsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -22,8 +22,12 @@ func MetricsMiddleware() gin.HandlerFunc {
 		if route == "" {
 			route = "unmatched"
 		}
-		telemetry.APIRequestDuration.
-			WithLabelValues(route, c.Request.Method, strconv.Itoa(c.Writer.Status())).
-			Observe(time.Since(start).Seconds())
+		telemetry.ObserveAPIRequestDuration(
+			c.Request.Context(),
+			route,
+			c.Request.Method,
+			strconv.Itoa(c.Writer.Status()),
+			time.Since(start).Seconds(),
+		)
 	}
 }

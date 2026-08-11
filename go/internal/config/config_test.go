@@ -100,6 +100,51 @@ func TestLoadRequiresMetricsTokenInProduction(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsDirectMetricsByEnvironment(t *testing.T) {
+	t.Run("enabled in production", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("METRICS_BEARER_TOKEN", "token")
+		t.Setenv("OTEL_METRICS_ENABLED", "")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if !cfg.OTELMetricsEnabled {
+			t.Fatal("OTELMetricsEnabled = false, want true in production")
+		}
+	})
+
+	t.Run("disabled in development", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("APP_ENV", "development")
+		t.Setenv("OTEL_METRICS_ENABLED", "")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if cfg.OTELMetricsEnabled {
+			t.Fatal("OTELMetricsEnabled = true, want false in development")
+		}
+	})
+
+	t.Run("explicit override", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("APP_ENV", "development")
+		t.Setenv("OTEL_METRICS_ENABLED", "true")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if !cfg.OTELMetricsEnabled {
+			t.Fatal("OTELMetricsEnabled = false, want explicit true")
+		}
+	})
+}
+
 func TestLoadReadsMetricsTokenFile(t *testing.T) {
 	setRequiredEnv(t)
 	tokenPath := filepath.Join(t.TempDir(), "metrics_token")
@@ -129,6 +174,7 @@ func TestLoadValidatesStreamingAndPprofConfiguration(t *testing.T) {
 		{name: "invalid duration", key: "STREAM_IDLE_TIMEOUT", value: "later", wantErr: "STREAM_IDLE_TIMEOUT"},
 		{name: "invalid chunk size", key: "STREAM_CHUNK_SIZE", value: "100", wantErr: "streaming limits"},
 		{name: "invalid boolean", key: "PPROF_ENABLED", value: "perhaps", wantErr: "PPROF_ENABLED"},
+		{name: "invalid metrics boolean", key: "OTEL_METRICS_ENABLED", value: "perhaps", wantErr: "OTEL_METRICS_ENABLED"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

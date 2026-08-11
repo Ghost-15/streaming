@@ -75,8 +75,8 @@ func (uc *streamUseCase) Start(ctx context.Context, broadcasterID, title string)
 	if err := uc.streamRepo.Create(ctx, stream); err != nil {
 		return nil, fmt.Errorf("stream: start: %w", err)
 	}
-	telemetry.ActiveStreams.Inc()
-	telemetry.StreamStartTotal.Inc()
+	telemetry.IncrementActiveStreams()
+	telemetry.RecordStreamStart()
 	return stream, nil
 }
 
@@ -96,8 +96,8 @@ func (uc *streamUseCase) Restart(ctx context.Context, streamID, broadcasterID st
 	stream.EndedAt = nil
 	stream.ListenerCount = 0
 	if !wasLive {
-		telemetry.ActiveStreams.Inc()
-		telemetry.StreamStartTotal.Inc()
+		telemetry.IncrementActiveStreams()
+		telemetry.RecordStreamStart()
 	}
 	return stream, nil
 }
@@ -123,7 +123,7 @@ func (uc *streamUseCase) End(ctx context.Context, streamID, broadcasterID, sessi
 	if !deactivated {
 		return ErrStreamSessionExpired
 	}
-	telemetry.ActiveStreams.Dec()
+	telemetry.DecrementActiveStreams()
 	return nil
 }
 
@@ -136,7 +136,7 @@ func (uc *streamUseCase) Delete(ctx context.Context, streamID, broadcasterID str
 		return fmt.Errorf("stream: delete: %w", err)
 	}
 	if stream.IsLive() {
-		telemetry.ActiveStreams.Dec()
+		telemetry.DecrementActiveStreams()
 	}
 	return nil
 }

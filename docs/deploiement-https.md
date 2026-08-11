@@ -176,10 +176,10 @@ connu comme sain.
 ## 8. Observabilité et pprof
 
 Prometheus/Grafana restent disponibles dans la stack Docker locale. En
-production, un Background Worker Render Grafana Alloy construit depuis
-`go/infra/alloy/Dockerfile` scrape `/metrics` avec le bearer token et effectue
-un remote write vers Grafana Cloud. Les logs et traces partent directement de
-l’API vers Loki et Tempo. Voir `docs/observability-rncp.md`.
+production, le Web Service API envoie directement les métriques et les traces
+en OTLP vers Grafana Cloud, sans Background Worker Render payant. Les logs
+partent directement de l’API vers Loki. `/metrics` reste disponible pour la
+stack locale. Voir `docs/observability-rncp.md`.
 
 pprof doit rester désactivé sur Render : les profils peuvent contenir des
 informations internes et ne doivent pas être rendus publics.

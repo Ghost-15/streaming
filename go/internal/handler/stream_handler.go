@@ -324,8 +324,8 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 	if len(initSegment) > 0 {
 		written, writeErr := c.Writer.Write(initSegment)
 		if written > 0 {
-			telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(written))
-			telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+			telemetry.AddAudioEgressBytes(streamID, written)
+			telemetry.RecordAudioChunk(streamID, "egress")
 		}
 		if writeErr != nil {
 			return
@@ -366,8 +366,8 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 			}
 			written, err := c.Writer.Write(packet)
 			if written > 0 {
-				telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(written))
-				telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+				telemetry.AddAudioEgressBytes(streamID, written)
+				telemetry.RecordAudioChunk(streamID, "egress")
 			}
 			if err != nil {
 				middleware.Logger(c).Debug().Err(err).Str("stream_id", streamID).Msg("audio listener write ended")
@@ -652,8 +652,8 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 	if len(initSegment) > 0 {
 		written, writeErr := c.Writer.Write(initSegment)
 		if written > 0 {
-			telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(written))
-			telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+			telemetry.AddAudioEgressBytes(streamID, written)
+			telemetry.RecordAudioChunk(streamID, "egress")
 		}
 		if writeErr != nil {
 			return
@@ -695,8 +695,8 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 			}
 			written, err := c.Writer.Write(chunk)
 			if written > 0 {
-				telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(written))
-				telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+				telemetry.AddAudioEgressBytes(streamID, written)
+				telemetry.RecordAudioChunk(streamID, "egress")
 			}
 			if err != nil {
 				return
@@ -775,8 +775,8 @@ func (h *StreamHandler) serveAudioSocket(ctx context.Context, conn *websocket.Co
 		if err := websocket.Message.Send(conn, payload); err != nil {
 			return err
 		}
-		telemetry.AudioEgressBytesTotal.WithLabelValues(streamID).Add(float64(len(payload)))
-		telemetry.AudioChunksTotal.WithLabelValues(streamID, "egress").Inc()
+		telemetry.AddAudioEgressBytes(streamID, len(payload))
+		telemetry.RecordAudioChunk(streamID, "egress")
 		return nil
 	}
 	if len(initSegment) > 0 {
