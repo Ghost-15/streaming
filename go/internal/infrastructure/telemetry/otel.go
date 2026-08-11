@@ -5,7 +5,6 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
@@ -27,18 +26,22 @@ func InitTracer(ctx context.Context, serviceName, serviceNamespace, deploymentEn
 
 	if protocol == "http/protobuf" || strings.HasPrefix(endpoint, "https://") {
 		// HTTP mode — Grafana Cloud direct (TLS + Basic Auth via OTEL_EXPORTER_OTLP_HEADERS)
-		u, parseErr := url.Parse(endpoint)
+		u, parseErr := parseOTLPHTTPEndpoint(endpoint, "traces")
 		if parseErr != nil {
-			return nil, fmt.Errorf("telemetry: invalid endpoint: %w", parseErr)
+			return nil, parseErr
 		}
-		exporter, err = otlptracehttp.New(ctx,
+		opts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpoint(u.Host),
-			otlptracehttp.WithURLPath(u.Path+"/v1/traces"),
-		)
+			otlptracehttp.WithURLPath(u.Path),
+		}
+		if u.Scheme == "http" {
+			opts = append(opts, otlptracehttp.WithInsecure())
+		}
+		exporter, err = otlptracehttp.New(ctx, opts...)
 	} else {
 		// gRPC mode — local OTEL collector (no TLS in dev)
 		exporter, err = otlptracegrpc.New(ctx,
-			otlptracegrpc.WithEndpoint(endpoint),
+			otlptracegrpc.WithEndpoint(trimEndpointScheme(endpoint)),
 			otlptracegrpc.WithInsecure(),
 		)
 	}
@@ -47,15 +50,9 @@ func InitTracer(ctx context.Context, serviceName, serviceNamespace, deploymentEn
 		return nil, fmt.Errorf("telemetry: create exporter: %w", err)
 	}
 
-	res, err := resource.New(ctx,
-		resource.WithAttributes(
-			semconv.ServiceName(serviceName),
-			semconv.ServiceNamespace(serviceNamespace),
-			semconv.DeploymentEnvironment(deploymentEnvironment),
-		),
-	)
+	res, err := newResource(ctx, serviceName, serviceNamespace, deploymentEnvironment)
 	if err != nil {
-		return nil, fmt.Errorf("telemetry: create resource: %w", err)
+		return nil, err
 	}
 
 	tp := sdktrace.NewTracerProvider(
@@ -66,4 +63,18 @@ func InitTracer(ctx context.Context, serviceName, serviceNamespace, deploymentEn
 	otel.SetTracerProvider(tp)
 
 	return tp.Shutdown, nil
+}
+
+func newResource(ctx context.Context, serviceName, serviceNamespace, deploymentEnvironment string) (*resource.Resource, error) {
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceName(serviceName),
+			semconv.ServiceNamespace(serviceNamespace),
+			semconv.DeploymentEnvironment(deploymentEnvironment),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: create resource: %w", err)
+	}
+	return res, nil
 }

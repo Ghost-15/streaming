@@ -69,7 +69,27 @@ func main() {
 		}()
 	}
 
-	// 4. Infrastructure — database (non-bloquant si pas encore de BDD)
+	// 4. Metrics — direct OTLP export in production, alongside /metrics.
+	if cfg.OTELMetricsEnabled {
+		metricsShutdown, metricsErr := telemetry.InitMetrics(
+			ctx,
+			"streampulse-api",
+			cfg.OTELServiceNamespace,
+			cfg.OTELDeploymentEnv,
+			cfg.OTELEndpoint,
+		)
+		if metricsErr != nil {
+			log.Warn().Err(metricsErr).Msg("otel metrics unavailable")
+		} else {
+			defer func() {
+				if err := metricsShutdown(ctx); err != nil {
+					log.Error().Err(err).Msg("otel metrics shutdown failed")
+				}
+			}()
+		}
+	}
+
+	// 5. Infrastructure — database (non-bloquant si pas encore de BDD)
 	db, err := supabase.NewPool(ctx, cfg.SupabaseDBURL)
 	if err != nil {
 		log.Warn().Err(err).Msg("database unavailable, api starts without db")
@@ -79,7 +99,7 @@ func main() {
 		defer db.Close()
 	}
 
-	// 5. Repositories (infrastructure layer)
+	// 6. Repositories (infrastructure layer)
 	userRepo := supabase.NewUserRepo(db)
 	streamRepo := supabase.NewStreamRepo(db)
 	playlistRepo := supabase.NewPlaylistRepo(db)
@@ -88,7 +108,7 @@ func main() {
 	historyRepo := supabase.NewListenHistoryRepo(db)
 	recommendationRepo := supabase.NewRecommendationRepo(db)
 
-	// 6. Use Cases (business layer)
+	// 7. Use Cases (business layer)
 	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
 	streamUC := usecase.NewStreamUseCase(streamRepo, historyRepo)
 	playlistUC := usecase.NewPlaylistUseCase(playlistRepo)
@@ -96,7 +116,7 @@ func main() {
 	favoriteUC := usecase.NewFavoriteUseCase(favoriteRepo)
 	recommendationUC := usecase.NewRecommendationUseCase(recommendationRepo)
 
-	// 7. Handlers (presentation layer)
+	// 8. Handlers (presentation layer)
 	authH := handler.NewAuthHandler(authUC)
 	// Audio relay hub (goroutines + channels, no external dependency).
 	audioHub := streaming.NewHub()
@@ -117,10 +137,10 @@ func main() {
 	favoriteH := handler.NewFavoriteHandler(favoriteUC)
 	recommendationH := handler.NewRecommendationHandler(recommendationUC)
 
-	// 8. Router
+	// 9. Router
 	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
 
-	// 9. HTTP server with graceful shutdown.
+	// 10. HTTP server with graceful shutdown.
 	// ReadTimeout and WriteTimeout are 0 (disabled) to allow long-lived
 	// streaming connections (broadcaster Push + listener Audio).
 	srv := &http.Server{

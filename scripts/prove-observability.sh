@@ -25,14 +25,14 @@ start="$((now - 1800))"
 
 prometheus_json="$(curl --fail --silent --show-error --get \
   --user "${GRAFANA_PROMETHEUS_USERNAME}:${GRAFANA_PROMETHEUS_API_KEY}" \
-  --data-urlencode 'query=up{service="streampulse-api",env="production"}' \
+  --data-urlencode 'query=streampulse_api_request_duration_seconds_count{service="streampulse-api",env="production"}' \
   "${GRAFANA_PROMETHEUS_QUERY_URL%/}/api/v1/query")"
-prometheus_samples="$(jq -er '[.data.result[] | select(.value[1] == "1")] | length' <<<"$prometheus_json")"
+prometheus_samples="$(jq -er '[.data.result[] | select((.value[1] | tonumber) > 0)] | length' <<<"$prometheus_json")"
 (( prometheus_samples > 0 )) || {
-  echo "No healthy production Prometheus target found" >&2
+  echo "No directly exported production API metric found" >&2
   exit 1
 }
-jq '{status, resultType: .data.resultType, healthy_samples: [.data.result[] | select(.value[1] == "1") | {metric, timestamp: .value[0]}]}' \
+jq '{status, resultType: .data.resultType, matching_samples: [.data.result[] | select((.value[1] | tonumber) > 0) | {metric, timestamp: .value[0]}]}' \
   <<<"$prometheus_json" >"$evidence_dir/prometheus.json"
 
 loki_json="$(curl --fail --silent --show-error --get \
@@ -70,7 +70,7 @@ cat >"$evidence_dir/summary.md" <<EOF
 # Production observability evidence
 
 - Timestamp (UTC): $(date -u +'%Y-%m-%dT%H:%M:%SZ')
-- Prometheus healthy production samples: ${prometheus_samples}
+- Prometheus production API metric samples: ${prometheus_samples}
 - Loki production entries in the last 30 minutes: ${loki_entries}
 - Tempo production traces in the last 30 minutes: ${tempo_traces}
 

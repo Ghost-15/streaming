@@ -22,6 +22,7 @@ type Config struct {
 	OTELEndpoint          string
 	OTELServiceNamespace  string
 	OTELDeploymentEnv     string
+	OTELMetricsEnabled    bool
 	CORSOrigins           string
 	MetricsBearerToken    string
 	MetricsBearerFile     string
@@ -94,6 +95,11 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	appEnv := getEnv("APP_ENV", "development")
+	otelMetricsEnabled, err := boolEnv("OTEL_METRICS_ENABLED", appEnv == "production")
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := &Config{
 		Port:                  getEnv("PORT", "8080"),
@@ -103,10 +109,11 @@ func Load() (*Config, error) {
 		OTELEndpoint:          getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 		OTELServiceNamespace:  getEnv("OTEL_SERVICE_NAMESPACE", "my-application-group"),
 		OTELDeploymentEnv:     getEnv("OTEL_DEPLOYMENT_ENVIRONMENT", "production"),
+		OTELMetricsEnabled:    otelMetricsEnabled,
 		CORSOrigins:           os.Getenv("CORS_ALLOWED_ORIGINS"),
 		MetricsBearerToken:    metricsBearerToken,
 		MetricsBearerFile:     metricsBearerFile,
-		Env:                   getEnv("APP_ENV", "development"),
+		Env:                   appEnv,
 		HTTPReadHeaderTimeout: httpReadHeaderTimeout,
 		HTTPIdleTimeout:       httpIdleTimeout,
 		ShutdownTimeout:       shutdownTimeout,

@@ -19,23 +19,32 @@ montrer au jury que l'observabilite fait partie du projet.
 
 ## Collecte de production sur Render
 
-L'API envoie directement les logs a Loki et les traces OTLP a Tempo. Les
-metriques Prometheus utilisent un modele pull : il faut donc un second service,
-et pas seulement importer le dashboard. Creer un Background Worker Render avec :
+Un Background Worker Render n'est pas necessaire. Le Web Service API exporte
+directement les metriques et les traces en OTLP vers Grafana Cloud, tandis que
+les logs partent directement vers Loki. `/metrics` reste disponible pour la
+stack Prometheus locale.
 
-- Dockerfile : `go/infra/alloy/Dockerfile` (contexte de build : racine du depot) ;
-- `STREAMPULSE_API_HOST` : hostname Render de l'API, sans `https://` ;
-- `METRICS_BEARER_TOKEN` : meme valeur que sur le Web Service API ;
-- `GRAFANA_CLOUD_PROMETHEUS_URL` : endpoint remote write Grafana Cloud ;
-- `GRAFANA_CLOUD_PROMETHEUS_USERNAME` : identifiant de l'instance Metrics ;
-- `GRAFANA_CLOUD_API_KEY` : token limite a l'ecriture de metriques.
+Dans **Render > Web Service API > Environment**, configurer les valeurs donnees
+par la tuile de connexion OpenTelemetry de Grafana Cloud :
 
-Alloy scrape `https://<host>/metrics` toutes les 15 secondes et ajoute les
-labels `service="streampulse-api"` et `env="production"`. Le job de deploiement
-attend ensuite un cycle d'export et execute `scripts/prove-observability.sh`.
-Il echoue si l'un des trois constats manque : cible Prometheus `up == 1`, log
-Loki de production, trace Tempo de production. L'artefact conserve uniquement
-les labels, timestamps et identifiants de trace, jamais le contenu des logs.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` : endpoint OTLP se terminant normalement par
+  `/otlp` ;
+- `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` ;
+- `OTEL_EXPORTER_OTLP_HEADERS` : en-tete `Authorization` fourni par Grafana ;
+- `OTEL_DEPLOYMENT_ENVIRONMENT=production` ;
+- `OTEL_SERVICE_NAMESPACE=streampulse` (ou le namespace retenu).
+
+Le token associe a l'en-tete OTLP doit avoir les scopes `metrics:write` et
+`traces:write`. `OTEL_METRICS_ENABLED` vaut automatiquement `true` lorsque
+`APP_ENV=production`; il peut etre fixe explicitement a `true` sur Render pour
+rendre l'intention visible.
+
+L'API exporte les metriques toutes les 15 secondes avec les labels
+`service="streampulse-api"` et `env="production"`. Le job de deploiement attend
+un cycle d'export et execute `scripts/prove-observability.sh`. Il echoue si l'un
+des trois constats manque : metrique HTTP StreamPulse, log Loki de production,
+trace Tempo de production. L'artefact conserve uniquement les labels,
+timestamps et identifiants de trace, jamais le contenu des logs.
 
 Variables GitHub requises pour la lecture de preuve :
 
@@ -86,6 +95,8 @@ Panels techniques :
 
 L'API expose les metriques Prometheus sur `/metrics`, protege par bearer token
 si `METRICS_BEARER_TOKEN` ou `METRICS_BEARER_TOKEN_FILE` est configure.
+En production, les memes mesures sont aussi envoyees directement en OTLP a
+Grafana Cloud, sans service Alloy payant.
 
 | Metrique | Type | Usage |
 | --- | --- | --- |

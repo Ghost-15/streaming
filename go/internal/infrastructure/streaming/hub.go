@@ -158,9 +158,9 @@ func (h *Hub) RegisterWithInit(client *Client) ([]byte, error) {
 	}
 
 	h.streams[client.StreamID][key] = client
-	telemetry.ListenersPerStream.WithLabelValues(client.StreamID).Inc()
+	telemetry.IncrementListeners(client.StreamID)
 	if h.userConnections[client.UserID] == 0 {
-		telemetry.OnlineUsers.Inc()
+		telemetry.IncrementOnlineUsers()
 	}
 	h.userConnections[client.UserID]++
 	return append([]byte(nil), h.initSegments[client.StreamID]...), nil
@@ -270,11 +270,11 @@ func (h *Hub) broadcastLocked(streamID string, data []byte) (delivered, dropped 
 	if len(listeners) == 0 {
 		delete(h.streams, streamID)
 	}
-	telemetry.AudioIngestBytesTotal.WithLabelValues(streamID).Add(float64(len(data)))
-	telemetry.AudioChunksTotal.WithLabelValues(streamID, "ingest").Inc()
-	telemetry.AudioChunkSizeBytes.Observe(float64(len(data)))
+	telemetry.AddAudioIngestBytes(streamID, len(data))
+	telemetry.RecordAudioChunk(streamID, "ingest")
+	telemetry.ObserveAudioChunkSize(len(data))
 	if dropped > 0 {
-		telemetry.AudioDroppedChunksTotal.WithLabelValues(streamID).Add(float64(dropped))
+		telemetry.AddDroppedAudioChunks(streamID, dropped)
 	}
 	return delivered, dropped
 }
@@ -305,7 +305,7 @@ func (h *Hub) OpenPublisher(streamID, contentType string) (context.Context, erro
 	}
 	delete(h.initSegments, streamID)
 	delete(h.initCandidates, streamID)
-	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
+	telemetry.SetAudioBroadcaster(streamID, true)
 	return ctx, nil
 }
 
@@ -336,7 +336,7 @@ func (h *Hub) OpenOwnedPublisher(
 	}
 	delete(h.initSegments, streamID)
 	delete(h.initCandidates, streamID)
-	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
+	telemetry.SetAudioBroadcaster(streamID, true)
 	return ctx, nil
 }
 
@@ -388,7 +388,7 @@ func (h *Hub) OpenOwnedChunkPublisher(streamID, broadcasterID, sessionID, conten
 	}
 	delete(h.initSegments, streamID)
 	delete(h.initCandidates, streamID)
-	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(1)
+	telemetry.SetAudioBroadcaster(streamID, true)
 	return nil
 }
 
@@ -447,8 +447,8 @@ func (h *Hub) ClosePublisher(streamID string) {
 		return
 	}
 	pub.cancel()
-	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(0)
-	telemetry.BroadcasterSessionDuration.Observe(time.Since(pub.startedAt).Seconds())
+	telemetry.SetAudioBroadcaster(streamID, false)
+	telemetry.ObserveBroadcasterSessionDuration(time.Since(pub.startedAt).Seconds())
 }
 
 // CloseOwnedPublisher closes only the continuous publisher belonging to the
@@ -544,8 +544,8 @@ func (h *Hub) finishPublisher(streamID string, pub publisher, exists bool) {
 		return
 	}
 	pub.cancel()
-	telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(0)
-	telemetry.BroadcasterSessionDuration.Observe(time.Since(pub.startedAt).Seconds())
+	telemetry.SetAudioBroadcaster(streamID, false)
+	telemetry.ObserveBroadcasterSessionDuration(time.Since(pub.startedAt).Seconds())
 }
 
 // Shutdown releases every long-lived connection and rejects new ones.
@@ -568,23 +568,23 @@ func (h *Hub) Shutdown() {
 
 	for streamID, pub := range publishers {
 		pub.cancel()
-		telemetry.AudioBroadcasters.WithLabelValues(streamID).Set(0)
-		telemetry.BroadcasterSessionDuration.Observe(time.Since(pub.startedAt).Seconds())
+		telemetry.SetAudioBroadcaster(streamID, false)
+		telemetry.ObserveBroadcasterSessionDuration(time.Since(pub.startedAt).Seconds())
 	}
 }
 
 func (h *Hub) disconnectLocked(client *Client) {
 	close(client.Send)
-	telemetry.ListenersPerStream.WithLabelValues(client.StreamID).Dec()
-	telemetry.ListenerDisconnectTotal.Inc()
+	telemetry.DecrementListeners(client.StreamID)
+	telemetry.RecordListenerDisconnect()
 	if !client.joinedAt.IsZero() {
-		telemetry.ListenerSessionDuration.Observe(time.Since(client.joinedAt).Seconds())
+		telemetry.ObserveListenerSessionDuration(time.Since(client.joinedAt).Seconds())
 	}
 	if h.userConnections[client.UserID] > 0 {
 		h.userConnections[client.UserID]--
 		if h.userConnections[client.UserID] == 0 {
 			delete(h.userConnections, client.UserID)
-			telemetry.OnlineUsers.Dec()
+			telemetry.DecrementOnlineUsers()
 		}
 	}
 }
