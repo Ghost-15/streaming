@@ -22,7 +22,10 @@ class MiniPlayer extends StatelessWidget {
     final stream = audio.currentStream!;
     final accent = _streamAccent(stream.id);
 
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: 'Ouvrir le lecteur : ${stream.title}',
+      child: GestureDetector(
       onTap: () => _openFullPlayer(context),
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -119,6 +122,9 @@ class MiniPlayer extends StatelessWidget {
                       )
                     else
                       IconButton(
+                        tooltip: audio.isPlaying || audio.isBuffering
+                            ? 'Pause'
+                            : 'Lecture',
                         icon: Icon(
                           audio.isPlaying || audio.isBuffering
                               ? Icons.pause_rounded
@@ -138,6 +144,7 @@ class MiniPlayer extends StatelessWidget {
                         },
                       ),
                     IconButton(
+                      tooltip: 'Fermer le lecteur',
                       icon: const Icon(Icons.close_rounded, size: 18),
                       color: cs.onSurfaceVariant,
                       onPressed: () => context.read<AudioNotifier>().stop(),
@@ -149,6 +156,7 @@ class MiniPlayer extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -332,6 +340,9 @@ class _FullPlayerSheet extends StatelessWidget {
                       Row(
                         children: [
                           _ActionBtn(
+                            label: isFavorited
+                                ? 'Retirer des favoris'
+                                : 'Ajouter aux favoris',
                             icon: isFavorited
                                 ? Icons.favorite_rounded
                                 : Icons.favorite_border_rounded,
@@ -345,6 +356,7 @@ class _FullPlayerSheet extends StatelessWidget {
                                   ),
                           ),
                           _ActionBtn(
+                            label: 'Ajouter à une playlist',
                             icon: Icons.playlist_add_rounded,
                             color: cs.onSurfaceVariant,
                             onTap: () =>
@@ -412,19 +424,25 @@ class _ActionBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final String label;
   const _ActionBtn({
     required this.icon,
     required this.color,
     required this.onTap,
+    required this.label,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(icon, color: color, size: 22),
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, color: color, size: 22),
+        ),
       ),
     );
   }
