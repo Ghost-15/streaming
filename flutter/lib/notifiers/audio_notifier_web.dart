@@ -47,6 +47,8 @@ class AudioNotifier extends ChangeNotifier {
   String? _objectUrl;
   String? _joinedStreamId;
   JSFunction? _pageHideHandler;
+  JSFunction? _onlineHandler;
+  JSFunction? _offlineHandler;
   bool _responseEnded = false;
   bool _tearingDown = false;
   bool _disposed = false;
@@ -68,6 +70,25 @@ class AudioNotifier extends ChangeNotifier {
     : _repository = repository ?? const StreamRepository() {
     _pageHideHandler = ((web.Event _) => _leaveJoinedStream()).toJS;
     web.window.addEventListener('pagehide', _pageHideHandler);
+
+    _onlineHandler = ((web.Event _) {
+      debugPrint('[Listener] network online');
+      final stream = _currentStream;
+      if (stream == null || _userPaused || _disposed) return;
+      if (_socket != null) return;
+      if (_playbackState == AudioPlaybackState.error) return;
+      _reconnectAttempt = 0;
+      unawaited(playStream(stream));
+    }).toJS;
+    web.window.addEventListener('online', _onlineHandler);
+
+    _offlineHandler = ((web.Event _) {
+      debugPrint('[Listener] network offline');
+      if (_currentStream != null && !_userPaused && !_disposed) {
+        _setState(AudioPlaybackState.buffering);
+      }
+    }).toJS;
+    web.window.addEventListener('offline', _offlineHandler);
   }
 
   AudioPlaybackState get playbackState => _playbackState;
@@ -811,6 +832,16 @@ class AudioNotifier extends ChangeNotifier {
     if (pageHideHandler != null) {
       web.window.removeEventListener('pagehide', pageHideHandler);
       _pageHideHandler = null;
+    }
+    final onlineHandler = _onlineHandler;
+    if (onlineHandler != null) {
+      web.window.removeEventListener('online', onlineHandler);
+      _onlineHandler = null;
+    }
+    final offlineHandler = _offlineHandler;
+    if (offlineHandler != null) {
+      web.window.removeEventListener('offline', offlineHandler);
+      _offlineHandler = null;
     }
     ++_version;
     _stopElement();
