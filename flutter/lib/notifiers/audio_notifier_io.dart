@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:audio_session/audio_session.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -22,6 +24,14 @@ enum AudioPlaybackState { idle, loading, buffering, playing, paused, error }
 /// pausing when headphones are unplugged).
 class AudioNotifier extends ChangeNotifier {
   static const _duckVolumeFactor = 0.3;
+  static const _maxReconnectAttempts = 8;
+  static const _reconnectBackoff = <Duration>[
+    Duration(milliseconds: 500),
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+  ];
 
   final StreamRepository _repository;
   // handleInterruptions is disabled so this notifier fully owns audio-focus
@@ -30,6 +40,10 @@ class AudioNotifier extends ChangeNotifier {
   StreamSubscription<PlayerState>? _stateSub;
   StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
   StreamSubscription<void>? _noisySub;
+  StreamSubscription<PlaybackEvent>? _eventSub;
+  StreamSubscription<List<ConnectivityResult>>? _connSub;
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
 
   AudioPlaybackState _playbackState = AudioPlaybackState.idle;
   double _volume = 1.0;
@@ -44,6 +58,10 @@ class AudioNotifier extends ChangeNotifier {
     : _repository = repository ?? const StreamRepository() {
     unawaited(_player.setVolume(_volume));
     _stateSub = _player.playerStateStream.listen(_onPlayerState);
+    // A dropped live connection surfaces as a playback-event error rather than a
+    // state change, so recovery is driven from here.
+    _eventSub = _player.playbackEventStream.listen((_) {}, onError: _onPlaybackError);
+    _connSub = Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
     unawaited(_configureAudioSession());
   }
 
@@ -113,6 +131,7 @@ class AudioNotifier extends ChangeNotifier {
               : AudioPlaybackState.buffering,
         );
       case ProcessingState.ready:
+        if (state.playing) _reconnectAttempt = 0;
         _setState(
           state.playing
               ? AudioPlaybackState.playing
@@ -121,6 +140,53 @@ class AudioNotifier extends ChangeNotifier {
       case ProcessingState.completed:
         _finish();
     }
+  }
+
+  void _onPlaybackError(Object error, StackTrace stack) {
+    if (_disposed || _userPaused || _currentStream == null) return;
+    debugPrint('[Listener] playback error: $error');
+    _scheduleReconnect();
+  }
+
+  void _onConnectivityChanged(List<ConnectivityResult> results) {
+    if (_disposed) return;
+    final online = results.any((r) => r != ConnectivityResult.none);
+    final stream = _currentStream;
+    if (stream == null || _userPaused) return;
+    if (!online) {
+      _setState(AudioPlaybackState.buffering);
+      return;
+    }
+    // Network came back (e.g. Wi-Fi ↔ mobile): if playback is degraded, retry
+    // right away from a fresh live edge.
+    if (hasError || isBuffering) {
+      _reconnectAttempt = 0;
+      _scheduleReconnect(immediate: true);
+    }
+  }
+
+  void _scheduleReconnect({bool immediate = false}) {
+    final stream = _currentStream;
+    if (stream == null || _userPaused || _disposed) return;
+    if (_reconnectTimer?.isActive ?? false) return;
+    if (_reconnectAttempt >= _maxReconnectAttempts) {
+      _fail('Connexion au direct perdue');
+      return;
+    }
+    _setState(AudioPlaybackState.buffering);
+    final delay = immediate
+        ? Duration.zero
+        : _reconnectBackoff[math.min(
+            _reconnectAttempt,
+            _reconnectBackoff.length - 1,
+          )];
+    _reconnectAttempt++;
+    _reconnectTimer = Timer(delay, () {
+      _reconnectTimer = null;
+      final current = _currentStream;
+      if (current == null || _userPaused || _disposed) return;
+      unawaited(playStream(current));
+    });
   }
 
   // On mobile the source carries a MediaItem so the OS shows lock-screen and
@@ -146,6 +212,8 @@ class AudioNotifier extends ChangeNotifier {
   }
 
   Future<void> playStream(StreamModel stream) async {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _userPaused = false;
     _interruptionPaused = false;
     _currentStream = stream;
@@ -203,6 +271,9 @@ class AudioNotifier extends ChangeNotifier {
   Future<void> stop() async {
     _userPaused = false;
     _interruptionPaused = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempt = 0;
     await _player.stop();
     _leaveJoinedStream();
     _currentStream = null;
@@ -246,10 +317,13 @@ class AudioNotifier extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _reconnectTimer?.cancel();
     _leaveJoinedStream();
     unawaited(_stateSub?.cancel());
     unawaited(_interruptionSub?.cancel());
     unawaited(_noisySub?.cancel());
+    unawaited(_eventSub?.cancel());
+    unawaited(_connSub?.cancel());
     unawaited(_player.dispose());
     super.dispose();
   }
