@@ -2,6 +2,7 @@ package entity_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Ghost-15/streaming/internal/entity"
 )
@@ -61,6 +62,16 @@ func TestUser_HasRole(t *testing.T) {
 	}
 	if u.HasRole() {
 		t.Error("expected HasRole to return false when no roles are provided")
+	}
+}
+
+func TestUser_IsSuspended(t *testing.T) {
+	if (&entity.User{}).IsSuspended() {
+		t.Error("user without SuspendedAt should not be suspended")
+	}
+	now := time.Now()
+	if !(&entity.User{SuspendedAt: &now}).IsSuspended() {
+		t.Error("user with SuspendedAt should be suspended")
 	}
 }
 
