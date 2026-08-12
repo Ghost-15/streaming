@@ -39,10 +39,13 @@ class _CompactCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final accent = _streamAccent(stream.id);
 
-    return GestureDetector(
-      onTap: onPlay,
-      child: SizedBox(
-        width: 148,
+    return Semantics(
+      button: true,
+      label: 'Écouter ${stream.title} par ${stream.broadcasterName}',
+      child: GestureDetector(
+        onTap: onPlay,
+        child: SizedBox(
+          width: 148,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -151,6 +154,7 @@ class _CompactCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -169,9 +173,13 @@ class _RowCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final accent = _streamAccent(stream.id);
 
-    return GestureDetector(
-      onTap: onTap ?? onPlay,
-      child: Container(
+    return Semantics(
+      label: '${stream.title} par ${stream.broadcasterName}'
+          '${stream.isLive ? ", en direct" : ""}'
+          ', ${stream.listenerCount} auditeur${stream.listenerCount != 1 ? "s" : ""}',
+      child: GestureDetector(
+        onTap: onTap ?? onPlay,
+        child: Container(
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(18),
@@ -274,26 +282,31 @@ class _RowCard extends StatelessWidget {
 
               // Play button — circle with subtle shadow
               const SizedBox(width: 8),
-              GestureDetector(
-                onTap: onPlay,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.primary.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.play_arrow_rounded,
-                    color: cs.onPrimary,
-                    size: 22,
+              Semantics(
+                button: true,
+                label: 'Écouter ${stream.title}',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: onPlay,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.primary.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      color: cs.onPrimary,
+                      size: 22,
+                    ),
                   ),
                 ),
               ),
@@ -301,6 +314,7 @@ class _RowCard extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -313,26 +327,29 @@ class _LiveBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: cs.error,
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(
-            color: cs.error.withValues(alpha: 0.35),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
+    return Semantics(
+      label: 'En direct',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: cs.error,
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(
+              color: cs.error.withValues(alpha: 0.35),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Text(
+          'LIVE',
+          style: TextStyle(
+            color: cs.onError,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
           ),
-        ],
-      ),
-      child: Text(
-        'LIVE',
-        style: TextStyle(
-          color: cs.onError,
-          fontSize: 9,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.8,
         ),
       ),
     );
@@ -349,20 +366,23 @@ class _ListenerCount extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final color = light ? Colors.white70 : cs.onSurfaceVariant;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.headphones_rounded, size: 12, color: color),
-        const SizedBox(width: 3),
-        Text(
-          '$count',
-          style: TextStyle(
-            fontSize: 11,
-            color: color,
-            fontWeight: FontWeight.w500,
+    return Semantics(
+      label: '$count auditeur${count != 1 ? "s" : ""}',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.headphones_rounded, size: 12, color: color),
+          const SizedBox(width: 3),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -89,6 +89,21 @@ class StreamRepository extends ModelRepository<StreamModel> {
     );
   }
 
+  Future<List<StreamModel>> getRecommendations() {
+    return ApiService().request(
+      uri: 'recommendations',
+      parser: (res) {
+        final list = res is List ? res : (res['data'] as List);
+        return list.map<StreamModel>((e) {
+          final stream = StreamModel.fromJson(e as Map<String, dynamic>);
+          return stream.copyWith(
+            streamUrl: '${AppConfig.apiBaseUrl}/streams/${stream.id}/audio',
+          );
+        }).toList();
+      },
+    );
+  }
+
   Future<void> pushChunk(
     String id,
     String sessionId,

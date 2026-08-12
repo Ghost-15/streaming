@@ -9,6 +9,7 @@ import '../api/models/track_model.dart';
 import '../notifiers/audio_notifier.dart';
 import '../notifiers/favorite_notifier.dart';
 import '../notifiers/playlist_notifier.dart';
+import '../notifiers/recommendation_notifier.dart';
 import '../notifiers/session_notifier.dart';
 import '../notifiers/stream_notifier.dart';
 import '../widgets/stream_card.dart';
@@ -29,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (context.read<SessionNotifier>().isAuthenticated) {
         context.read<PlaylistNotifier>().load();
         context.read<FavoriteNotifier>().load();
+        context.read<RecommendationNotifier>().load();
       }
     });
   }
@@ -52,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (isAuth) {
       context.read<PlaylistNotifier>().load();
       context.read<FavoriteNotifier>().load();
+      context.read<RecommendationNotifier>().reload();
     }
   }
 
@@ -61,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final streams = context.watch<StreamNotifier>();
     final playlists = context.watch<PlaylistNotifier>();
     final favorites = context.watch<FavoriteNotifier>();
+    final recos = context.watch<RecommendationNotifier>();
 
     return Scaffold(
       body: RefreshIndicator(
@@ -84,6 +88,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: playlists.playlists.length.clamp(0, 4),
                   itemBuilder: (_, i) =>
                       _PlaylistCard(playlist: playlists.playlists[i]),
+                ),
+              ),
+            ],
+
+            // ── Recommandations (connecté) ───────────────────────────────
+            if (session.isAuthenticated && recos.hasRecommendations) ...[
+              const _SectionHeader('Pour toi'),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 210,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: recos.recommendations.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 14),
+                    itemBuilder: (_, i) => StreamCard(
+                      stream: recos.recommendations[i],
+                      compact: true,
+                      onPlay: () => _play(context, recos.recommendations[i]),
+                    ),
+                  ),
                 ),
               ),
             ],
