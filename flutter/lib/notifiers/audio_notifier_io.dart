@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import '../api/models/stream_model.dart';
 import '../api/repositories/stream_repository.dart';
@@ -11,14 +14,22 @@ enum AudioPlaybackState { idle, loading, buffering, playing, paused, error }
 /// Mobile/desktop (dart:io) live audio listener backed by just_audio.
 ///
 /// The public surface mirrors the Web implementation (`audio_notifier_web.dart`)
-/// exactly so the UI and providers stay platform-agnostic. just_audio handles
-/// the network buffering of the live `GET /streams/:id/audio` response, which is
-/// natively decodable by ExoPlayer (Android). Background playback, system
-/// controls and audio-focus interruptions are wired in a later step.
+/// exactly so the UI and providers stay platform-agnostic. just_audio buffers
+/// the live `GET /streams/:id/audio` response (natively decodable by ExoPlayer
+/// on Android). A `MediaItem` tag drives the lock-screen / notification controls
+/// and background playback, while `audio_session` handles OS audio-focus
+/// interruptions (ducking on a transient sound, pausing on a phone call, and
+/// pausing when headphones are unplugged).
 class AudioNotifier extends ChangeNotifier {
+  static const _duckVolumeFactor = 0.3;
+
   final StreamRepository _repository;
-  final AudioPlayer _player = AudioPlayer();
+  // handleInterruptions is disabled so this notifier fully owns audio-focus
+  // behaviour, including volume ducking which just_audio does not do on its own.
+  final AudioPlayer _player = AudioPlayer(handleInterruptions: false);
   StreamSubscription<PlayerState>? _stateSub;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
+  StreamSubscription<void>? _noisySub;
 
   AudioPlaybackState _playbackState = AudioPlaybackState.idle;
   double _volume = 1.0;
@@ -26,12 +37,14 @@ class AudioNotifier extends ChangeNotifier {
   String _errorMessage = '';
   String? _joinedStreamId;
   bool _userPaused = false;
+  bool _interruptionPaused = false;
   bool _disposed = false;
 
   AudioNotifier({StreamRepository? repository})
     : _repository = repository ?? const StreamRepository() {
     unawaited(_player.setVolume(_volume));
     _stateSub = _player.playerStateStream.listen(_onPlayerState);
+    unawaited(_configureAudioSession());
   }
 
   AudioPlaybackState get playbackState => _playbackState;
@@ -44,6 +57,45 @@ class AudioNotifier extends ChangeNotifier {
   bool get isLoading => _playbackState == AudioPlaybackState.loading;
   bool get isBuffering => _playbackState == AudioPlaybackState.buffering;
   bool get hasError => _playbackState == AudioPlaybackState.error;
+
+  Future<void> _configureAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      _interruptionSub = session.interruptionEventStream.listen(_onInterruption);
+      // Headphones unplugged / Bluetooth disconnected: pause like a music app.
+      _noisySub = session.becomingNoisyEventStream.listen((_) => pause());
+    } catch (_) {
+      // Audio focus management is best-effort; playback still works without it.
+    }
+  }
+
+  void _onInterruption(AudioInterruptionEvent event) {
+    if (_disposed) return;
+    if (event.begin) {
+      switch (event.type) {
+        case AudioInterruptionType.duck:
+          // A short system sound (notification, GPS): lower the volume.
+          unawaited(_player.setVolume(_volume * _duckVolumeFactor));
+        case AudioInterruptionType.pause:
+        case AudioInterruptionType.unknown:
+          // A phone call or another app takes exclusive focus: pause.
+          _interruptionPaused = isPlaying || isBuffering || isLoading;
+          unawaited(_player.pause());
+          if (_interruptionPaused) _setState(AudioPlaybackState.paused);
+      }
+    } else {
+      switch (event.type) {
+        case AudioInterruptionType.duck:
+          unawaited(_player.setVolume(_volume));
+        case AudioInterruptionType.pause:
+          if (_interruptionPaused && !_userPaused) unawaited(resume());
+          _interruptionPaused = false;
+        case AudioInterruptionType.unknown:
+          _interruptionPaused = false;
+      }
+    }
+  }
 
   void _onPlayerState(PlayerState state) {
     if (_disposed || hasError) return;
@@ -71,15 +123,38 @@ class AudioNotifier extends ChangeNotifier {
     }
   }
 
+  // On mobile the source carries a MediaItem so the OS shows lock-screen and
+  // notification controls; other io targets (desktop) play without it.
+  Future<void> _loadLiveSource(StreamModel stream) {
+    final uri = Uri.parse(stream.streamUrl);
+    if (Platform.isAndroid || Platform.isIOS) {
+      return _player.setAudioSource(
+        AudioSource.uri(
+          uri,
+          tag: MediaItem(
+            id: stream.id,
+            title: stream.title,
+            artist: stream.broadcasterName.isEmpty
+                ? 'StreamPulse'
+                : stream.broadcasterName,
+            album: 'Direct StreamPulse',
+          ),
+        ),
+      );
+    }
+    return _player.setAudioSource(AudioSource.uri(uri));
+  }
+
   Future<void> playStream(StreamModel stream) async {
     _userPaused = false;
+    _interruptionPaused = false;
     _currentStream = stream;
     _errorMessage = '';
     _setState(AudioPlaybackState.loading);
 
     unawaited(_joinStream(stream.id));
     try {
-      await _player.setUrl(stream.streamUrl);
+      await _loadLiveSource(stream);
       await _player.play();
     } catch (e) {
       _fail('Impossible de lire le direct: $e');
@@ -118,7 +193,7 @@ class AudioNotifier extends ChangeNotifier {
     // playback restarts at the current live edge.
     _setState(AudioPlaybackState.loading);
     try {
-      await _player.setUrl(stream.streamUrl);
+      await _loadLiveSource(stream);
       await _player.play();
     } catch (e) {
       _fail('Lecture impossible: $e');
@@ -127,6 +202,7 @@ class AudioNotifier extends ChangeNotifier {
 
   Future<void> stop() async {
     _userPaused = false;
+    _interruptionPaused = false;
     await _player.stop();
     _leaveJoinedStream();
     _currentStream = null;
@@ -172,6 +248,8 @@ class AudioNotifier extends ChangeNotifier {
     _disposed = true;
     _leaveJoinedStream();
     unawaited(_stateSub?.cancel());
+    unawaited(_interruptionSub?.cancel());
+    unawaited(_noisySub?.cancel());
     unawaited(_player.dispose());
     super.dispose();
   }
