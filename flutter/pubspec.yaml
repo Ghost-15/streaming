@@ -22,7 +22,6 @@ dependencies:
   just_audio_background: ^0.0.1-beta.17
   audio_session: ^0.2.4
   connectivity_plus: ^7.3.1
-  permission_handler: ^13.0.1
 
 dev_dependencies:
   flutter_test:
