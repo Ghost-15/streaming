@@ -1,5 +1,5 @@
 name: streampulse
-description: Client Flutter Web de diffusion audio en direct StreamPulse.
+description: Client Flutter multiplateforme (Web, iOS, Android) de diffusion audio en direct StreamPulse.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -18,6 +18,10 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   google_fonts: ^6.2.1
   web: ^1.1.1
+  just_audio: ^0.10.6
+  just_audio_background: ^0.0.1-beta.17
+  audio_session: ^0.2.4
+  connectivity_plus: ^7.3.1
 
 dev_dependencies:
   flutter_test:

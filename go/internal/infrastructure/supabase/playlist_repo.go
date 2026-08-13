@@ -59,10 +59,13 @@ func (r *supabasePlaylistRepo) FindByID(ctx context.Context, id string) (playlis
 
 func (r *supabasePlaylistRepo) listTracks(ctx context.Context, playlistID string) ([]entity.Track, error) {
 	const q = `
-		SELECT t.id, t.title, t.artist, t.duration, t.file_url, t.uploaded_by, t.created_at,
+		SELECT s.id, s.title,
+		       COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), '') AS artist,
+		       0 AS duration, '' AS file_url, s.broadcaster_id AS uploaded_by, s.started_at,
 		       pt.position, pt.added_at
 		FROM playlist_tracks pt
-		JOIN tracks t ON t.id = pt.track_id
+		JOIN streams s ON s.id = pt.track_id
+		LEFT JOIN users u ON u.id = s.broadcaster_id
 		WHERE pt.playlist_id = $1
 		ORDER BY pt.position ASC`
 	rows, err := r.db.Query(ctx, q, playlistID)
