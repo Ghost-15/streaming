@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:provider/provider.dart';
@@ -9,17 +10,24 @@ import 'api/repositories/stream_repository.dart';
 import 'config/router.dart';
 import 'config/theme.dart';
 import 'services/api_service.dart';
+import 'services/audio_bootstrap.dart';
 import 'notifiers/admin_notifier.dart';
 import 'notifiers/audio_notifier.dart';
 import 'notifiers/broadcaster_notifier.dart';
 import 'notifiers/favorite_notifier.dart';
 import 'notifiers/playlist_notifier.dart';
+import 'notifiers/recommendation_notifier.dart';
 import 'notifiers/session_notifier.dart';
 import 'notifiers/stream_notifier.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  usePathUrlStrategy();
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  } else {
+    // Enable background playback + lock-screen controls on iOS/Android.
+    await initAudioBackground();
+  }
 
   final sessionNotifier = SessionNotifier();
   try {
@@ -47,6 +55,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => FavoriteNotifier(const FavoriteRepository()),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => RecommendationNotifier(const StreamRepository()),
         ),
       ],
       child: StreamPulseApp(router: router),

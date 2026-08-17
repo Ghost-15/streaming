@@ -11,6 +11,7 @@ import 'package:streampulse/notifiers/audio_notifier.dart';
 import 'package:streampulse/notifiers/broadcaster_notifier.dart';
 import 'package:streampulse/notifiers/favorite_notifier.dart';
 import 'package:streampulse/notifiers/playlist_notifier.dart';
+import 'package:streampulse/notifiers/recommendation_notifier.dart';
 import 'package:streampulse/notifiers/session_notifier.dart';
 import 'package:streampulse/notifiers/stream_notifier.dart';
 
@@ -36,6 +37,9 @@ void main() {
           ),
           ChangeNotifierProvider(
             create: (_) => FavoriteNotifier(const FavoriteRepository()),
+          ),
+          ChangeNotifierProvider(
+            create: (_) => RecommendationNotifier(const StreamRepository()),
           ),
         ],
         child: StreamPulseApp(router: buildRouter(session)),

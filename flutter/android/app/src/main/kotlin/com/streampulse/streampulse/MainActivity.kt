@@ -1,5 +1,7 @@
 package com.streampulse.streampulse
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// just_audio_background requires the host Activity to be an AudioServiceActivity
+// so the background media session binds to the correct FlutterEngine.
+class MainActivity : AudioServiceActivity()

@@ -71,9 +71,12 @@ func (r *supabaseFavoriteRepo) ListByUser(ctx context.Context, userID string) ([
 	}
 
 	const q = `
-		SELECT t.id, t.title, t.artist, t.duration, t.file_url, t.uploaded_by, t.created_at
+		SELECT s.id, s.title,
+		       COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), '') AS artist,
+		       0 AS duration, '' AS file_url, s.broadcaster_id AS uploaded_by, f.created_at
 		FROM favorites f
-		JOIN tracks t ON t.id = f.track_id
+		JOIN streams s ON s.id = f.track_id
+		LEFT JOIN users u ON u.id = s.broadcaster_id
 		WHERE f.user_id = $1
 		ORDER BY f.created_at DESC`
 	rows, err := r.db.Query(ctx, q, userID)
