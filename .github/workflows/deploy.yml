@@ -6,6 +6,10 @@ on:
       - main
     tags:
       - "v*"
+    paths-ignore:
+      - "evidence/**"
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
 
 permissions:
