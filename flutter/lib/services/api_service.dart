@@ -19,6 +19,11 @@ class ApiService {
   // Called on HTTP 401 (except when notifyOnUnauthorized is false).
   static void Function()? onUnauthorized;
 
+  // Called on HTTP 401 before giving up. Returns true when a new access token
+  // was obtained, in which case the request is replayed once. Set by
+  // SessionNotifier so a long listening session survives access token expiry.
+  static Future<bool> Function()? onRefreshNeeded;
+
   final client = http.Client();
   final baseUrl = AppConfig.apiBaseUrl;
 
@@ -31,6 +36,7 @@ class ApiService {
     Map<String, String> headers = const {},
     T Function(dynamic)? parser,
     bool notifyOnUnauthorized = true,
+    bool allowRefreshRetry = true,
   }) async {
     Uri url = Uri.parse('$baseUrl/$uri');
 
@@ -42,44 +48,49 @@ class ApiService {
       url = url.replace(queryParameters: queryParams);
     }
 
-    final String? token = await StorageService.get(StorageKey.token);
-
     if (kDebugMode) {
       print('${httpMethod.name.toUpperCase()} : $url');
     }
 
-    final requestHeaders = {
-      ...headers,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-
     final String? body = data != null ? jsonEncode(data) : null;
-    http.Response response;
 
-    try {
-      switch (httpMethod) {
-        case HttpMethod.post:
-          response = await client.post(
-            url,
-            body: body,
-            headers: requestHeaders,
-          );
-          break;
-        case HttpMethod.put:
-          response = await client.put(url, body: body, headers: requestHeaders);
-          break;
-        case HttpMethod.delete:
-          response = await client.delete(url, headers: requestHeaders);
-          break;
-        default:
-          response = await client.get(url, headers: requestHeaders);
+    // Reads the current access token on every attempt, so the replay that
+    // follows a refresh picks up the renewed one.
+    Future<http.Response> send() async {
+      final String? token = await StorageService.get(StorageKey.token);
+      final requestHeaders = {
+        ...headers,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      try {
+        switch (httpMethod) {
+          case HttpMethod.post:
+            return await client.post(url, body: body, headers: requestHeaders);
+          case HttpMethod.put:
+            return await client.put(url, body: body, headers: requestHeaders);
+          case HttpMethod.delete:
+            return await client.delete(url, headers: requestHeaders);
+          default:
+            return await client.get(url, headers: requestHeaders);
+        }
+      } on http.ClientException catch (e) {
+        throw ApiException(httpStatus: 0, message: 'Erreur réseau: $e');
+      } catch (e) {
+        throw ApiException(httpStatus: 0, message: 'Erreur inattendue: $e');
       }
-    } on http.ClientException catch (e) {
-      throw ApiException(httpStatus: 0, message: 'Erreur réseau: $e');
-    } catch (e) {
-      throw ApiException(httpStatus: 0, message: 'Erreur inattendue: $e');
+    }
+
+    http.Response response = await send();
+
+    // An expired access token is recoverable: renew once, then replay.
+    if (response.statusCode == HttpStatus.unauthorized &&
+        allowRefreshRetry &&
+        ApiService.onRefreshNeeded != null) {
+      final renewed = await ApiService.onRefreshNeeded!();
+      if (renewed) response = await send();
     }
 
     switch (response.statusCode) {

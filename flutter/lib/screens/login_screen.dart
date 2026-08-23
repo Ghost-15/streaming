@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      final response = await AuthRepository().authenticate({
+      final response = await const AuthRepository().authenticate({
         'email': _emailController.text.trim(),
         'password': _passwordController.text,
       });

@@ -52,7 +52,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final response = await AuthRepository().register({
+      final response = await const AuthRepository().register({
         'email': email,
         'password': password,
         'first_name': _firstNameController.text.trim(),
