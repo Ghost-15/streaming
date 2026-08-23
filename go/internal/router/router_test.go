@@ -24,6 +24,15 @@ import (
 
 func writePublicKey(t *testing.T) string {
 	t.Helper()
+	_, path := writeKeyPair(t)
+	return path
+}
+
+// writeKeyPair generates a throwaway RSA pair, writes the public half where the
+// router expects it, and hands the private half back so a test can mint tokens
+// the running router will actually accept.
+func writeKeyPair(t *testing.T) (*rsa.PrivateKey, string) {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("gen key: %v", err)
@@ -41,7 +50,7 @@ func writePublicKey(t *testing.T) string {
 	}
 	f.Close()
 	t.Cleanup(func() { os.Remove(f.Name()) })
-	return f.Name()
+	return key, f.Name()
 }
 
 // newTestRouter builds the production router over mock repositories. Both the
@@ -49,12 +58,21 @@ func writePublicKey(t *testing.T) string {
 // single place where the route table is assembled.
 func newTestRouter(t *testing.T) *gin.Engine {
 	t.Helper()
-	return newTestRouterWithSwagger(t, true)
+	engine, _ := buildTestRouter(t, true)
+	return engine
 }
 
 func newTestRouterWithSwagger(t *testing.T, swaggerEnabled bool) *gin.Engine {
 	t.Helper()
-	pubPath := writePublicKey(t)
+	engine, _ := buildTestRouter(t, swaggerEnabled)
+	return engine
+}
+
+// buildTestRouter returns the assembled engine together with the signing key,
+// so security tests can forge tokens accepted by this exact router.
+func buildTestRouter(t *testing.T, swaggerEnabled bool) (*gin.Engine, *rsa.PrivateKey) {
+	t.Helper()
+	privateKey, pubPath := writeKeyPair(t)
 
 	cfg := &config.Config{
 		JWTPublicKeyPath:   pubPath,
@@ -74,7 +92,7 @@ func newTestRouterWithSwagger(t *testing.T, swaggerEnabled bool) *gin.Engine {
 	favoriteH := handler.NewFavoriteHandler(usecase.NewFavoriteUseCase(&mock.MockFavoriteRepository{}))
 	recommendationH := handler.NewRecommendationHandler(usecase.NewRecommendationUseCase(&mock.MockRecommendationRepository{}))
 
-	return router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
+	return router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH), privateKey
 }
 
 func TestNewRouter(t *testing.T) {
