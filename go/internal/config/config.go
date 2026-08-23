@@ -19,6 +19,8 @@ type Config struct {
 	SupabaseDBURL         string
 	JWTPrivateKeyPath     string
 	JWTPublicKeyPath      string
+	AuthAccessTokenTTL    time.Duration
+	AuthRefreshTokenTTL   time.Duration
 	OTELEndpoint          string
 	OTELServiceNamespace  string
 	OTELDeploymentEnv     string
@@ -55,6 +57,14 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	authAccessTokenTTL, err := durationEnv("AUTH_ACCESS_TOKEN_TTL", time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	authRefreshTokenTTL, err := durationEnv("AUTH_REFRESH_TOKEN_TTL", 30*24*time.Hour)
+	if err != nil {
+		return nil, err
+	}
 	httpReadHeaderTimeout, err := durationEnv("HTTP_READ_HEADER_TIMEOUT", 10*time.Second)
 	if err != nil {
 		return nil, err
@@ -106,6 +116,8 @@ func Load() (*Config, error) {
 		SupabaseDBURL:         os.Getenv("SUPABASE_DB_URL"),
 		JWTPrivateKeyPath:     resolveConfigFilePath(os.Getenv("JWT_PRIVATE_KEY_PATH"), dotEnvDir),
 		JWTPublicKeyPath:      resolveConfigFilePath(os.Getenv("JWT_PUBLIC_KEY_PATH"), dotEnvDir),
+		AuthAccessTokenTTL:    authAccessTokenTTL,
+		AuthRefreshTokenTTL:   authRefreshTokenTTL,
 		OTELEndpoint:          getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 		OTELServiceNamespace:  getEnv("OTEL_SERVICE_NAMESPACE", "my-application-group"),
 		OTELDeploymentEnv:     getEnv("OTEL_DEPLOYMENT_ENVIRONMENT", "production"),
@@ -155,6 +167,9 @@ func (c *Config) validate() error {
 	}
 	if c.Env == "production" && c.MetricsBearerToken == "" {
 		return fmt.Errorf("config: missing METRICS_BEARER_TOKEN or METRICS_BEARER_TOKEN_FILE in production")
+	}
+	if c.AuthAccessTokenTTL <= 0 || c.AuthRefreshTokenTTL <= c.AuthAccessTokenTTL {
+		return fmt.Errorf("config: AUTH_REFRESH_TOKEN_TTL must be positive and longer than AUTH_ACCESS_TOKEN_TTL")
 	}
 	if c.StreamMaxDuration <= 0 || c.StreamIdleTimeout <= 0 || c.StreamWriteTimeout <= 0 ||
 		c.ShutdownTimeout <= 0 || c.HTTPReadHeaderTimeout <= 0 || c.HTTPIdleTimeout <= 0 {
