@@ -1,4 +1,4 @@
-.PHONY: dev build test lint vet clean docker-build migrate flutter-dev flutter-run flutter-test flutter-build-apk flutter-build-web load-bench load-k6 profile-cpu help
+.PHONY: dev build test lint vet clean docker-build migrate flutter-dev flutter-run flutter-test flutter-perf flutter-build-apk flutter-build-web load-bench load-k6 profile-cpu help
 
 COVERAGE_THRESHOLD ?= 80
 
@@ -92,6 +92,9 @@ flutter-run:
 
 flutter-test:
 	cd flutter && flutter test
+
+flutter-perf:
+	cd flutter && flutter drive 		--driver=test_driver/integration_test.dart 		--target=integration_test/rendering_performance_test.dart 		-d $(DEVICE) 		--profile
 
 flutter-build-apk:
 	cd flutter && flutter build apk --release

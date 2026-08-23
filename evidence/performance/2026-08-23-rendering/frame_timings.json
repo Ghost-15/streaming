@@ -1,0 +1,19 @@
+{
+  "frame_timings": {
+    "frame_count": 278,
+    "frame_budget_ms": 16.666666666666668,
+    "ui_thread_ms": {
+      "p50": 2.384,
+      "p90": 3.962,
+      "p99": 7.684,
+      "worst": 35.974
+    },
+    "raster_thread_ms": {
+      "p50": 3.067,
+      "p90": 16.253,
+      "p99": 20.602,
+      "worst": 51.576
+    },
+    "frames_over_budget": 1
+  }
+}

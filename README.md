@@ -137,6 +137,20 @@ auditeur. Le mode opératoire k6 et pprof se trouve dans
 modèle de capacité/coûts sont dans
 [docs/performance-couts.md](docs/performance-couts.md).
 
+## Fluidité du rendu
+
+La contrainte des 60 FPS est vérifiée par un test d'intégration exécuté en mode
+profile sur un appareil, jamais estimée :
+
+```bash
+make flutter-perf DEVICE=emulator-5554
+```
+
+Le test reconstruit la liste de directs toutes les 16 ms pendant six passes de
+défilement et échoue si le p90 du fil UI dépasse 16,67 ms. Le relevé mesuré et
+ses limites sont archivés dans
+[evidence/performance](evidence/performance/2026-08-23-rendering/README.md).
+
 ## Observabilité
 
 `/metrics` est protégé par bearer token. Le dashboard local provisionné contient :
