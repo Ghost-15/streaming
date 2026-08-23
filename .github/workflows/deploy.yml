@@ -22,6 +22,7 @@ concurrency:
 env:
   GO_VERSION: "1.25"
   GOTOOLCHAIN: local
+  FLUTTER_VERSION: "3.41.6"
   REGISTRY: docker.io
 
 jobs:
@@ -40,7 +41,7 @@ jobs:
         run: go test ./... -race
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.x"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
       - name: Flutter quality gate

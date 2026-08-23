@@ -12,6 +12,7 @@ permissions:
 env:
   GO_VERSION: "1.25"
   GOTOOLCHAIN: local
+  FLUTTER_VERSION: "3.41.6"
   # Coverage gate enforced at 80% (mock helper packages excluded from the measure).
   COVERAGE_MIN: "80"
 
@@ -127,7 +128,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.x"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: "stable"
           cache: true
       - name: Get dependencies
