@@ -22,13 +22,13 @@ class _FakeFavoriteRepo extends FavoriteRepository {
   }
 
   @override
-  Future<void> add(String trackId) async {
-    data = [...data, _track(trackId)];
+  Future<void> add(String streamId) async {
+    data = [...data, _track(streamId)];
   }
 
   @override
-  Future<void> remove(String trackId) async {
-    data = data.where((t) => t.id != trackId).toList();
+  Future<void> remove(String streamId) async {
+    data = data.where((t) => t.id != streamId).toList();
   }
 }
 

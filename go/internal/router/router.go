@@ -92,7 +92,7 @@ func NewRouter(
 
 		protected.GET("/favorites", favoriteH.List)
 		protected.POST("/favorites", favoriteH.Add)
-		protected.DELETE("/favorites/:trackID", favoriteH.Remove)
+		protected.DELETE("/favorites/:streamID", favoriteH.Remove)
 
 		protected.GET("/recommendations", recommendationH.List)
 	}
