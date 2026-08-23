@@ -5,6 +5,9 @@ on:
     branches: ["main", "develop"]
   pull_request:
     branches: ["main", "develop"]
+  # Lets the pipeline be run on demand from any branch, without opening a pull
+  # request first.
+  workflow_dispatch:
 
 permissions:
   contents: read
