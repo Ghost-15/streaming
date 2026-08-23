@@ -50,6 +50,8 @@ func NewRouter(
 		{
 			auth.POST("/register", authH.Register)
 			auth.POST("/login", authH.Login)
+			auth.POST("/refresh", authH.Refresh)
+			auth.POST("/logout", authH.Logout)
 		}
 
 		v1.GET("/streams", streamH.ListActive)
@@ -66,6 +68,8 @@ func NewRouter(
 	))
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
+		protected.GET("/auth/me", authH.Me)
+
 		protected.GET("/streams/:id/listen", streamH.StreamAudio)
 		protected.POST("/streams/:id/listen", streamH.Listen)
 		protected.POST("/streams/:id/leave", streamH.Leave)

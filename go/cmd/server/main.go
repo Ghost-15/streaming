@@ -101,6 +101,7 @@ func main() {
 
 	// 6. Repositories (infrastructure layer)
 	userRepo := supabase.NewUserRepo(db)
+	refreshRepo := supabase.NewRefreshTokenRepo(db)
 	streamRepo := supabase.NewStreamRepo(db)
 	playlistRepo := supabase.NewPlaylistRepo(db)
 	adminRepo := supabase.NewAdminRepo(db)
@@ -109,7 +110,7 @@ func main() {
 	recommendationRepo := supabase.NewRecommendationRepo(db)
 
 	// 7. Use Cases (business layer)
-	authUC := usecase.NewAuthUseCase(userRepo, cfg.JWTPrivateKeyPath)
+	authUC := usecase.NewAuthUseCase(userRepo, refreshRepo, cfg.JWTPrivateKeyPath, cfg.AuthAccessTokenTTL, cfg.AuthRefreshTokenTTL)
 	streamUC := usecase.NewStreamUseCase(streamRepo, historyRepo)
 	playlistUC := usecase.NewPlaylistUseCase(playlistRepo)
 	adminUC := usecase.NewAdminUseCase(adminRepo)

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/entity"
@@ -54,7 +55,7 @@ func TestNewRouter(t *testing.T) {
 		ListActiveFn: func(_ context.Context) ([]entity.Stream, error) { return []entity.Stream{}, nil },
 	}
 
-	authH := handler.NewAuthHandler(usecase.NewAuthUseCase(&mock.MockUserRepository{}, ""))
+	authH := handler.NewAuthHandler(usecase.NewAuthUseCase(&mock.MockUserRepository{}, &mock.MockRefreshTokenRepository{}, "", time.Hour, 720*time.Hour))
 	streamH := handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil))
 	playlistH := handler.NewPlaylistHandler(usecase.NewPlaylistUseCase(&mock.MockPlaylistRepository{}))
 	adminH := handler.NewAdminHandler(usecase.NewAdminUseCase(&mock.MockAdminRepository{}))
