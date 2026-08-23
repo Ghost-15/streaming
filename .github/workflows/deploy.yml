@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.26"
   GOTOOLCHAIN: local
   FLUTTER_VERSION: "3.41.6"
   REGISTRY: docker.io
