@@ -91,8 +91,9 @@ jobs:
           cache-dependency-path: go/go.sum
       - name: Run tests with race detector and coverage
         working-directory: go
-        # Exclude mock helper packages from the coverage measurement.
-        run: go test $(go list ./... | grep -v '/mock$') -race -coverprofile=coverage.out -covermode=atomic
+        # Exclude mock helpers and the generated OpenAPI package from the
+        # coverage measurement: neither is code under test.
+        run: go test $(go list ./... | grep -vE '/mock$|/docs/openapi$') -race -coverprofile=coverage.out -covermode=atomic
       - name: Report coverage
         id: coverage
         working-directory: go
