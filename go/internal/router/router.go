@@ -7,8 +7,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
+	_ "github.com/Ghost-15/streaming/docs/openapi" // generated OpenAPI spec served by /swagger
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/handler"
@@ -127,9 +130,13 @@ func NewRouter(
 		admin.GET("/stats", adminH.GetStats)
 	}
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "service": "streampulse-api"})
-	})
+	r.GET("/health", handler.Health)
+
+	// Interactive OpenAPI contract. Documentation only: each route it lists is
+	// still guarded by its own middleware.
+	if cfg.SwaggerEnabled {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
 
 	// Prometheus metrics endpoint (Sprint 3 — US-010, scraped by Prometheus).
 	r.GET("/metrics", middleware.MetricsAuthMiddleware(cfg.MetricsBearerToken), gin.WrapH(promhttp.Handler()))

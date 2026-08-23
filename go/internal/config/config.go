@@ -39,6 +39,7 @@ type Config struct {
 	StreamChunkSize       int
 	StreamClientBuffer    int
 	PprofEnabled          bool
+	SwaggerEnabled        bool
 	PprofAddr             string
 }
 
@@ -105,6 +106,13 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The Swagger UI only renders the contract; every documented route stays
+	// behind its own RBAC middleware. It is on by default so the deployed API
+	// is self-documenting, and can be switched off per environment.
+	swaggerEnabled, err := boolEnv("SWAGGER_ENABLED", true)
+	if err != nil {
+		return nil, err
+	}
 	appEnv := getEnv("APP_ENV", "development")
 	otelMetricsEnabled, err := boolEnv("OTEL_METRICS_ENABLED", appEnv == "production")
 	if err != nil {
@@ -136,6 +144,7 @@ func Load() (*Config, error) {
 		StreamChunkSize:       streamChunkSize,
 		StreamClientBuffer:    streamClientBuffer,
 		PprofEnabled:          pprofEnabled,
+		SwaggerEnabled:        swaggerEnabled,
 		PprofAddr:             getEnv("PPROF_ADDR", "127.0.0.1:6060"),
 	}
 

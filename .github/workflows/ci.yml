@@ -40,6 +40,29 @@ jobs:
             prom/prometheus:v3.5.0 \
             check rules /etc/prometheus/alerts.yml
 
+  openapi-contract:
+    name: OpenAPI contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go/go.sum
+      - name: Install swag
+        run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
+      - name: Regenerate the specification from the handler annotations
+        working-directory: go
+        run: |
+          swag init             --dir ./cmd/server,./internal/handler,./internal/entity             --generalInfo main.go             --output docs/openapi             --parseInternal             --parseDepth 2
+      - name: Fail if the committed specification is stale
+        run: |
+          if ! git diff --exit-code -- go/docs/openapi; then
+            echo "::error::The committed OpenAPI specification does not match the handler annotations. Run swag init and commit the result." >&2
+            exit 1
+          fi
+
   go-lint:
     name: Go Lint
     runs-on: ubuntu-latest

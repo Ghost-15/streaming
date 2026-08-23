@@ -61,11 +61,35 @@ Renseigner auparavant `SUPABASE_DB_URL` et `CORS_ALLOWED_ORIGINS` dans `.env`.
 Services locaux :
 
 - API : `http://localhost:8080`
+- Contrat OpenAPI : `http://localhost:8080/swagger/index.html`
 - Prometheus : `http://localhost:9090`
 - Grafana : `http://localhost:3000`
 - pprof : `http://127.0.0.1:6060/debug/pprof/`
 
 Le guide détaillé est dans [docs/runbook-local.md](docs/runbook-local.md).
+
+## Contrat d’API
+
+La description OpenAPI est générée depuis les annotations des handlers, jamais
+écrite à la main :
+
+```bash
+cd go
+swag init --dir ./cmd/server,./internal/handler,./internal/entity --generalInfo main.go --output docs/openapi --parseInternal --parseDepth 2
+```
+
+Le résultat est versionné dans `go/docs/openapi/` (40 opérations). Deux
+garde-fous empêchent la documentation de décrocher du code :
+
+- `TestOpenAPISpecCoversEveryRoute` échoue si une route enregistrée dans le
+  routeur n’apparaît pas dans la spécification ;
+  `TestOpenAPISpecHasNoStaleOperation` couvre le décalage inverse ;
+- le job CI `openapi-contract` régénère la spécification et échoue si la version
+  commitée diffère.
+
+L’interface Swagger est servie sur `/swagger/index.html` et se désactive avec
+`SWAGGER_ENABLED=false`. Elle n’expose que le contrat : chaque route listée reste
+protégée par son propre middleware RBAC.
 
 ## Protocole audio
 

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/entity"
 	"github.com/Ghost-15/streaming/internal/handler"
@@ -42,13 +44,23 @@ func writePublicKey(t *testing.T) string {
 	return f.Name()
 }
 
-func TestNewRouter(t *testing.T) {
+// newTestRouter builds the production router over mock repositories. Both the
+// behavioural tests and the OpenAPI contract tests go through it, so there is a
+// single place where the route table is assembled.
+func newTestRouter(t *testing.T) *gin.Engine {
+	t.Helper()
+	return newTestRouterWithSwagger(t, true)
+}
+
+func newTestRouterWithSwagger(t *testing.T, swaggerEnabled bool) *gin.Engine {
+	t.Helper()
 	pubPath := writePublicKey(t)
 
 	cfg := &config.Config{
 		JWTPublicKeyPath:   pubPath,
 		CORSOrigins:        "http://localhost:3000",
 		MetricsBearerToken: "secret-token",
+		SwaggerEnabled:     swaggerEnabled,
 	}
 
 	streamRepo := &mock.MockStreamRepository{
@@ -62,7 +74,11 @@ func TestNewRouter(t *testing.T) {
 	favoriteH := handler.NewFavoriteHandler(usecase.NewFavoriteUseCase(&mock.MockFavoriteRepository{}))
 	recommendationH := handler.NewRecommendationHandler(usecase.NewRecommendationUseCase(&mock.MockRecommendationRepository{}))
 
-	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
+	return router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
+}
+
+func TestNewRouter(t *testing.T) {
+	engine := newTestRouter(t)
 
 	t.Run("health ok", func(t *testing.T) {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil)
