@@ -17,6 +17,7 @@ type MockAdminRepository struct {
 	GetUserFn        func(ctx context.Context, id string) (*entity.User, error)
 	UpdateUserRoleFn func(ctx context.Context, id string, role entity.UserRole) error
 	SuspendUserFn    func(ctx context.Context, id string, suspend bool) error
+	DeleteUserFn     func(ctx context.Context, id string) error
 	GetStatsFn       func(ctx context.Context) (*entity.AdminStats, error)
 }
 
@@ -34,6 +35,10 @@ func (m *MockAdminRepository) UpdateUserRole(ctx context.Context, id string, rol
 
 func (m *MockAdminRepository) SuspendUser(ctx context.Context, id string, suspend bool) error {
 	return m.SuspendUserFn(ctx, id, suspend)
+}
+
+func (m *MockAdminRepository) DeleteUser(ctx context.Context, id string) error {
+	return m.DeleteUserFn(ctx, id)
 }
 
 func (m *MockAdminRepository) GetStats(ctx context.Context) (*entity.AdminStats, error) {

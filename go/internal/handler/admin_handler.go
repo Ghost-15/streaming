@@ -160,6 +160,36 @@ func (h *AdminHandler) SuspendUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "user account updated"})
 }
 
+// DeleteUser godoc
+// @Summary     Delete a user account
+// @Tags        admin
+// @Produce     json
+// @Param       id path string true "User ID"
+// @Success     204
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/admin/users/{id} [delete]
+func (h *AdminHandler) DeleteUser(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := h.useCase.DeleteUser(c.Request.Context(), id); err != nil {
+		middleware.Logger(c).Error().Err(err).Str("user_id", id).Msg("admin: delete user failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Audit log
+	claims, _ := middleware.GetClaims(c)
+	if claims != nil {
+		middleware.Logger(c).Info().
+			Str("admin_id", claims.UserID).
+			Str("target_user_id", id).
+			Str("action", "deleted").
+			Msg("admin: user account deleted")
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 // GetStats godoc
 // @Summary     Get admin statistics
 // @Tags        admin

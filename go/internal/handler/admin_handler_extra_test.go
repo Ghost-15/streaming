@@ -129,3 +129,33 @@ func mustJSON(v interface{}) []byte {
 	b, _ := json.Marshal(v)
 	return b
 }
+
+func TestAdminHandler_DeleteUser(t *testing.T) {
+	repo := &mock.MockAdminRepository{
+		DeleteUserFn: func(_ context.Context, _ string) error { return nil },
+	}
+	h := handler.NewAdminHandler(usecase.NewAdminUseCase(repo))
+	r := newAdminEngine(h)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/admin/users/u1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("DeleteUser() status = %d, want 204", w.Code)
+	}
+}
+
+func TestAdminHandler_DeleteUser_Error(t *testing.T) {
+	repo := &mock.MockAdminRepository{
+		DeleteUserFn: func(_ context.Context, _ string) error { return errAdminTest },
+	}
+	h := handler.NewAdminHandler(usecase.NewAdminUseCase(repo))
+	r := newAdminEngine(h)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/admin/users/u1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("DeleteUser() status = %d, want 500", w.Code)
+	}
+}

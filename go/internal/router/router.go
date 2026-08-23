@@ -123,6 +123,7 @@ func NewRouter(
 		admin.GET("/users/:id", adminH.GetUser)
 		admin.PUT("/users/:id/role", adminH.UpdateUserRole)
 		admin.POST("/users/:id/suspend", adminH.SuspendUser)
+		admin.DELETE("/users/:id", adminH.DeleteUser)
 		admin.GET("/stats", adminH.GetStats)
 	}
 

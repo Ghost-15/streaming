@@ -33,6 +33,7 @@ func newAdminEngine(h *handler.AdminHandler) *gin.Engine {
 	r.GET("/admin/users/:id", h.GetUser)
 	r.PUT("/admin/users/:id/role", h.UpdateUserRole)
 	r.POST("/admin/users/:id/suspend", h.SuspendUser)
+	r.DELETE("/admin/users/:id", h.DeleteUser)
 	r.GET("/admin/stats", h.GetStats)
 	return r
 }
