@@ -22,12 +22,6 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
 
-func writePublicKey(t *testing.T) string {
-	t.Helper()
-	_, path := writeKeyPair(t)
-	return path
-}
-
 // writeKeyPair generates a throwaway RSA pair, writes the public half where the
 // router expects it, and hands the private half back so a test can mint tokens
 // the running router will actually accept.
