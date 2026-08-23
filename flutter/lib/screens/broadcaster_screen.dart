@@ -270,34 +270,41 @@ class _LiveStatusCard extends StatelessWidget {
       child: Column(
         children: [
           // Status indicator
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isLive)
-                _PulsingDot(color: cs.error)
-              else
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant,
-                    borderRadius: BorderRadius.circular(5),
+          Semantics(
+            liveRegion: true,
+            container: true,
+            label: isLive
+                ? 'Diffusion en cours'
+                : 'Diffusion arrêtée, vous êtes hors ligne',
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isLive)
+                  _PulsingDot(color: cs.error)
+                else
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: cs.onSurfaceVariant,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                  ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    isLive ? 'EN DIRECT' : 'HORS LIGNE',
+                    style: tt.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                      color: isLive ? cs.error : cs.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  isLive ? 'EN DIRECT' : 'HORS LIGNE',
-                  style: tt.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5,
-                    color: isLive ? cs.error : cs.onSurfaceVariant,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
           if (streamTitle != null && streamTitle!.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -491,6 +498,7 @@ class _ErrorBanner extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.close_rounded, size: 18),
+            tooltip: 'Masquer le message',
             onPressed: onDismiss,
             color: cs.onErrorContainer,
             padding: EdgeInsets.zero,

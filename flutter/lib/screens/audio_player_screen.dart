@@ -41,6 +41,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, size: 20),
+                    tooltip: 'Actualiser la liste des directs',
                     color: cs.onSurfaceVariant,
                     onPressed: () =>
                         context.read<StreamNotifier>().loadActive(),

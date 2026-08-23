@@ -74,6 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   // Back button
                   IconButton(
                     icon: const Icon(Icons.arrow_back_rounded),
+                    tooltip: 'Retour',
                     color: Colors.white70,
                     onPressed: () =>
                         context.canPop() ? context.pop() : context.go('/'),
@@ -89,18 +90,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: cs.primary,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(
-                      Icons.radio_rounded,
-                      color: Colors.white,
-                      size: 28,
+                    child: const ExcludeSemantics(
+                      child: Icon(
+                        Icons.radio_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Bon retour !',
-                    style: tt.headlineMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      'Bon retour !',
+                      style: tt.headlineMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -140,6 +146,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? Icons.visibility_outlined
                               : Icons.visibility_off_outlined,
                         ),
+                        tooltip: _obscurePassword
+                            ? 'Afficher le mot de passe'
+                            : 'Masquer le mot de passe',
                         onPressed: () => setState(
                           () => _obscurePassword = !_obscurePassword,
                         ),
@@ -161,12 +170,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   FilledButton(
                     onPressed: _isLoading ? null : _login,
                     child: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
+                        ? Semantics(
+                            label: 'Connexion en cours',
+                            child: const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
                             ),
                           )
                         : const Text('Se connecter'),
@@ -206,25 +218,35 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: cs.errorContainer,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: cs.onErrorContainer),
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            ExcludeSemantics(
+              child: Icon(
+                Icons.error_outline_rounded,
+                color: cs.error,
+                size: 18,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
