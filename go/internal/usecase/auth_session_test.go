@@ -24,18 +24,26 @@ func newSessionUseCase(t *testing.T, user *entity.User) (usecase.AuthUseCase, *m
 	}
 	user.PasswordHash = string(hash)
 
+	deleted := false
 	userRepo := &mock.MockUserRepository{
 		FindByEmailFn: func(_ context.Context, email string) (*entity.User, error) {
-			if email == user.Email {
+			if deleted || email != user.Email {
+				return nil, nil
+			}
+			return user, nil
+		},
+		FindByIDFn: func(_ context.Context, id string) (*entity.User, error) {
+			if id == user.ID && !deleted {
 				return user, nil
 			}
 			return nil, nil
 		},
-		FindByIDFn: func(_ context.Context, id string) (*entity.User, error) {
-			if id == user.ID {
-				return user, nil
+		DeleteFn: func(_ context.Context, id string) error {
+			if id != user.ID {
+				return errors.New("user_repo: not found")
 			}
-			return nil, nil
+			deleted = true
+			return nil
 		},
 	}
 	refreshRepo := &mock.MockRefreshTokenRepository{}
@@ -229,5 +237,66 @@ func TestAuthUseCase_MeRejectsEmptyID(t *testing.T) {
 
 	if _, err := uc.Me(context.Background(), ""); !errors.Is(err, usecase.ErrUserNotFound) {
 		t.Errorf("Me() error = %v, want ErrUserNotFound", err)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────
+// DeleteAccount — RGPD right to erasure
+// ─────────────────────────────────────────────────────────────
+
+func TestAuthUseCase_DeleteAccountRevokesEverySession(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, store := newSessionUseCase(t, user)
+
+	first := loginForTest(t, uc, user.Email)
+	second := loginForTest(t, uc, user.Email)
+
+	if err := uc.DeleteAccount(context.Background(), user.ID); err != nil {
+		t.Fatalf("DeleteAccount() error = %v", err)
+	}
+
+	for i, stored := range store.Stored {
+		if stored.RevokedAt == nil {
+			t.Errorf("DeleteAccount() left session %d usable", i)
+		}
+	}
+	if _, err := uc.Refresh(context.Background(), first.RefreshToken); err == nil {
+		t.Error("Refresh() must fail once the account is deleted")
+	}
+	if _, err := uc.Refresh(context.Background(), second.RefreshToken); err == nil {
+		t.Error("Refresh() must fail on every session of a deleted account")
+	}
+}
+
+func TestAuthUseCase_DeleteAccountMakesTheUserUnreadable(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, _ := newSessionUseCase(t, user)
+
+	if err := uc.DeleteAccount(context.Background(), user.ID); err != nil {
+		t.Fatalf("DeleteAccount() error = %v", err)
+	}
+	if _, err := uc.Me(context.Background(), user.ID); !errors.Is(err, usecase.ErrUserNotFound) {
+		t.Errorf("Me() error = %v, want ErrUserNotFound", err)
+	}
+	if _, err := uc.Login(context.Background(), user.Email, "password123"); err == nil {
+		t.Error("Login() must fail once the account is deleted")
+	}
+}
+
+func TestAuthUseCase_DeleteAccountRejectsUnknownUser(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, _ := newSessionUseCase(t, user)
+
+	if err := uc.DeleteAccount(context.Background(), "ghost"); !errors.Is(err, usecase.ErrUserNotFound) {
+		t.Errorf("DeleteAccount() error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestAuthUseCase_DeleteAccountRejectsEmptyID(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, _ := newSessionUseCase(t, user)
+
+	if err := uc.DeleteAccount(context.Background(), ""); !errors.Is(err, usecase.ErrUserNotFound) {
+		t.Errorf("DeleteAccount() error = %v, want ErrUserNotFound", err)
 	}
 }

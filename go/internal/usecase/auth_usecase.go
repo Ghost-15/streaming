@@ -48,6 +48,7 @@ type AuthUseCase interface {
 	Refresh(ctx context.Context, refreshToken string) (*AuthResult, error)
 	Logout(ctx context.Context, refreshToken string) error
 	Me(ctx context.Context, userID string) (*entity.User, error)
+	DeleteAccount(ctx context.Context, userID string) error
 }
 
 // authUseCase is the concrete implementation injected with its dependencies.
@@ -210,8 +211,33 @@ func (uc *authUseCase) Me(ctx context.Context, userID string) (*entity.User, err
 	if user == nil {
 		return nil, ErrUserNotFound
 	}
-	user.PasswordHash = ""
-	return user, nil
+	return withoutPasswordHash(user), nil
+}
+
+// DeleteAccount erases a user on their own request (RGPD right to erasure).
+// Sessions are revoked first so a valid refresh token cannot outlive the account.
+// Streams, playlists and favorites cascade with the row; listen history is kept
+// but detached, so aggregate statistics survive without staying attributable.
+func (uc *authUseCase) DeleteAccount(ctx context.Context, userID string) error {
+	if userID == "" {
+		return ErrUserNotFound
+	}
+
+	user, err := uc.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("auth: delete account: %w", err)
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+
+	if err := uc.refreshRepo.RevokeAllForUser(ctx, userID); err != nil {
+		return fmt.Errorf("auth: delete account: %w", err)
+	}
+	if err := uc.userRepo.Delete(ctx, userID); err != nil {
+		return fmt.Errorf("auth: delete account: %w", err)
+	}
+	return nil
 }
 
 // issueSession mints an access token and a refresh token for an authenticated user.
@@ -234,13 +260,20 @@ func (uc *authUseCase) issueSession(ctx context.Context, user *entity.User) (*Au
 		return nil, fmt.Errorf("auth: issue session: %w", err)
 	}
 
-	user.PasswordHash = ""
 	return &AuthResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    int(uc.accessTTL.Seconds()),
-		User:         user,
+		User:         withoutPasswordHash(user),
 	}, nil
+}
+
+// withoutPasswordHash copies a user with its credential stripped. Returning a
+// copy keeps the entity owned by the repository untouched.
+func withoutPasswordHash(user *entity.User) *entity.User {
+	safe := *user
+	safe.PasswordHash = ""
+	return &safe
 }
 
 func (uc *authUseCase) signToken(user *entity.User) (string, error) {

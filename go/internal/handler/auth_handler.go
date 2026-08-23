@@ -208,3 +208,32 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
+
+// DeleteMe godoc.
+// @Summary     Delete the authenticated account (RGPD right to erasure)
+// @Tags        auth
+// @Produce     json
+// @Success     204
+// @Failure     401 {object} map[string]string
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/auth/me [delete]
+func (h *AuthHandler) DeleteMe(c *gin.Context) {
+	uid, ok := ownerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
+	if err := h.useCase.DeleteAccount(c.Request.Context(), uid); err != nil {
+		if errors.Is(err, usecase.ErrUserNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		middleware.Logger(c).Error().Err(err).Msg("delete account failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	middleware.Logger(c).Info().Str("user_id", uid).Msg("account deleted")
+
+	c.Status(http.StatusNoContent)
+}

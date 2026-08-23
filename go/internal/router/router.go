@@ -69,6 +69,7 @@ func NewRouter(
 	protected.Use(middleware.UserRateLimitMiddleware(100, 100))
 	{
 		protected.GET("/auth/me", authH.Me)
+		protected.DELETE("/auth/me", authH.DeleteMe)
 
 		protected.GET("/streams/:id/listen", streamH.StreamAudio)
 		protected.POST("/streams/:id/listen", streamH.Listen)
