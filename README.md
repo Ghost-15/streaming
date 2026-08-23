@@ -15,7 +15,7 @@ goroutine lors des déconnexions ou d’un arrêt serveur.
 
 ## Ce qui est livré
 
-- API REST Go 1.25, authentification JWT RS256 et rôles User/Diffuseur/Admin.
+- API REST Go 1.26, authentification JWT RS256 et rôles User/Diffuseur/Admin.
 - Streaming HTTP chunked : une ingestion `audio/*`, plusieurs auditeurs et
   éviction non bloquante des clients lents.
 - Annulation transverse par `context.Context`, timeouts glissants, fermeture du
@@ -46,7 +46,7 @@ documentée dans [la note de performance et de coûts](docs/performance-couts.md
 
 ## Démarrage local
 
-Prérequis : Docker avec Compose, Go 1.25+, Flutter stable et OpenSSL.
+Prérequis : Docker avec Compose, Go 1.26+, Flutter stable et OpenSSL.
 
 ```powershell
 Copy-Item .env.example .env
