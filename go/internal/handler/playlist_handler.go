@@ -275,6 +275,17 @@ type ReorderRequest struct {
 	TrackIDs []string `json:"track_ids" binding:"required,min=1"`
 }
 
+// ReorderTracks godoc.
+// @Summary     Reorder the queue of a playlist
+// @Tags        playlists
+// @Accept      json
+// @Produce     json
+// @Param       id   path string         true "Playlist ID"
+// @Param       body body ReorderRequest true "Ordered track IDs"
+// @Success     204
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Router      /api/v1/playlists/{id}/tracks/reorder [put]
 func (h *PlaylistHandler) ReorderTracks(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {
@@ -298,6 +309,15 @@ func (h *PlaylistHandler) ReorderTracks(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// NextTrack godoc.
+// @Summary     Pop the next track of a playlist queue
+// @Tags        playlists
+// @Produce     json
+// @Param       id path string true "Playlist ID"
+// @Success     200 {object} entity.Track
+// @Failure     401 {object} map[string]string
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/playlists/{id}/next [post]
 func (h *PlaylistHandler) NextTrack(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {

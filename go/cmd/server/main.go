@@ -22,6 +22,23 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase"
 )
 
+// @title                      StreamPulse API
+// @version                    1.0
+// @description                Live audio streaming API. A broadcaster ingests an audio
+// @description                stream, the Hub fans it out to every listener, and playlists,
+// @description                favorites and listening history are exposed as REST resources.
+// @termsOfService             https://github.com/Ghost-15/streaming
+// @contact.name               StreamPulse team
+// @contact.url                https://github.com/Ghost-15/streaming
+// @license.name               Educational project
+// @host                       localhost:8080
+// @BasePath                   /
+// @schemes                    https http
+// @securityDefinitions.apikey BearerAuth
+// @in                         header
+// @name                       Authorization
+// @description                Access token issued by /api/v1/auth/login, sent as "Bearer <token>".
+
 // main is the composition root: it wires all dependencies manually (no DI framework).
 // ADR-002: explicit wiring > magic DI — easier to read and defend in soutenance.
 func main() {

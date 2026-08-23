@@ -22,6 +22,14 @@ type AddFavoriteRequest struct {
 	StreamID string `json:"stream_id" binding:"required"`
 }
 
+// List godoc.
+// @Summary     List the favorites of the authenticated user
+// @Tags        favorites
+// @Produce     json
+// @Success     200 {object} map[string][]entity.Track
+// @Failure     401 {object} map[string]string
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/favorites [get]
 func (h *FavoriteHandler) List(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {
@@ -39,6 +47,17 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": tracks})
 }
 
+// Add godoc.
+// @Summary     Add a live stream to the favorites
+// @Tags        favorites
+// @Accept      json
+// @Produce     json
+// @Param       body body AddFavoriteRequest true "Favorite payload"
+// @Success     201
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/favorites [post]
 func (h *FavoriteHandler) Add(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {
@@ -66,6 +85,16 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 	c.Status(http.StatusCreated)
 }
 
+// Remove godoc.
+// @Summary     Remove a live stream from the favorites
+// @Tags        favorites
+// @Produce     json
+// @Param       streamID path string true "Stream ID"
+// @Success     204
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/favorites/{streamID} [delete]
 func (h *FavoriteHandler) Remove(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {
