@@ -20,6 +20,8 @@ type MockUserRepository struct {
 	CreateFn      func(ctx context.Context, user *entity.User) error
 	UpdateFn      func(ctx context.Context, user *entity.User) error
 	DeleteFn      func(ctx context.Context, id string) error
+
+	UpdatePasswordFn func(ctx context.Context, id, passwordHash string) error
 }
 
 func (m *MockUserRepository) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
@@ -36,6 +38,10 @@ func (m *MockUserRepository) Create(ctx context.Context, user *entity.User) erro
 
 func (m *MockUserRepository) Update(ctx context.Context, user *entity.User) error {
 	return m.UpdateFn(ctx, user)
+}
+
+func (m *MockUserRepository) UpdatePassword(ctx context.Context, id, passwordHash string) error {
+	return m.UpdatePasswordFn(ctx, id, passwordHash)
 }
 
 func (m *MockUserRepository) Delete(ctx context.Context, id string) error {

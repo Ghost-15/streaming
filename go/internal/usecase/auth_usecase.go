@@ -31,6 +31,18 @@ var ErrInvalidRefreshToken = errors.New("auth: invalid refresh token")
 // ErrUserNotFound is returned when the subject of a valid token no longer exists.
 var ErrUserNotFound = errors.New("auth: user not found")
 
+// ErrInvalidCredentials is returned when a password check fails outside of login.
+var ErrInvalidCredentials = errors.New("auth: invalid credentials")
+
+// ErrPasswordTooShort mirrors the minimum enforced by the registration binding.
+var ErrPasswordTooShort = errors.New("auth: password too short")
+
+// ErrPasswordUnchanged is returned when the new password equals the current one.
+var ErrPasswordUnchanged = errors.New("auth: password unchanged")
+
+// minPasswordLength matches the `min=8` binding used on register and login.
+const minPasswordLength = 8
+
 // AuthResult carries the credentials issued by a successful authentication.
 // ExpiresIn is the access token lifetime in seconds, so a client can schedule a
 // refresh instead of waiting for a 401.
@@ -48,6 +60,7 @@ type AuthUseCase interface {
 	Refresh(ctx context.Context, refreshToken string) (*AuthResult, error)
 	Logout(ctx context.Context, refreshToken string) error
 	Me(ctx context.Context, userID string) (*entity.User, error)
+	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 	DeleteAccount(ctx context.Context, userID string) error
 }
 
@@ -212,6 +225,45 @@ func (uc *authUseCase) Me(ctx context.Context, userID string) (*entity.User, err
 		return nil, ErrUserNotFound
 	}
 	return withoutPasswordHash(user), nil
+}
+
+// ChangePassword replaces a user credential after re-checking the current one.
+// Every session is revoked afterwards: a password change is how a user reacts to
+// a suspected compromise, so tokens issued before it must stop working.
+func (uc *authUseCase) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	if userID == "" {
+		return ErrUserNotFound
+	}
+	if len(newPassword) < minPasswordLength {
+		return ErrPasswordTooShort
+	}
+
+	user, err := uc.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("auth: change password: %w", err)
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+	if currentPassword == newPassword {
+		return ErrPasswordUnchanged
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("auth: change password: hash password: %w", err)
+	}
+	if err := uc.userRepo.UpdatePassword(ctx, userID, string(hash)); err != nil {
+		return fmt.Errorf("auth: change password: %w", err)
+	}
+	if err := uc.refreshRepo.RevokeAllForUser(ctx, userID); err != nil {
+		return fmt.Errorf("auth: change password: %w", err)
+	}
+	return nil
 }
 
 // DeleteAccount erases a user on their own request (RGPD right to erasure).

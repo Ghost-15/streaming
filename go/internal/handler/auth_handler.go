@@ -209,6 +209,62 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
+// ChangePasswordRequest is the JSON body for PUT /auth/password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required,min=8"`
+	NewPassword     string `json:"new_password"     binding:"required,min=8"`
+}
+
+// ChangePassword godoc.
+// @Summary     Change the password of the authenticated user
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Param       body body ChangePasswordRequest true "Password payload"
+// @Success     204
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Router      /api/v1/auth/password [put]
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	uid, ok := ownerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing claims"})
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		middleware.Logger(c).Warn().Err(err).Msg("invalid password payload")
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.useCase.ChangePassword(c.Request.Context(), uid, req.CurrentPassword, req.NewPassword)
+	switch {
+	case err == nil:
+	case errors.Is(err, usecase.ErrInvalidCredentials):
+		middleware.Logger(c).Warn().Msg("password change rejected")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	case errors.Is(err, usecase.ErrPasswordUnchanged):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "new password must differ from the current one"})
+		return
+	case errors.Is(err, usecase.ErrPasswordTooShort):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password too short"})
+		return
+	case errors.Is(err, usecase.ErrUserNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	default:
+		middleware.Logger(c).Error().Err(err).Msg("password change failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	middleware.Logger(c).Info().Str("user_id", uid).Msg("password changed")
+
+	c.Status(http.StatusNoContent)
+}
+
 // DeleteMe godoc.
 // @Summary     Delete the authenticated account (RGPD right to erasure)
 // @Tags        auth

@@ -70,6 +70,7 @@ func NewRouter(
 	{
 		protected.GET("/auth/me", authH.Me)
 		protected.DELETE("/auth/me", authH.DeleteMe)
+		protected.PUT("/auth/password", authH.ChangePassword)
 
 		protected.GET("/streams/:id/listen", streamH.StreamAudio)
 		protected.POST("/streams/:id/listen", streamH.Listen)

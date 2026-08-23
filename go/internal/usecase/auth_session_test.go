@@ -38,6 +38,13 @@ func newSessionUseCase(t *testing.T, user *entity.User) (usecase.AuthUseCase, *m
 			}
 			return nil, nil
 		},
+		UpdatePasswordFn: func(_ context.Context, id, passwordHash string) error {
+			if id != user.ID || deleted {
+				return errors.New("user_repo: not found")
+			}
+			user.PasswordHash = passwordHash
+			return nil
+		},
 		DeleteFn: func(_ context.Context, id string) error {
 			if id != user.ID {
 				return errors.New("user_repo: not found")
@@ -237,6 +244,73 @@ func TestAuthUseCase_MeRejectsEmptyID(t *testing.T) {
 
 	if _, err := uc.Me(context.Background(), ""); !errors.Is(err, usecase.ErrUserNotFound) {
 		t.Errorf("Me() error = %v, want ErrUserNotFound", err)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────
+// ChangePassword
+// ─────────────────────────────────────────────────────────────
+
+func TestAuthUseCase_ChangePasswordRevokesEverySession(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, store := newSessionUseCase(t, user)
+
+	result := loginForTest(t, uc, user.Email)
+	if err := uc.ChangePassword(context.Background(), user.ID, "password123", "new-password-456"); err != nil {
+		t.Fatalf("ChangePassword() error = %v", err)
+	}
+
+	if store.Stored[0].RevokedAt == nil {
+		t.Error("ChangePassword() must revoke sessions issued before the change")
+	}
+	if _, err := uc.Refresh(context.Background(), result.RefreshToken); err == nil {
+		t.Error("Refresh() must fail after a password change")
+	}
+	if _, err := uc.Login(context.Background(), user.Email, "new-password-456"); err != nil {
+		t.Errorf("Login() with the new password error = %v", err)
+	}
+	if _, err := uc.Login(context.Background(), user.Email, "password123"); err == nil {
+		t.Error("Login() with the old password must fail")
+	}
+}
+
+func TestAuthUseCase_ChangePasswordRejectsWrongCurrentPassword(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, _ := newSessionUseCase(t, user)
+
+	err := uc.ChangePassword(context.Background(), user.ID, "not-the-password", "new-password-456")
+	if !errors.Is(err, usecase.ErrInvalidCredentials) {
+		t.Errorf("ChangePassword() error = %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestAuthUseCase_ChangePasswordRejectsIdenticalPassword(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, _ := newSessionUseCase(t, user)
+
+	err := uc.ChangePassword(context.Background(), user.ID, "password123", "password123")
+	if !errors.Is(err, usecase.ErrPasswordUnchanged) {
+		t.Errorf("ChangePassword() error = %v, want ErrPasswordUnchanged", err)
+	}
+}
+
+func TestAuthUseCase_ChangePasswordRejectsShortPassword(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, _ := newSessionUseCase(t, user)
+
+	err := uc.ChangePassword(context.Background(), user.ID, "password123", "short")
+	if !errors.Is(err, usecase.ErrPasswordTooShort) {
+		t.Errorf("ChangePassword() error = %v, want ErrPasswordTooShort", err)
+	}
+}
+
+func TestAuthUseCase_ChangePasswordRejectsUnknownUser(t *testing.T) {
+	user := &entity.User{ID: "user-1", Email: "listener@streampulse.fr", Role: entity.RoleUser}
+	uc, _ := newSessionUseCase(t, user)
+
+	err := uc.ChangePassword(context.Background(), "ghost", "password123", "new-password-456")
+	if !errors.Is(err, usecase.ErrUserNotFound) {
+		t.Errorf("ChangePassword() error = %v, want ErrUserNotFound", err)
 	}
 }
 
