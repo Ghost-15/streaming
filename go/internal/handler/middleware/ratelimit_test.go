@@ -90,6 +90,36 @@ func TestUserRateLimitMiddleware_Returns429ByUser(t *testing.T) {
 	}
 }
 
+func TestUserRateLimitMiddleware_FallsBackToIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := gin.New()
+	engine.GET("/api/v1/streams",
+		UserRateLimitMiddleware(60, 1),
+		func(c *gin.Context) {
+			c.Status(http.StatusNoContent)
+		},
+	)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/streams", nil)
+	req.RemoteAddr = "203.0.113.55:1000"
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("first request status = %d, want 204", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/streams", nil)
+	req.RemoteAddr = "203.0.113.55:1000"
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want 429", rec.Code)
+	}
+}
+
 func TestStreamDataRateLimit_AllowsMediaRecorderCadence(t *testing.T) {
 	limiter := newKeyedLimiter(
 		rate.Limit(streamDataRequestsPerMinute/60.0),
@@ -104,5 +134,38 @@ func TestStreamDataRateLimit_AllowsMediaRecorderCadence(t *testing.T) {
 		if !limiter.AllowN(at, 1) {
 			t.Fatalf("audio chunk %d was unexpectedly rate limited", chunk+1)
 		}
+	}
+}
+
+func TestStreamDataRateLimitMiddleware_Returns429ByAuthenticatedUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := gin.New()
+	engine.POST("/api/v1/streams/s1/push",
+		func(c *gin.Context) {
+			c.Set(claimsKey, &entity.JWTClaims{UserID: "broadcaster-1"})
+			c.Next()
+		},
+		StreamDataRateLimitMiddleware(),
+		func(c *gin.Context) {
+			c.Status(http.StatusNoContent)
+		},
+	)
+
+	for i := 0; i < streamDataBurst; i++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/streams/s1/push", nil)
+		engine.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("request %d status = %d, want 204", i+1, rec.Code)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/streams/s1/push", nil)
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", rec.Code)
 	}
 }
