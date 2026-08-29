@@ -35,6 +35,8 @@ class _FakeFavoriteRepo extends FavoriteRepository {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
+  _failureReportingTests();
+
   group('FavoriteNotifier', () {
     test('initial state is idle with no tracks', () {
       final n = FavoriteNotifier(_FakeFavoriteRepo());
@@ -103,6 +105,50 @@ void main() {
       n.clearError();
       expect(n.error, isEmpty);
       expect(notified, isTrue);
+      n.dispose();
+    });
+  });
+}
+
+// ── Failure reporting ────────────────────────────────────────────────────────
+
+class _FailingFavoriteRepo extends FavoriteRepository {
+  const _FailingFavoriteRepo();
+
+  @override
+  Future<List<TrackModel>> list() async => const [];
+
+  @override
+  Future<void> add(String streamId) async => throw Exception('rejected');
+
+  @override
+  Future<void> remove(String streamId) async => throw Exception('rejected');
+}
+
+void _failureReportingTests() {
+  group('FavoriteNotifier failure reporting', () {
+    test('add returns false when the server rejects the stream', () async {
+      final n = FavoriteNotifier(const _FailingFavoriteRepo());
+      expect(await n.add('not-a-uuid'), isFalse);
+      expect(n.error, isNotEmpty);
+      n.dispose();
+    });
+
+    test('add returns true when the stream is accepted', () async {
+      final n = FavoriteNotifier(_FakeFavoriteRepo());
+      expect(await n.add('uuid-1'), isTrue);
+      n.dispose();
+    });
+
+    test('add refuses an empty identifier without calling the API', () async {
+      final n = FavoriteNotifier(const _FailingFavoriteRepo());
+      expect(await n.add('   '), isFalse);
+      n.dispose();
+    });
+
+    test('remove returns false when the server rejects it', () async {
+      final n = FavoriteNotifier(const _FailingFavoriteRepo());
+      expect(await n.remove('uuid-1'), isFalse);
       n.dispose();
     });
   });
