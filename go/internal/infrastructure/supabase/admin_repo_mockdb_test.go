@@ -102,3 +102,26 @@ func TestAdminRepo_GetStats_Mock(t *testing.T) {
 		t.Errorf("GetStats = %+v", stats)
 	}
 }
+
+func TestAdminRepo_DeleteUser_Mock(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r := &adminRepo{db: mock}
+
+	mock.ExpectExec("DELETE FROM users").WithArgs("u1").WillReturnResult(pgxmock.NewResult("DELETE", 1))
+	if err := r.DeleteUser(context.Background(), "u1"); err != nil {
+		t.Fatalf("DeleteUser err = %v", err)
+	}
+
+	mock.ExpectExec("DELETE FROM users").WithArgs("ghost").WillReturnResult(pgxmock.NewResult("DELETE", 0))
+	if err := r.DeleteUser(context.Background(), "ghost"); err == nil {
+		t.Error("DeleteUser on a missing user: expected an error")
+	}
+}
+
+func TestAdminRepo_DeleteUser_NilDB(t *testing.T) {
+	r := &adminRepo{db: nil}
+	if err := r.DeleteUser(context.Background(), "u1"); err == nil {
+		t.Error("DeleteUser with a nil pool: expected an error")
+	}
+}

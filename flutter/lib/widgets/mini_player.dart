@@ -26,137 +26,137 @@ class MiniPlayer extends StatelessWidget {
       button: true,
       label: 'Ouvrir le lecteur : ${stream.title}',
       child: GestureDetector(
-      onTap: () => _openFullPlayer(context),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: cs.outlineVariant, width: 0.8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.22),
-              blurRadius: 18,
-              offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: accent.withValues(alpha: 0.06),
-              blurRadius: 20,
-              spreadRadius: -4,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (audio.isLoading || audio.isBuffering)
-                LinearProgressIndicator(
-                  backgroundColor: Colors.transparent,
-                  color: accent,
-                  minHeight: 2,
-                ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [accent, accent.withValues(alpha: 0.5)],
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.radio_rounded,
-                          color: Colors.white54,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            stream.title,
-                            style: tt.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            stream.broadcasterName,
-                            style: tt.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (audio.isLoading)
-                      Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: cs.primary,
-                          ),
-                        ),
-                      )
-                    else
-                      IconButton(
-                        tooltip: audio.isPlaying || audio.isBuffering
-                            ? 'Pause'
-                            : 'Lecture',
-                        icon: Icon(
-                          audio.isPlaying || audio.isBuffering
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                          size: 26,
-                        ),
-                        color: cs.onSurface,
-                        onPressed: () {
-                          final notifier = context.read<AudioNotifier>();
-                          if (audio.isPlaying || audio.isBuffering) {
-                            notifier.pause();
-                          } else if (audio.isPaused) {
-                            notifier.resume();
-                          } else {
-                            notifier.playStream(stream);
-                          }
-                        },
-                      ),
-                    IconButton(
-                      tooltip: 'Fermer le lecteur',
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      color: cs.onSurfaceVariant,
-                      onPressed: () => context.read<AudioNotifier>().stop(),
-                    ),
-                  ],
-                ),
+        onTap: () => _openFullPlayer(context),
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: cs.outlineVariant, width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22),
+                blurRadius: 18,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: accent.withValues(alpha: 0.06),
+                blurRadius: 20,
+                spreadRadius: -4,
               ),
             ],
           ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (audio.isLoading || audio.isBuffering)
+                  LinearProgressIndicator(
+                    backgroundColor: Colors.transparent,
+                    color: accent,
+                    minHeight: 2,
+                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [accent, accent.withValues(alpha: 0.5)],
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.radio_rounded,
+                            color: Colors.white54,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              stream.title,
+                              style: tt.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              stream.broadcasterName,
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (audio.isLoading)
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.primary,
+                            ),
+                          ),
+                        )
+                      else
+                        IconButton(
+                          tooltip: audio.isPlaying || audio.isBuffering
+                              ? 'Pause'
+                              : 'Lecture',
+                          icon: Icon(
+                            audio.isPlaying || audio.isBuffering
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 26,
+                          ),
+                          color: cs.onSurface,
+                          onPressed: () {
+                            final notifier = context.read<AudioNotifier>();
+                            if (audio.isPlaying || audio.isBuffering) {
+                              notifier.pause();
+                            } else if (audio.isPaused) {
+                              notifier.resume();
+                            } else {
+                              notifier.playStream(stream);
+                            }
+                          },
+                        ),
+                      IconButton(
+                        tooltip: 'Fermer le lecteur',
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        color: cs.onSurfaceVariant,
+                        onPressed: () => context.read<AudioNotifier>().stop(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -236,6 +236,7 @@ class _FullPlayerSheet extends StatelessWidget {
                           Icons.keyboard_arrow_down_rounded,
                           size: 28,
                         ),
+                        tooltip: 'Réduire le lecteur',
                         onPressed: () => Navigator.of(context).pop(),
                         color: cs.onSurface,
                       ),

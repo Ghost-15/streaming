@@ -27,7 +27,7 @@ func newFavoriteEngine(h *handler.FavoriteHandler, userID string) *gin.Engine {
 	}
 	r.GET("/favorites", h.List)
 	r.POST("/favorites", h.Add)
-	r.DELETE("/favorites/:trackID", h.Remove)
+	r.DELETE("/favorites/:streamID", h.Remove)
 	return r
 }
 
@@ -91,18 +91,18 @@ func TestFavoriteHandler_Add(t *testing.T) {
 		{
 			name:   "success",
 			userID: "u1",
-			body:   map[string]interface{}{"track_id": "t1"},
+			body:   map[string]interface{}{"stream_id": "t1"},
 			repoSetup: func(r *mock.MockFavoriteRepository) {
 				r.AddFn = func(_ context.Context, _, _ string) error { return nil }
 			},
 			wantStatus: http.StatusCreated,
 		},
-		{name: "missing track_id", userID: "u1", body: map[string]interface{}{}, wantStatus: http.StatusBadRequest},
-		{name: "unauthenticated", userID: "", body: map[string]interface{}{"track_id": "t1"}, wantStatus: http.StatusUnauthorized},
+		{name: "missing stream_id", userID: "u1", body: map[string]interface{}{}, wantStatus: http.StatusBadRequest},
+		{name: "unauthenticated", userID: "", body: map[string]interface{}{"stream_id": "t1"}, wantStatus: http.StatusUnauthorized},
 		{
 			name:   "repo error",
 			userID: "u1",
-			body:   map[string]interface{}{"track_id": "t1"},
+			body:   map[string]interface{}{"stream_id": "t1"},
 			repoSetup: func(r *mock.MockFavoriteRepository) {
 				r.AddFn = func(_ context.Context, _, _ string) error { return errStreamTest }
 			},

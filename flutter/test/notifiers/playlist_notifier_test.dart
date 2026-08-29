@@ -64,6 +64,8 @@ class _FakePlaylistRepo extends PlaylistRepository {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 void main() {
+  _addTrackFailureTests();
+
   group('PlaylistNotifier', () {
     test('initial state is idle', () {
       final n = PlaylistNotifier(_FakePlaylistRepo());
@@ -140,6 +142,45 @@ void main() {
       n.clearError();
       expect(n.error, isEmpty);
       expect(notified, isTrue);
+      n.dispose();
+    });
+  });
+}
+
+// ── Failure reporting ────────────────────────────────────────────────────────
+
+class _FailingPlaylistRepo extends PlaylistRepository {
+  const _FailingPlaylistRepo();
+
+  @override
+  Future<List<PlaylistModel>> list() async => const [];
+
+  @override
+  Future<PlaylistModel> get(String id) async => _playlist(id: id);
+
+  @override
+  Future<void> addTrack(String playlistId, String trackId) async =>
+      throw Exception('rejected');
+}
+
+void _addTrackFailureTests() {
+  group('PlaylistNotifier addTrack failure reporting', () {
+    test('returns false when the server rejects the track', () async {
+      final n = PlaylistNotifier(const _FailingPlaylistRepo());
+      expect(await n.addTrack('p-1', 'not-a-uuid'), isFalse);
+      expect(n.error, isNotEmpty);
+      n.dispose();
+    });
+
+    test('returns true when the track is accepted', () async {
+      final n = PlaylistNotifier(_FakePlaylistRepo());
+      expect(await n.addTrack('p-1', 'uuid-1'), isTrue);
+      n.dispose();
+    });
+
+    test('refuses an empty identifier without calling the API', () async {
+      final n = PlaylistNotifier(const _FailingPlaylistRepo());
+      expect(await n.addTrack('p-1', '  '), isFalse);
       n.dispose();
     });
   });

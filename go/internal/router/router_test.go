@@ -10,6 +10,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/Ghost-15/streaming/internal/config"
 	"github.com/Ghost-15/streaming/internal/entity"
@@ -19,7 +22,10 @@ import (
 	"github.com/Ghost-15/streaming/internal/usecase/mock"
 )
 
-func writePublicKey(t *testing.T) string {
+// writeKeyPair generates a throwaway RSA pair, writes the public half where the
+// router expects it, and hands the private half back so a test can mint tokens
+// the running router will actually accept.
+func writeKeyPair(t *testing.T) (*rsa.PrivateKey, string) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -38,30 +44,53 @@ func writePublicKey(t *testing.T) string {
 	}
 	f.Close()
 	t.Cleanup(func() { os.Remove(f.Name()) })
-	return f.Name()
+	return key, f.Name()
 }
 
-func TestNewRouter(t *testing.T) {
-	pubPath := writePublicKey(t)
+// newTestRouter builds the production router over mock repositories. Both the
+// behavioural tests and the OpenAPI contract tests go through it, so there is a
+// single place where the route table is assembled.
+func newTestRouter(t *testing.T) *gin.Engine {
+	t.Helper()
+	engine, _ := buildTestRouter(t, true)
+	return engine
+}
+
+func newTestRouterWithSwagger(t *testing.T, swaggerEnabled bool) *gin.Engine {
+	t.Helper()
+	engine, _ := buildTestRouter(t, swaggerEnabled)
+	return engine
+}
+
+// buildTestRouter returns the assembled engine together with the signing key,
+// so security tests can forge tokens accepted by this exact router.
+func buildTestRouter(t *testing.T, swaggerEnabled bool) (*gin.Engine, *rsa.PrivateKey) {
+	t.Helper()
+	privateKey, pubPath := writeKeyPair(t)
 
 	cfg := &config.Config{
 		JWTPublicKeyPath:   pubPath,
 		CORSOrigins:        "http://localhost:3000",
 		MetricsBearerToken: "secret-token",
+		SwaggerEnabled:     swaggerEnabled,
 	}
 
 	streamRepo := &mock.MockStreamRepository{
 		ListActiveFn: func(_ context.Context) ([]entity.Stream, error) { return []entity.Stream{}, nil },
 	}
 
-	authH := handler.NewAuthHandler(usecase.NewAuthUseCase(&mock.MockUserRepository{}, ""))
+	authH := handler.NewAuthHandler(usecase.NewAuthUseCase(&mock.MockUserRepository{}, &mock.MockRefreshTokenRepository{}, "", time.Hour, 720*time.Hour))
 	streamH := handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, nil))
 	playlistH := handler.NewPlaylistHandler(usecase.NewPlaylistUseCase(&mock.MockPlaylistRepository{}))
 	adminH := handler.NewAdminHandler(usecase.NewAdminUseCase(&mock.MockAdminRepository{}))
 	favoriteH := handler.NewFavoriteHandler(usecase.NewFavoriteUseCase(&mock.MockFavoriteRepository{}))
 	recommendationH := handler.NewRecommendationHandler(usecase.NewRecommendationUseCase(&mock.MockRecommendationRepository{}))
 
-	engine := router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH)
+	return router.NewRouter(cfg, authH, streamH, playlistH, adminH, favoriteH, recommendationH), privateKey
+}
+
+func TestNewRouter(t *testing.T) {
+	engine := newTestRouter(t)
 
 	t.Run("health ok", func(t *testing.T) {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil)

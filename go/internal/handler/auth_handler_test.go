@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -135,7 +136,7 @@ func TestAuthHandler_Register(t *testing.T) {
 				return nil
 			}
 
-			uc := usecase.NewAuthUseCase(repo, testKeyPath)
+			uc := usecase.NewAuthUseCase(repo, &mock.MockRefreshTokenRepository{}, testKeyPath, time.Hour, 720*time.Hour)
 			h := handler.NewAuthHandler(uc)
 
 			bodyBytes, _ := json.Marshal(tt.body)
@@ -257,7 +258,7 @@ func TestAuthHandler_Login(t *testing.T) {
 				return nil, nil
 			}
 
-			uc := usecase.NewAuthUseCase(repo, testKeyPath)
+			uc := usecase.NewAuthUseCase(repo, &mock.MockRefreshTokenRepository{}, testKeyPath, time.Hour, 720*time.Hour)
 			h := handler.NewAuthHandler(uc)
 
 			bodyBytes, _ := json.Marshal(tt.body)

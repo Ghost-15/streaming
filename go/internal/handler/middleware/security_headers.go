@@ -13,6 +13,9 @@ func SecurityHeadersMiddleware() gin.HandlerFunc {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-XSS-Protection", "1; mode=block")
 		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		// The API is consumed by clients, not navigated: never leak the URL of
+		// the previous page, which can carry stream or user identifiers.
+		h.Set("Referrer-Policy", "no-referrer")
 
 		c.Next()
 	}

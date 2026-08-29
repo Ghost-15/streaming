@@ -125,3 +125,21 @@ func TestListenHistoryRepo_NilDB(t *testing.T) {
 		t.Error("ListByUser nil db: expected error")
 	}
 }
+
+func TestRefreshTokenRepo_NilDBFromConstructor(t *testing.T) {
+	r := supabase.NewRefreshTokenRepo(nil)
+	ctx := context.Background()
+
+	if err := r.Create(ctx, &entity.RefreshToken{}); err == nil {
+		t.Error("Create nil db: expected error")
+	}
+	if _, err := r.FindByHash(ctx, "hash"); err == nil {
+		t.Error("FindByHash nil db: expected error")
+	}
+	if err := r.Revoke(ctx, "hash"); err == nil {
+		t.Error("Revoke nil db: expected error")
+	}
+	if err := r.RevokeAllForUser(ctx, "u1"); err == nil {
+		t.Error("RevokeAllForUser nil db: expected error")
+	}
+}

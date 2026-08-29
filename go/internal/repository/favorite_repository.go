@@ -7,7 +7,7 @@ import (
 )
 
 type FavoriteRepository interface {
-	Add(ctx context.Context, userID, trackID string) error
-	Remove(ctx context.Context, userID, trackID string) error
+	Add(ctx context.Context, userID, streamID string) error
+	Remove(ctx context.Context, userID, streamID string) error
 	ListByUser(ctx context.Context, userID string) ([]entity.Track, error)
 }

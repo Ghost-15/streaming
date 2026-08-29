@@ -75,15 +75,19 @@ class PlaylistNotifier extends ChangeNotifier {
     }
   }
 
-  Future<void> addTrack(String playlistId, String trackId) async {
-    if (trackId.trim().isEmpty) return;
+  /// Returns false when the track could not be added, so the caller can surface
+  /// the failure instead of leaving the user in front of an unchanged playlist.
+  Future<bool> addTrack(String playlistId, String trackId) async {
+    if (trackId.trim().isEmpty) return false;
     try {
       await _repo.addTrack(playlistId, trackId.trim());
       await open(playlistId);
       await load();
+      return true;
     } catch (e) {
       error = e.toString();
       notifyListeners();
+      return false;
     }
   }
 

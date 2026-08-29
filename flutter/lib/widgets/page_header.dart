@@ -34,11 +34,14 @@ class PageHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: tt.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        title,
+                        style: tt.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
                       ),
                     ),
                     if (subtitle != null) ...[
@@ -59,10 +62,12 @@ class PageHeader extends StatelessWidget {
               ] else
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Icon(
-                    icon,
-                    size: 20,
-                    color: cs.primary.withValues(alpha: 0.45),
+                  child: ExcludeSemantics(
+                    child: Icon(
+                      icon,
+                      size: 20,
+                      color: cs.primary.withValues(alpha: 0.45),
+                    ),
                   ),
                 ),
             ],

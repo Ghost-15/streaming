@@ -113,6 +113,12 @@ func mapStreamSessionError(c *gin.Context, err error) {
 
 // ListOwned returns every reusable live created by the authenticated
 // broadcaster, including offline ones.
+// @Summary     List the streams owned by the authenticated broadcaster
+// @Tags        streams
+// @Produce     json
+// @Success     200 {array}  entity.Stream
+// @Failure     401 {object} map[string]string
+// @Router      /api/v1/streams/mine [get]
 func (h *StreamHandler) ListOwned(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -129,6 +135,12 @@ func (h *StreamHandler) ListOwned(c *gin.Context) {
 
 // ListActive lists all currently live streams. This route is intentionally
 // public so anonymous users can browse public live streams.
+// @Summary     List every stream currently live
+// @Tags        streams
+// @Produce     json
+// @Success     200 {array}  entity.Stream
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/streams [get]
 func (h *StreamHandler) ListActive(c *gin.Context) {
 	streams, err := h.useCase.ListActive(c.Request.Context())
 	if err != nil {
@@ -141,6 +153,16 @@ func (h *StreamHandler) ListActive(c *gin.Context) {
 }
 
 // Start creates a new live stream for the authenticated broadcaster.
+// @Summary     Create a live stream
+// @Tags        streams
+// @Accept      json
+// @Produce     json
+// @Param       body body StartRequest true "Stream payload"
+// @Success     201 {object} entity.Stream
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/streams [post]
 func (h *StreamHandler) Start(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -173,6 +195,14 @@ func (h *StreamHandler) Start(c *gin.Context) {
 }
 
 // Restart begins a new broadcast session on an existing persistent stream.
+// @Summary     Put an existing stream back on air
+// @Tags        streams
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     200 {object} entity.Stream
+// @Failure     401 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/streams/{id}/start [put]
 func (h *StreamHandler) Restart(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -200,6 +230,13 @@ func (h *StreamHandler) Restart(c *gin.Context) {
 }
 
 // Stop ends a live stream owned by the authenticated broadcaster.
+// @Summary     End a live stream
+// @Tags        streams
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     204
+// @Failure     401 {object} map[string]string
+// @Router      /api/v1/streams/{id}/stop [put]
 func (h *StreamHandler) Stop(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -225,6 +262,13 @@ func (h *StreamHandler) Stop(c *gin.Context) {
 }
 
 // Delete permanently removes a reusable stream owned by the broadcaster.
+// @Summary     Delete a stream owned by the broadcaster
+// @Tags        streams
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     204
+// @Failure     401 {object} map[string]string
+// @Router      /api/v1/streams/{id} [delete]
 func (h *StreamHandler) Delete(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -246,6 +290,13 @@ func (h *StreamHandler) Delete(c *gin.Context) {
 
 // Listen records a logical join. The GET variant is StreamAudio and represents
 // the real long-lived listener connection.
+// @Summary     Record that the user joined a stream
+// @Tags        streams
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     200 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Router      /api/v1/streams/{id}/listen [post]
 func (h *StreamHandler) Listen(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -266,6 +317,15 @@ func (h *StreamHandler) Listen(c *gin.Context) {
 // StreamAudio sends publisher bytes to one authenticated listener using HTTP
 // chunked transfer encoding. Request cancellation, stream stop and server
 // shutdown all release the Hub registration and database listener count.
+// @Summary     Stream the live audio to an authenticated listener
+// @Tags        streams
+// @Produce     octet-stream
+// @Param       id path string true "Stream ID"
+// @Success     200 {string} binary "Chunked audio bytes"
+// @Failure     401 {object} map[string]string
+// @Failure     409 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/streams/{id}/listen [get]
 func (h *StreamHandler) StreamAudio(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -383,6 +443,19 @@ func (h *StreamHandler) StreamAudio(c *gin.Context) {
 
 // IngestAudio receives an audio byte stream from the stream owner and fans out
 // each bounded chunk through the Hub. One publisher is allowed per stream.
+// @Summary     Ingest a continuous audio stream from the owner
+// @Tags        streams
+// @Accept      octet-stream
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     204
+// @Failure     401 {object} map[string]string
+// @Failure     408 {object} map[string]string
+// @Failure     409 {object} map[string]string
+// @Failure     413 {object} map[string]string
+// @Failure     415 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/streams/{id}/audio [put]
 func (h *StreamHandler) IngestAudio(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -471,6 +544,19 @@ func (h *StreamHandler) IngestAudio(c *gin.Context) {
 // stopped. This is the browser-compatible counterpart to the continuous PUT
 // endpoint, since MediaRecorder exposes ordered blobs rather than a writable
 // HTTP request body.
+// @Summary     Push one recorder chunk from a browser broadcaster
+// @Tags        streams
+// @Accept      octet-stream
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     204
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Failure     409 {object} map[string]string
+// @Failure     413 {object} map[string]string
+// @Failure     415 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/streams/{id}/push [post]
 func (h *StreamHandler) PushAudio(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -557,6 +643,13 @@ func (h *StreamHandler) leaveDetached(streamID, userID string) {
 }
 
 // Leave records that the authenticated listener left a stream.
+// @Summary     Record that the user left a stream
+// @Tags        streams
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     200 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Router      /api/v1/streams/{id}/leave [post]
 func (h *StreamHandler) Leave(c *gin.Context) {
 	claims, ok := middleware.GetClaims(c)
 	if !ok || claims == nil {
@@ -577,6 +670,14 @@ func (h *StreamHandler) Leave(c *gin.Context) {
 // Audio streams audio data to a listener using chunked HTTP transfer.
 // The endpoint is intentionally public: the browser <audio> element cannot
 // set custom Authorization headers, so auth is handled on the ingest side.
+// @Summary     Stream the live audio publicly
+// @Tags        streams
+// @Produce     octet-stream
+// @Param       id path string true "Stream ID"
+// @Success     200 {string} binary "Chunked audio bytes"
+// @Failure     409 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/streams/{id}/audio [get]
 func (h *StreamHandler) Audio(c *gin.Context) {
 	if h.hub == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})
@@ -717,6 +818,14 @@ func (h *StreamHandler) Audio(c *gin.Context) {
 // AudioSocket transports the publisher's ordered WebM bytes in binary
 // messages. MediaRecorder blob boundaries are not assumed to be independently
 // decodable: late listeners receive metadata only, then resume on a Cluster.
+// @Summary     Stream the live audio over a WebSocket
+// @Tags        streams
+// @Produce     json
+// @Param       id path string true "Stream ID"
+// @Success     101 {string} string "Switching protocols"
+// @Failure     409 {object} map[string]string
+// @Failure     503 {object} map[string]string
+// @Router      /api/v1/streams/{id}/audio/ws [get]
 func (h *StreamHandler) AudioSocket(c *gin.Context) {
 	if h.hub == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "audio streaming unavailable"})

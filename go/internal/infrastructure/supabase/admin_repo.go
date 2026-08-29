@@ -144,6 +144,28 @@ func (r *adminRepo) UpdateUserRole(ctx context.Context, id string, role entity.U
 	return nil
 }
 
+// DeleteUser removes a user account. Refresh tokens, streams, playlists and
+// favorites cascade with the row; listen history keeps its rows with a NULL
+// user_id so aggregate statistics survive the erasure.
+func (r *adminRepo) DeleteUser(ctx context.Context, id string) (err error) {
+	ctx, span := startRepoSpan(ctx, "admin", "AdminRepository", "DeleteUser", "users", "DELETE")
+	defer finishRepoSpan(span, &err)
+
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+
+	const q = `DELETE FROM users WHERE id = $1`
+	tag, execErr := r.db.Exec(ctx, q, id)
+	if execErr != nil {
+		return fmt.Errorf("admin_repo: delete user: %w", execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("admin_repo: user %s not found", id)
+	}
+	return nil
+}
+
 // SuspendUser suspends or reactivates a user account.
 func (r *adminRepo) SuspendUser(ctx context.Context, id string, suspend bool) (err error) {
 	ctx, span := startRepoSpan(ctx, "admin", "AdminRepository", "SuspendUser", "users", "UPDATE",

@@ -14,6 +14,7 @@ type AdminUseCase interface {
 	GetUser(ctx context.Context, id string) (*entity.User, error)
 	UpdateUserRole(ctx context.Context, id string, role entity.UserRole) error
 	SuspendUser(ctx context.Context, id string, suspend bool) error
+	DeleteUser(ctx context.Context, id string) error
 	GetStats(ctx context.Context) (*entity.AdminStats, error)
 }
 
@@ -51,6 +52,16 @@ func (uc *adminUseCase) UpdateUserRole(ctx context.Context, id string, role enti
 
 func (uc *adminUseCase) SuspendUser(ctx context.Context, id string, suspend bool) error {
 	return uc.adminRepo.SuspendUser(ctx, id, suspend)
+}
+
+// DeleteUser erases an account on an administrator decision. Refresh tokens,
+// streams, playlists and favorites cascade with the row, and listen history is
+// detached rather than deleted — same erasure semantics as a self-service delete.
+func (uc *adminUseCase) DeleteUser(ctx context.Context, id string) error {
+	if err := uc.adminRepo.DeleteUser(ctx, id); err != nil {
+		return fmt.Errorf("admin: delete user: %w", err)
+	}
+	return nil
 }
 
 func (uc *adminUseCase) GetStats(ctx context.Context) (*entity.AdminStats, error) {

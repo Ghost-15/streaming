@@ -15,7 +15,7 @@ goroutine lors des déconnexions ou d’un arrêt serveur.
 
 ## Ce qui est livré
 
-- API REST Go 1.25, authentification JWT RS256 et rôles User/Diffuseur/Admin.
+- API REST Go 1.26, authentification JWT RS256 et rôles User/Diffuseur/Admin.
 - Streaming HTTP chunked : une ingestion `audio/*`, plusieurs auditeurs et
   éviction non bloquante des clients lents.
 - Annulation transverse par `context.Context`, timeouts glissants, fermeture du
@@ -46,7 +46,7 @@ documentée dans [la note de performance et de coûts](docs/performance-couts.md
 
 ## Démarrage local
 
-Prérequis : Docker avec Compose, Go 1.25+, Flutter stable et OpenSSL.
+Prérequis : Docker avec Compose, Go 1.26+, Flutter stable et OpenSSL.
 
 ```powershell
 Copy-Item .env.example .env
@@ -61,11 +61,35 @@ Renseigner auparavant `SUPABASE_DB_URL` et `CORS_ALLOWED_ORIGINS` dans `.env`.
 Services locaux :
 
 - API : `http://localhost:8080`
+- Contrat OpenAPI : `http://localhost:8080/swagger/index.html`
 - Prometheus : `http://localhost:9090`
 - Grafana : `http://localhost:3000`
 - pprof : `http://127.0.0.1:6060/debug/pprof/`
 
 Le guide détaillé est dans [docs/runbook-local.md](docs/runbook-local.md).
+
+## Contrat d’API
+
+La description OpenAPI est générée depuis les annotations des handlers, jamais
+écrite à la main :
+
+```bash
+cd go
+swag init --dir ./cmd/server,./internal/handler,./internal/entity --generalInfo main.go --output docs/openapi --parseInternal --parseDepth 2
+```
+
+Le résultat est versionné dans `go/docs/openapi/` (40 opérations). Deux
+garde-fous empêchent la documentation de décrocher du code :
+
+- `TestOpenAPISpecCoversEveryRoute` échoue si une route enregistrée dans le
+  routeur n’apparaît pas dans la spécification ;
+  `TestOpenAPISpecHasNoStaleOperation` couvre le décalage inverse ;
+- le job CI `openapi-contract` régénère la spécification et échoue si la version
+  commitée diffère.
+
+L’interface Swagger est servie sur `/swagger/index.html` et se désactive avec
+`SWAGGER_ENABLED=false`. Elle n’expose que le contrat : chaque route listée reste
+protégée par son propre middleware RBAC.
 
 ## Protocole audio
 
@@ -112,6 +136,20 @@ auditeur. Le mode opératoire k6 et pprof se trouve dans
 [go/loadtest/README.md](go/loadtest/README.md). Les résultats mesurés et le
 modèle de capacité/coûts sont dans
 [docs/performance-couts.md](docs/performance-couts.md).
+
+## Fluidité du rendu
+
+La contrainte des 60 FPS est vérifiée par un test d'intégration exécuté en mode
+profile sur un appareil, jamais estimée :
+
+```bash
+make flutter-perf DEVICE=emulator-5554
+```
+
+Le test reconstruit la liste de directs toutes les 16 ms pendant six passes de
+défilement et échoue si le p90 du fil UI dépasse 16,67 ms. Le relevé mesuré et
+ses limites sont archivés dans
+[evidence/performance](evidence/performance/2026-08-23-rendering/README.md).
 
 ## Observabilité
 

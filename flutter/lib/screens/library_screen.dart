@@ -1,36 +1,75 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models/playlist_model.dart';
+import '../api/models/stream_model.dart';
 import '../api/models/track_model.dart';
+import '../notifiers/audio_notifier.dart';
 import '../notifiers/favorite_notifier.dart';
 import '../notifiers/playlist_notifier.dart';
+import '../notifiers/stream_notifier.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/page_header.dart';
+import '../widgets/stream_picker.dart';
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key});
+  /// How often the on-air state of the entries is re-checked while the screen
+  /// is visible. Pass null to disable the timer — widget tests do, because a
+  /// pending periodic timer never lets `pumpAndSettle` settle.
+  final Duration? liveRefreshInterval;
+
+  const LibraryScreen({
+    super.key,
+    this.liveRefreshInterval = const Duration(seconds: 8),
+  });
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
 class _LibraryScreenState extends State<LibraryScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final TabController _tabs;
+  Timer? _liveRefresh;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PlaylistNotifier>().load();
       context.read<FavoriteNotifier>().load();
+      // Needed to resolve a favourite or a playlist item to a live stream.
+      context.read<StreamNotifier>().loadActive();
     });
+
+    // A broadcaster going on or off air changes streams.status server side.
+    // Nothing pushes that to the client, so the state is re-read on a short
+    // cycle while the library is on screen.
+    final interval = widget.liveRefreshInterval;
+    if (interval != null) {
+      _liveRefresh = Timer.periodic(interval, (_) {
+        if (mounted) context.read<StreamNotifier>().loadActive();
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from the background can be minutes later: re-read at once
+    // rather than showing a stale badge until the next tick.
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<StreamNotifier>().loadActive();
+    }
   }
 
   @override
   void dispose() {
+    _liveRefresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _tabs.dispose();
     super.dispose();
   }
@@ -78,7 +117,10 @@ class _PlaylistsTab extends StatelessWidget {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () => context.read<PlaylistNotifier>().load(),
+        onRefresh: () => Future.wait([
+          context.read<PlaylistNotifier>().load(),
+          context.read<StreamNotifier>().loadActive(),
+        ]),
         child: _StatusView(
           status: playlists.status,
           error: playlists.error,
@@ -256,6 +298,7 @@ class _PlaylistTile extends StatelessWidget {
                               padding: const EdgeInsets.only(bottom: 6),
                               child: _TrackTile(
                                 track: track,
+                                onTap: () => _openLive(context, track),
                                 trailing: IconButton(
                                   icon: Icon(
                                     Icons.remove_circle_outline_rounded,
@@ -294,11 +337,13 @@ class _PlaylistTile extends StatelessWidget {
           onSubmit: (value) => notifier.rename(playlist.id, value),
         );
       case _PlaylistAction.addTrack:
-        _showTextDialog(
+        // The API keys playlist items on a live stream identifier, so the user
+        // picks a stream rather than typing a name.
+        showStreamPicker(
           context,
-          title: 'Ajouter un titre',
-          label: 'Nom du titre',
-          onSubmit: (value) => notifier.addTrack(playlist.id, value),
+          title: 'Ajouter à « ${playlist.title} »',
+          onPick: (stream) => notifier.addTrack(playlist.id, stream.id),
+          failureLabel: 'Impossible d’ajouter ce direct à la playlist',
         );
       case _PlaylistAction.next:
         notifier.next(playlist.id);
@@ -321,7 +366,10 @@ class _FavoritesTab extends StatelessWidget {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () => context.read<FavoriteNotifier>().load(),
+        onRefresh: () => Future.wait([
+          context.read<FavoriteNotifier>().load(),
+          context.read<StreamNotifier>().loadActive(),
+        ]),
         child: _StatusView(
           status: favorites.status,
           error: favorites.error,
@@ -338,6 +386,7 @@ class _FavoritesTab extends StatelessWidget {
               final track = favorites.tracks[i];
               return _TrackTile(
                 track: track,
+                onTap: () => _openLive(context, track),
                 trailing: IconButton(
                   icon: Icon(
                     Icons.favorite_rounded,
@@ -353,16 +402,96 @@ class _FavoritesTab extends StatelessWidget {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showTextDialog(
-          context,
-          title: 'Ajouter un favori',
-          label: 'Nom du titre',
-          onSubmit: (value) => context.read<FavoriteNotifier>().add(value),
-        ),
-        icon: const Icon(Icons.favorite_border_rounded),
-        label: const Text('Favori'),
+    );
+  }
+}
+
+// ── Opening a live from the library ───────────────────────────────────────────
+
+StreamModel? _liveWithId(StreamNotifier streams, String id) {
+  for (final stream in streams.streams) {
+    if (stream.id == id) return stream;
+  }
+  return null;
+}
+
+/// Starts playback of the live a library entry points at.
+///
+/// A favourite or a playlist item only stores a stream identifier, so the live
+/// is looked up among the streams currently on air. `GET /streams` returns only
+/// rows with status `live`, which is exactly the "the broadcaster is on air"
+/// condition: an entry whose broadcast has ended cannot be opened.
+Future<void> _openLive(BuildContext context, TrackModel track) async {
+  final audio = context.read<AudioNotifier>();
+  final streams = context.read<StreamNotifier>();
+  final messenger = ScaffoldMessenger.of(context);
+
+  // Already the current stream: leave the running playback alone.
+  if (audio.currentStream?.id == track.id) return;
+
+  var live = _liveWithId(streams, track.id);
+  if (live == null) {
+    // The cached list may predate this broadcast, so refresh once before
+    // telling the user the live is unavailable.
+    await streams.loadActive();
+    live = _liveWithId(streams, track.id);
+  }
+
+  if (live == null) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('« ${track.title} » n’est pas à l’antenne'),
+        behavior: SnackBarBehavior.floating,
       ),
+    );
+    return;
+  }
+
+  await audio.playStream(live);
+}
+
+// ── Live / offline badge ──────────────────────────────────────────────────────
+
+/// Tells whether the broadcast behind a library entry is currently on air.
+///
+/// The wording is carried by a real text node rather than by colour alone, so
+/// the state is announced to a screen reader and remains readable for someone
+/// who does not distinguish the red dot.
+class _LiveBadge extends StatelessWidget {
+  final bool isLive;
+  final String detail;
+
+  const _LiveBadge({required this.isLive, required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final color = isLive ? cs.error : cs.onSurfaceVariant;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            detail.isEmpty
+                ? (isLive ? 'En direct' : 'Hors ligne')
+                : '${isLive ? 'En direct' : 'Hors ligne'} · $detail',
+            style: tt.bodySmall?.copyWith(
+              color: color,
+              fontWeight: isLive ? FontWeight.w600 : FontWeight.w400,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -372,61 +501,77 @@ class _FavoritesTab extends StatelessWidget {
 class _TrackTile extends StatelessWidget {
   final TrackModel track;
   final Widget? trailing;
-  const _TrackTile({required this.track, this.trailing});
+  final VoidCallback? onTap;
+  const _TrackTile({required this.track, this.trailing, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    // Watched rather than passed in: the badge follows every refresh of the
+    // live list without the parent having to rebuild the entry.
+    final isLive = context.watch<StreamNotifier>().streams.any(
+      (stream) => stream.id == track.id,
+    );
     final subtitle = [
       if (track.artist.isNotEmpty) track.artist,
       if (track.duration > 0) '${track.duration}s',
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
+    return Material(
+      color: cs.surfaceContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.5),
-          width: 0.6,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(8),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.6,
             ),
-            child: Icon(Icons.music_note_rounded, size: 17, color: cs.primary),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  track.title,
-                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isLive
+                      ? cs.errorContainer.withValues(alpha: 0.45)
+                      : cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                if (subtitle.isNotEmpty)
-                  Text(
-                    subtitle,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
+                child: Icon(
+                  isLive ? Icons.podcasts_rounded : Icons.radio_rounded,
+                  size: 17,
+                  color: isLive ? cs.error : cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      track.title,
+                      style: tt.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    _LiveBadge(isLive: isLive, detail: subtitle),
+                  ],
+                ),
+              ),
+              ?trailing,
+            ],
           ),
-          ?trailing,
-        ],
+        ),
       ),
     );
   }

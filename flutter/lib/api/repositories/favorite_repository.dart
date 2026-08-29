@@ -19,18 +19,18 @@ class FavoriteRepository {
     );
   }
 
-  Future<void> add(String trackId) {
+  Future<void> add(String streamId) {
     return ApiService().request(
       httpMethod: HttpMethod.post,
       uri: 'favorites',
-      data: {'track_id': trackId},
+      data: {'stream_id': streamId},
     );
   }
 
-  Future<void> remove(String trackId) {
+  Future<void> remove(String streamId) {
     return ApiService().request(
       httpMethod: HttpMethod.delete,
-      uri: 'favorites/$trackId',
+      uri: 'favorites/$streamId',
     );
   }
 }

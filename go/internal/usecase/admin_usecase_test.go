@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Ghost-15/streaming/internal/entity"
@@ -97,4 +98,35 @@ func TestAdminUseCase_GetStats(t *testing.T) {
 			t.Error("GetStats() expected error")
 		}
 	})
+}
+
+func TestAdminUseCase_DeleteUser(t *testing.T) {
+	var asked string
+	repo := &mock.MockAdminRepository{
+		DeleteUserFn: func(_ context.Context, id string) error {
+			asked = id
+			return nil
+		},
+	}
+	uc := usecase.NewAdminUseCase(repo)
+	if err := uc.DeleteUser(context.Background(), "u1"); err != nil {
+		t.Fatalf("DeleteUser() err = %v", err)
+	}
+	if asked != "u1" {
+		t.Errorf("DeleteUser() asked repository for %q, want %q", asked, "u1")
+	}
+}
+
+func TestAdminUseCase_DeleteUserWrapsRepositoryError(t *testing.T) {
+	repo := &mock.MockAdminRepository{
+		DeleteUserFn: func(_ context.Context, _ string) error { return errors.New("boom") },
+	}
+	uc := usecase.NewAdminUseCase(repo)
+	err := uc.DeleteUser(context.Background(), "u1")
+	if err == nil {
+		t.Fatal("DeleteUser() error = nil, want a wrapped repository error")
+	}
+	if !strings.Contains(err.Error(), "admin: delete user") {
+		t.Errorf("DeleteUser() error = %q, want it wrapped with the usecase prefix", err.Error())
+	}
 }
