@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models/playlist_model.dart';
+import '../api/models/stream_model.dart';
 import '../api/models/track_model.dart';
+import '../notifiers/audio_notifier.dart';
 import '../notifiers/favorite_notifier.dart';
 import '../notifiers/playlist_notifier.dart';
+import '../notifiers/stream_notifier.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/page_header.dart';
 import '../widgets/stream_picker.dart';
@@ -27,6 +30,8 @@ class _LibraryScreenState extends State<LibraryScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PlaylistNotifier>().load();
       context.read<FavoriteNotifier>().load();
+      // Needed to resolve a favourite or a playlist item to a live stream.
+      context.read<StreamNotifier>().loadActive();
     });
   }
 
@@ -257,6 +262,7 @@ class _PlaylistTile extends StatelessWidget {
                               padding: const EdgeInsets.only(bottom: 6),
                               child: _TrackTile(
                                 track: track,
+                                onTap: () => _openLive(context, track),
                                 trailing: IconButton(
                                   icon: Icon(
                                     Icons.remove_circle_outline_rounded,
@@ -341,6 +347,7 @@ class _FavoritesTab extends StatelessWidget {
               final track = favorites.tracks[i];
               return _TrackTile(
                 track: track,
+                onTap: () => _openLive(context, track),
                 trailing: IconButton(
                   icon: Icon(
                     Icons.favorite_rounded,
@@ -360,12 +367,57 @@ class _FavoritesTab extends StatelessWidget {
   }
 }
 
+// ── Opening a live from the library ───────────────────────────────────────────
+
+StreamModel? _liveWithId(StreamNotifier streams, String id) {
+  for (final stream in streams.streams) {
+    if (stream.id == id) return stream;
+  }
+  return null;
+}
+
+/// Starts playback of the live a library entry points at.
+///
+/// A favourite or a playlist item only stores a stream identifier, so the live
+/// is looked up among the streams currently on air. `GET /streams` returns only
+/// rows with status `live`, which is exactly the "the broadcaster is on air"
+/// condition: an entry whose broadcast has ended cannot be opened.
+Future<void> _openLive(BuildContext context, TrackModel track) async {
+  final audio = context.read<AudioNotifier>();
+  final streams = context.read<StreamNotifier>();
+  final messenger = ScaffoldMessenger.of(context);
+
+  // Already the current stream: leave the running playback alone.
+  if (audio.currentStream?.id == track.id) return;
+
+  var live = _liveWithId(streams, track.id);
+  if (live == null) {
+    // The cached list may predate this broadcast, so refresh once before
+    // telling the user the live is unavailable.
+    await streams.loadActive();
+    live = _liveWithId(streams, track.id);
+  }
+
+  if (live == null) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('« ${track.title} » n’est pas à l’antenne'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
+
+  await audio.playStream(live);
+}
+
 // ── Track tile ────────────────────────────────────────────────────────────────
 
 class _TrackTile extends StatelessWidget {
   final TrackModel track;
   final Widget? trailing;
-  const _TrackTile({required this.track, this.trailing});
+  final VoidCallback? onTap;
+  const _TrackTile({required this.track, this.trailing, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -376,50 +428,65 @@ class _TrackTile extends StatelessWidget {
       if (track.duration > 0) '${track.duration}s',
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
+    return Material(
+      color: cs.surfaceContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.5),
-          width: 0.6,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(8),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.6,
             ),
-            child: Icon(Icons.music_note_rounded, size: 17, color: cs.primary),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  track.title,
-                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                if (subtitle.isNotEmpty)
-                  Text(
-                    subtitle,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
+                child: Icon(
+                  Icons.music_note_rounded,
+                  size: 17,
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      track.title,
+                      style: tt.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              ?trailing,
+            ],
           ),
-          ?trailing,
-        ],
+        ),
       ),
     );
   }
