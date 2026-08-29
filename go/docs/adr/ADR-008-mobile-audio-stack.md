@@ -57,36 +57,39 @@ mobile) relance immédiatement depuis le live edge.
 ### Diffuseur : reste Web
 La capture micro navigateur (`MediaRecorder`) produit du WebM/Opus. Sur mobile,
 le diffuseur **dégrade proprement** (message explicite) ; la diffusion reste sur
-le client Web. Split assumé : **auditeur = mobile**, **diffuseur = Web**.
+le client Web.
 
 ## Conséquences
 
 ### Positives
-- Écoute native **Android** avec arrière-plan, contrôles système et interruptions
-  → couvre les exigences « lecture en arrière-plan » et « gestion des interruptions ».
-- **Aucune régression Web** : la version `_web.dart` est intacte, le backend n'est
-  pas touché (il sert déjà `/audio` + `/audio/ws`).
-- UI et state management (Provider) inchangés.
+- **Écoute native Android** (just_audio + background) **et iOS** (media_kit /
+  libmpv, qui décode le WebM/Opus qu'AVPlayer refuse) — avec arrière-plan,
+  contrôles système et interruptions → couvre « lecture en arrière-plan » et
+  « gestion des interruptions ». Le moteur est choisi au runtime derrière une
+  même interface `AudioNotifier`, sans toucher l'UI.
+- **Diffuseur mobile** (Android/iOS) : capture micro via `record`, poussée sur
+  `POST /streams/:id/push` au même rythme (~500 ms) que le MediaRecorder web.
+- **Aucune régression Web** : la version `_web.dart` et le backend sont intacts
+  (il sert déjà `/audio` + `/audio/ws`).
 
-### Négatives / limites — le mur codec iOS
-Le diffuseur navigateur émet du **WebM/Opus**. **AVPlayer (iOS) ne décode pas le
-WebM** : l'écoute live d'un flux poussé depuis le Web est donc **limitée sur iOS**.
-L'app iOS **compile, s'installe et se navigue**, mais la lecture du direct WebM
-n'est pas garantie nativement. Lever cette limite demanderait soit un
-**transcodage serveur HLS/AAC** (latence + pipeline FFmpeg, hors périmètre), soit
-un **décodeur Opus côté client** (complexe). Documenté comme limite connue.
+### Négatives / limites
+- **Codec du diffuseur mobile** : `record` produit de l'**AAC** (ADTS), pas du
+  WebM/Opus. Un live poussé depuis un mobile est donc décodable par les
+  **auditeurs mobiles** (just_audio / media_kit) mais **pas par un `<audio>`
+  navigateur**. Le diffuseur Web reste la source universelle.
+- **Latence** ~1 s (taille des chunks), comme sur le web.
+- Les builds iOS/Android natifs ne se valident que sur **appareil réel + Mac/Xcode**.
 
 ## Alternatives rejetées
-- **Transcodage serveur HLS/AAC** : rend iOS pleinement compatible mais ajoute de
-  la latence et un pipeline FFmpeg lourd — hors budget du sprint.
-- **Décodeur Opus client** (`flutter_soloud` / `opus_dart`, sortie PCM custom) :
-  débloque iOS mais complexité et risque élevés.
-- **Diffusion micro mobile** : asymétrie de codec (Android enregistre Opus, iOS
-  AAC/CAF ≠ WebM navigateur) — reportée, diffuseur maintenu sur Web.
+- **Transcodage serveur HLS/AAC pour iOS** : rend iOS universel mais ajoute de la
+  latence + un pipeline FFmpeg lourd dans le backend de **prod** — écarté au profit
+  du décodage client `media_kit`, sans aucun changement backend.
+- **just_audio sur iOS** : AVPlayer ne décode ni WebM ni Opus → inutilisable pour
+  ce flux ; d'où media_kit sur iOS, just_audio conservé sur Android (validé).
 
 ## Vérification
-- `flutter analyze` : 0 issue ; `flutter test` : suite verte (le smoke test
-  instancie le player io sans planter).
-- Builds ciblés `flutter build apk` / `ios` / `web` (validation sur émulateur
-  Android : écoute d'un live poussé depuis le Web + arrière-plan + ducking +
-  pause sur appel + pause casque + reprise réseau).
+- `flutter analyze` : 0 issue ; `flutter test` : 50 tests verts ;
+  `flutter build web` : OK (aucune régression) ; `flutter build apk` : OK.
+- Validation runtime à faire sur **appareil réel** (Android + iPhone via Mac) :
+  écoute d'un live + arrière-plan + ducking + pause appel + pause casque + reprise
+  réseau, et diffusion micro mobile → auditeur mobile.

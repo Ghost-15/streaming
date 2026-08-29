@@ -70,5 +70,7 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>StreamPulse utilise le microphone pour diffuser un live audio.</string>
 </dict>
 </plist>

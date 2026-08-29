@@ -204,6 +204,97 @@ func TestStreamUseCase_End(t *testing.T) {
 	}
 }
 
+func TestStreamUseCase_End_Branches(t *testing.T) {
+	session := "session-1"
+	liveOwned := func(sess string) *entity.Stream {
+		s := &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusLive}
+		if sess != "" {
+			s.ActiveSessionID = &sess
+		}
+		return s
+	}
+
+	t.Run("empty session", func(t *testing.T) {
+		uc := usecase.NewStreamUseCase(&mock.MockStreamRepository{}, nil)
+		if err := uc.End(context.Background(), "s1", "bc-1", ""); !errors.Is(err, usecase.ErrStreamInvalid) {
+			t.Fatalf("End() err = %v, want ErrStreamInvalid", err)
+		}
+	})
+
+	t.Run("already ended returns nil", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
+				return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusEnded}, nil
+			},
+		}
+		if err := usecase.NewStreamUseCase(repo, nil).End(context.Background(), "s1", "bc-1", session); err != nil {
+			t.Fatalf("End() on ended stream err = %v, want nil", err)
+		}
+	})
+
+	t.Run("session mismatch", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) { return liveOwned("other"), nil },
+		}
+		if err := usecase.NewStreamUseCase(repo, nil).End(context.Background(), "s1", "bc-1", session); !errors.Is(err, usecase.ErrStreamSessionExpired) {
+			t.Fatalf("End() mismatch err = %v, want ErrStreamSessionExpired", err)
+		}
+	})
+
+	t.Run("deactivate reports superseded", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn:   func(_ context.Context, _ string) (*entity.Stream, error) { return liveOwned(session), nil },
+			DeactivateFn: func(_ context.Context, _, _ string) (bool, error) { return false, nil },
+		}
+		if err := usecase.NewStreamUseCase(repo, nil).End(context.Background(), "s1", "bc-1", session); !errors.Is(err, usecase.ErrStreamSessionExpired) {
+			t.Fatalf("End() superseded err = %v, want ErrStreamSessionExpired", err)
+		}
+	})
+
+	t.Run("deactivate repo error", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn:   func(_ context.Context, _ string) (*entity.Stream, error) { return liveOwned(session), nil },
+			DeactivateFn: func(_ context.Context, _, _ string) (bool, error) { return false, errors.New("db down") },
+		}
+		if err := usecase.NewStreamUseCase(repo, nil).End(context.Background(), "s1", "bc-1", session); err == nil {
+			t.Fatal("End() expected repo error")
+		}
+	})
+}
+
+func TestStreamUseCase_Delete_Branches(t *testing.T) {
+	t.Run("live stream decrements active count", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) { return liveStream(), nil },
+			DeleteFn:   func(_ context.Context, _ string) error { return nil },
+		}
+		if err := usecase.NewStreamUseCase(repo, nil).Delete(context.Background(), "s1", "bc-1"); err != nil {
+			t.Fatalf("Delete() live err = %v", err)
+		}
+	})
+
+	t.Run("repo delete error", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
+				return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusEnded}, nil
+			},
+			DeleteFn: func(_ context.Context, _ string) error { return errors.New("db") },
+		}
+		if err := usecase.NewStreamUseCase(repo, nil).Delete(context.Background(), "s1", "bc-1"); err == nil {
+			t.Fatal("Delete() expected repo error")
+		}
+	})
+
+	t.Run("not owned", func(t *testing.T) {
+		repo := &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) { return liveStream(), nil },
+		}
+		if err := usecase.NewStreamUseCase(repo, nil).Delete(context.Background(), "s1", "intruder"); !errors.Is(err, usecase.ErrStreamForbidden) {
+			t.Fatalf("Delete() not owned err = %v, want ErrStreamForbidden", err)
+		}
+	})
+}
+
 func TestStreamUseCase_Join(t *testing.T) {
 	t.Run("success records history", func(t *testing.T) {
 		recorded := false

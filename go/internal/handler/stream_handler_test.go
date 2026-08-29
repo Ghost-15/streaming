@@ -89,6 +89,49 @@ func newStreamHandlerWithHistory(streamRepo *mock.MockStreamRepository, historyR
 	return handler.NewStreamHandler(usecase.NewStreamUseCase(streamRepo, historyRepo))
 }
 
+func TestStreamHandler_OwnerErrorPaths(t *testing.T) {
+	ownedEnded := func() *mock.MockStreamRepository {
+		return &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) {
+				return &entity.Stream{ID: "s1", BroadcasterID: "bc-1", Status: entity.StreamStatusEnded}, nil
+			},
+		}
+	}
+	notFound := func() *mock.MockStreamRepository {
+		return &mock.MockStreamRepository{
+			FindByIDFn: func(_ context.Context, _ string) (*entity.Stream, error) { return nil, nil },
+		}
+	}
+
+	cases := []struct {
+		name       string
+		method     string
+		path       string
+		userID     string
+		repo       *mock.MockStreamRepository
+		wantStatus int
+	}{
+		{"list owned missing claims", http.MethodGet, "/streams/mine", "", &mock.MockStreamRepository{}, http.StatusUnauthorized},
+		{"list owned repo error", http.MethodGet, "/streams/mine", "bc-1", &mock.MockStreamRepository{
+			ListByBroadcasterFn: func(_ context.Context, _ string) ([]entity.Stream, error) { return nil, errStreamTest },
+		}, http.StatusInternalServerError},
+		{"restart missing claims", http.MethodPut, "/streams/s1/start", "", &mock.MockStreamRepository{}, http.StatusUnauthorized},
+		{"restart not found", http.MethodPut, "/streams/s1/start", "bc-1", notFound(), http.StatusNotFound},
+		{"restart forbidden", http.MethodPut, "/streams/s1/start", "intruder", ownedEnded(), http.StatusForbidden},
+		{"delete missing claims", http.MethodDelete, "/streams/s1", "", &mock.MockStreamRepository{}, http.StatusUnauthorized},
+		{"delete not found", http.MethodDelete, "/streams/s1", "bc-1", notFound(), http.StatusNotFound},
+		{"delete forbidden", http.MethodDelete, "/streams/s1", "intruder", ownedEnded(), http.StatusForbidden},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := streamReq(newStreamEngine(newStreamHandler(tc.repo), tc.userID), tc.method, tc.path, nil)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("%s status = %d, want %d (body=%s)", tc.name, w.Code, tc.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
 func streamReq(engine *gin.Engine, method, path string, body interface{}) *httptest.ResponseRecorder {
 	var r *bytes.Reader
 	if body != nil {
