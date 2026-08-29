@@ -35,8 +35,8 @@ TrackModel _entry(String id, String title) =>
     TrackModel(id: id, title: title, createdAt: DateTime(2026));
 
 class _FakeStreamRepo extends StreamRepository {
-  final List<StreamModel> data;
-  const _FakeStreamRepo(this.data);
+  List<StreamModel> data;
+  _FakeStreamRepo(this.data);
 
   @override
   Future<List<StreamModel>> getActive() async => data;
@@ -78,12 +78,13 @@ Widget _host({
   required _SpyAudioNotifier audio,
   required List<StreamModel> live,
   required List<TrackModel> favourites,
+  _FakeStreamRepo? streamRepo,
 }) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<AudioNotifier>.value(value: audio),
-      ChangeNotifierProvider(
-        create: (_) => StreamNotifier(_FakeStreamRepo(live)),
+      ChangeNotifierProvider<StreamNotifier>(
+        create: (_) => StreamNotifier(streamRepo ?? _FakeStreamRepo(live)),
       ),
       ChangeNotifierProvider(
         create: (_) => FavoriteNotifier(_FakeFavoriteRepo(favourites)),
@@ -92,7 +93,9 @@ Widget _host({
         create: (_) => PlaylistNotifier(const _FakePlaylistRepo()),
       ),
     ],
-    child: const MaterialApp(home: LibraryScreen()),
+    child: const MaterialApp(
+      home: LibraryScreen(liveRefreshInterval: null),
+    ),
   );
 }
 
@@ -104,6 +107,7 @@ Future<void> _openFavouritesTab(WidgetTester tester) async {
 
 void main() {
   _badgeTests();
+  _statusChangeTests();
 
   testWidgets('tapping a favourite whose broadcast is on air opens it', (
     tester,
@@ -218,5 +222,59 @@ void _badgeTests() {
     await _openFavouritesTab(tester);
 
     expect(find.bySemanticsLabel(RegExp('En direct')), findsWidgets);
+  });
+}
+
+// ── Reacting to a broadcast ending ───────────────────────────────────────────
+
+void _statusChangeTests() {
+  testWidgets('the badge flips to offline once the broadcast stops', (
+    tester,
+  ) async {
+    final repo = _FakeStreamRepo([_live()]);
+    await tester.pumpWidget(
+      _host(
+        audio: _SpyAudioNotifier(),
+        live: const [],
+        favourites: [_entry(_liveId, 'Radio Nuit')],
+        streamRepo: repo,
+      ),
+    );
+    await _openFavouritesTab(tester);
+    expect(find.textContaining('En direct'), findsOneWidget);
+
+    // The broadcaster leaves the air. In the app the periodic timer re-reads
+    // the list; here it is driven explicitly so the test stays deterministic.
+    repo.data = const [];
+    final context = tester.element(find.byType(LibraryScreen));
+    await Provider.of<StreamNotifier>(context, listen: false).loadActive();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Hors ligne'), findsOneWidget);
+    expect(find.textContaining('En direct'), findsNothing);
+  });
+
+  testWidgets('a broadcast that just started becomes tappable', (tester) async {
+    final repo = _FakeStreamRepo(const []);
+    final audio = _SpyAudioNotifier();
+    await tester.pumpWidget(
+      _host(
+        audio: audio,
+        live: const [],
+        favourites: [_entry(_liveId, 'Radio Nuit')],
+        streamRepo: repo,
+      ),
+    );
+    await _openFavouritesTab(tester);
+    expect(find.textContaining('Hors ligne'), findsOneWidget);
+
+    // The broadcaster goes on air after the page was built. Tapping refreshes
+    // once before giving up, so the live must open rather than be refused.
+    repo.data = [_live()];
+    await tester.tap(find.text('Radio Nuit'));
+    await tester.pumpAndSettle();
+
+    expect(audio.played, [_liveId]);
+    expect(find.textContaining('En direct'), findsOneWidget);
   });
 }

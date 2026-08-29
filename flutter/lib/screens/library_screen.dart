@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,30 +15,61 @@ import '../widgets/page_header.dart';
 import '../widgets/stream_picker.dart';
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key});
+  /// How often the on-air state of the entries is re-checked while the screen
+  /// is visible. Pass null to disable the timer — widget tests do, because a
+  /// pending periodic timer never lets `pumpAndSettle` settle.
+  final Duration? liveRefreshInterval;
+
+  const LibraryScreen({
+    super.key,
+    this.liveRefreshInterval = const Duration(seconds: 8),
+  });
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
 class _LibraryScreenState extends State<LibraryScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final TabController _tabs;
+  Timer? _liveRefresh;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PlaylistNotifier>().load();
       context.read<FavoriteNotifier>().load();
       // Needed to resolve a favourite or a playlist item to a live stream.
       context.read<StreamNotifier>().loadActive();
     });
+
+    // A broadcaster going on or off air changes streams.status server side.
+    // Nothing pushes that to the client, so the state is re-read on a short
+    // cycle while the library is on screen.
+    final interval = widget.liveRefreshInterval;
+    if (interval != null) {
+      _liveRefresh = Timer.periodic(interval, (_) {
+        if (mounted) context.read<StreamNotifier>().loadActive();
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from the background can be minutes later: re-read at once
+    // rather than showing a stale badge until the next tick.
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<StreamNotifier>().loadActive();
+    }
   }
 
   @override
   void dispose() {
+    _liveRefresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _tabs.dispose();
     super.dispose();
   }
@@ -84,7 +117,10 @@ class _PlaylistsTab extends StatelessWidget {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () => context.read<PlaylistNotifier>().load(),
+        onRefresh: () => Future.wait([
+          context.read<PlaylistNotifier>().load(),
+          context.read<StreamNotifier>().loadActive(),
+        ]),
         child: _StatusView(
           status: playlists.status,
           error: playlists.error,
@@ -330,7 +366,10 @@ class _FavoritesTab extends StatelessWidget {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () => context.read<FavoriteNotifier>().load(),
+        onRefresh: () => Future.wait([
+          context.read<FavoriteNotifier>().load(),
+          context.read<StreamNotifier>().loadActive(),
+        ]),
         child: _StatusView(
           status: favorites.status,
           error: favorites.error,
