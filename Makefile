@@ -66,16 +66,10 @@ docker-down:
 migrate:
 	@echo "Applying migrations..."
 	@export $$(grep -v '^#' .env | xargs) && \
-		psql $$SUPABASE_DB_URL -f migrations/001_init.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/002_rls.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/003_listen_history.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/004_alter_users_and_playlist_tracks.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/005_playlist_track_count.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/006_user_suspend.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/007_favorites.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/008_listen_history_stream.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/009_listen_history_events.sql && \
-		psql $$SUPABASE_DB_URL -f migrations/010_reusable_stream_sessions.sql
+		for migration in migrations/*.sql; do \
+			echo "Applying $$migration"; \
+			psql -v ON_ERROR_STOP=1 --dbname="$$SUPABASE_DB_URL" -f "$$migration" || exit $$?; \
+		done
 	@echo "Done."
 
 # ── Flutter ───────────────────────────────────────────────────────────────────

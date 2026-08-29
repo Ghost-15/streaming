@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	favUser  = "user-1"
+	favUser   = "user-1"
 	favStream = "stream-1"
 )
 
@@ -19,13 +19,13 @@ func TestFavoriteUseCase_Add(t *testing.T) {
 	tests := []struct {
 		name      string
 		userID    string
-		streamID   string
+		streamID  string
 		repoSetup func(*mock.MockFavoriteRepository)
 		wantErr   error
 	}{
 		{
-			name:    "success",
-			userID:  favUser,
+			name:     "success",
+			userID:   favUser,
 			streamID: favStream,
 			repoSetup: func(r *mock.MockFavoriteRepository) {
 				r.AddFn = func(_ context.Context, _, _ string) error { return nil }
@@ -34,8 +34,8 @@ func TestFavoriteUseCase_Add(t *testing.T) {
 		{name: "empty user", userID: "", streamID: favStream, wantErr: usecase.ErrFavoriteInvalid},
 		{name: "empty track", userID: favUser, streamID: "", wantErr: usecase.ErrFavoriteInvalid},
 		{
-			name:    "repo error",
-			userID:  favUser,
+			name:     "repo error",
+			userID:   favUser,
 			streamID: favStream,
 			repoSetup: func(r *mock.MockFavoriteRepository) {
 				r.AddFn = func(_ context.Context, _, _ string) error { return errors.New("db") }
