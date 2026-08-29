@@ -103,6 +103,8 @@ Future<void> _openFavouritesTab(WidgetTester tester) async {
 }
 
 void main() {
+  _badgeTests();
+
   testWidgets('tapping a favourite whose broadcast is on air opens it', (
     tester,
   ) async {
@@ -167,5 +169,54 @@ void main() {
       isEmpty,
       reason: 'restarting the running stream would cut the listener off',
     );
+  });
+}
+
+// ── Live / offline badge ─────────────────────────────────────────────────────
+
+void _badgeTests() {
+  testWidgets('a favourite on air is labelled as live', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        audio: _SpyAudioNotifier(),
+        live: [_live()],
+        favourites: [_entry(_liveId, 'Radio Nuit')],
+      ),
+    );
+    await _openFavouritesTab(tester);
+
+    expect(find.textContaining('En direct'), findsOneWidget);
+    expect(find.textContaining('Hors ligne'), findsNothing);
+  });
+
+  testWidgets('a favourite whose broadcast ended is labelled offline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        audio: _SpyAudioNotifier(),
+        live: const [],
+        favourites: [_entry(_endedId, 'Emission finie')],
+      ),
+    );
+    await _openFavouritesTab(tester);
+
+    expect(find.textContaining('Hors ligne'), findsOneWidget);
+    expect(find.textContaining('En direct'), findsNothing);
+  });
+
+  testWidgets('the state is written, not only coloured', (tester) async {
+    // Colour alone excludes screen reader users and anyone who cannot
+    // distinguish the dot, so the wording must exist as text.
+    await tester.pumpWidget(
+      _host(
+        audio: _SpyAudioNotifier(),
+        live: [_live()],
+        favourites: [_entry(_liveId, 'Radio Nuit')],
+      ),
+    );
+    await _openFavouritesTab(tester);
+
+    expect(find.bySemanticsLabel(RegExp('En direct')), findsWidgets);
   });
 }

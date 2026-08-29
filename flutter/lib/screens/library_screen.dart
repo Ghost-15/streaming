@@ -411,6 +411,52 @@ Future<void> _openLive(BuildContext context, TrackModel track) async {
   await audio.playStream(live);
 }
 
+// ── Live / offline badge ──────────────────────────────────────────────────────
+
+/// Tells whether the broadcast behind a library entry is currently on air.
+///
+/// The wording is carried by a real text node rather than by colour alone, so
+/// the state is announced to a screen reader and remains readable for someone
+/// who does not distinguish the red dot.
+class _LiveBadge extends StatelessWidget {
+  final bool isLive;
+  final String detail;
+
+  const _LiveBadge({required this.isLive, required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final color = isLive ? cs.error : cs.onSurfaceVariant;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            detail.isEmpty
+                ? (isLive ? 'En direct' : 'Hors ligne')
+                : '${isLive ? 'En direct' : 'Hors ligne'} · $detail',
+            style: tt.bodySmall?.copyWith(
+              color: color,
+              fontWeight: isLive ? FontWeight.w600 : FontWeight.w400,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Track tile ────────────────────────────────────────────────────────────────
 
 class _TrackTile extends StatelessWidget {
@@ -423,6 +469,11 @@ class _TrackTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    // Watched rather than passed in: the badge follows every refresh of the
+    // live list without the parent having to rebuild the entry.
+    final isLive = context.watch<StreamNotifier>().streams.any(
+      (stream) => stream.id == track.id,
+    );
     final subtitle = [
       if (track.artist.isNotEmpty) track.artist,
       if (track.duration > 0) '${track.duration}s',
@@ -449,13 +500,15 @@ class _TrackTile extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: cs.primaryContainer.withValues(alpha: 0.35),
+                  color: isLive
+                      ? cs.errorContainer.withValues(alpha: 0.45)
+                      : cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  Icons.music_note_rounded,
+                  isLive ? Icons.podcasts_rounded : Icons.radio_rounded,
                   size: 17,
-                  color: cs.primary,
+                  color: isLive ? cs.error : cs.onSurfaceVariant,
                 ),
               ),
               const SizedBox(width: 12),
@@ -471,15 +524,8 @@ class _TrackTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (subtitle.isNotEmpty)
-                      Text(
-                        subtitle,
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    const SizedBox(height: 2),
+                    _LiveBadge(isLive: isLive, detail: subtitle),
                   ],
                 ),
               ),
