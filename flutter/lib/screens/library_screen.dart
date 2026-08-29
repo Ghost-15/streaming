@@ -7,6 +7,7 @@ import '../notifiers/favorite_notifier.dart';
 import '../notifiers/playlist_notifier.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/page_header.dart';
+import '../widgets/stream_picker.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -294,11 +295,13 @@ class _PlaylistTile extends StatelessWidget {
           onSubmit: (value) => notifier.rename(playlist.id, value),
         );
       case _PlaylistAction.addTrack:
-        _showTextDialog(
+        // The API keys playlist items on a live stream identifier, so the user
+        // picks a stream rather than typing a name.
+        showStreamPicker(
           context,
-          title: 'Ajouter un titre',
-          label: 'Nom du titre',
-          onSubmit: (value) => notifier.addTrack(playlist.id, value),
+          title: 'Ajouter à « ${playlist.title} »',
+          onPick: (stream) => notifier.addTrack(playlist.id, stream.id),
+          failureLabel: 'Impossible d’ajouter ce direct à la playlist',
         );
       case _PlaylistAction.next:
         notifier.next(playlist.id);
@@ -354,11 +357,14 @@ class _FavoritesTab extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showTextDialog(
+        // Favourites reference a live stream, not a free-text title: the user
+        // picks one from the streams currently on air.
+        onPressed: () => showStreamPicker(
           context,
           title: 'Ajouter un favori',
-          label: 'Nom du titre',
-          onSubmit: (value) => context.read<FavoriteNotifier>().add(value),
+          onPick: (stream) =>
+              context.read<FavoriteNotifier>().add(stream.id),
+          failureLabel: 'Impossible d’ajouter ce direct aux favoris',
         ),
         icon: const Icon(Icons.favorite_border_rounded),
         label: const Text('Favori'),

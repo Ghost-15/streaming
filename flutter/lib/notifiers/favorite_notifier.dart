@@ -27,24 +27,31 @@ class FavoriteNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> add(String streamId) async {
-    if (streamId.trim().isEmpty) return;
+  /// Returns false when the favourite could not be stored, so the caller can
+  /// surface the failure instead of leaving the user in front of an unchanged
+  /// list.
+  Future<bool> add(String streamId) async {
+    if (streamId.trim().isEmpty) return false;
     try {
       await _repo.add(streamId.trim());
       await load();
+      return true;
     } catch (e) {
       error = e.toString();
       notifyListeners();
+      return false;
     }
   }
 
-  Future<void> remove(String streamId) async {
+  Future<bool> remove(String streamId) async {
     try {
       await _repo.remove(streamId);
       await load();
+      return true;
     } catch (e) {
       error = e.toString();
       notifyListeners();
+      return false;
     }
   }
 
