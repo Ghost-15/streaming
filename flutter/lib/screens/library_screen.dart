@@ -356,19 +356,6 @@ class _FavoritesTab extends StatelessWidget {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        // Favourites reference a live stream, not a free-text title: the user
-        // picks one from the streams currently on air.
-        onPressed: () => showStreamPicker(
-          context,
-          title: 'Ajouter un favori',
-          onPick: (stream) =>
-              context.read<FavoriteNotifier>().add(stream.id),
-          failureLabel: 'Impossible d’ajouter ce direct aux favoris',
-        ),
-        icon: const Icon(Icons.favorite_border_rounded),
-        label: const Text('Favori'),
-      ),
     );
   }
 }
