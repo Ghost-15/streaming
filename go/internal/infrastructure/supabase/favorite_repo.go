@@ -19,7 +19,7 @@ func NewFavoriteRepo(db *pgxpool.Pool) repository.FavoriteRepository {
 	return &supabaseFavoriteRepo{db: poolOrNil(db)}
 }
 
-func (r *supabaseFavoriteRepo) Add(ctx context.Context, userID, trackID string) error {
+func (r *supabaseFavoriteRepo) Add(ctx context.Context, userID, streamID string) error {
 	var err error
 	ctx, span := startRepoSpan(ctx, "favorites", "FavoriteRepository", "Add", "favorites", "INSERT")
 	defer finishRepoSpan(span, &err)
@@ -29,16 +29,16 @@ func (r *supabaseFavoriteRepo) Add(ctx context.Context, userID, trackID string) 
 	}
 
 	const q = `
-		INSERT INTO favorites (user_id, track_id)
+		INSERT INTO favorites (user_id, stream_id)
 		VALUES ($1, $2)
-		ON CONFLICT (user_id, track_id) DO NOTHING`
-	if _, err = r.db.Exec(ctx, q, userID, trackID); err != nil {
+		ON CONFLICT (user_id, stream_id) DO NOTHING`
+	if _, err = r.db.Exec(ctx, q, userID, streamID); err != nil {
 		return fmt.Errorf("favorite_repo: add: %w", err)
 	}
 	return nil
 }
 
-func (r *supabaseFavoriteRepo) Remove(ctx context.Context, userID, trackID string) error {
+func (r *supabaseFavoriteRepo) Remove(ctx context.Context, userID, streamID string) error {
 	var err error
 	ctx, span := startRepoSpan(ctx, "favorites", "FavoriteRepository", "Remove", "favorites", "DELETE")
 	defer finishRepoSpan(span, &err)
@@ -47,8 +47,8 @@ func (r *supabaseFavoriteRepo) Remove(ctx context.Context, userID, trackID strin
 		return errDatabaseUnavailable
 	}
 
-	const q = `DELETE FROM favorites WHERE user_id = $1 AND track_id = $2`
-	tag, err := r.db.Exec(ctx, q, userID, trackID)
+	const q = `DELETE FROM favorites WHERE user_id = $1 AND stream_id = $2`
+	tag, err := r.db.Exec(ctx, q, userID, streamID)
 	if err != nil {
 		return fmt.Errorf("favorite_repo: remove: %w", err)
 	}
@@ -75,7 +75,7 @@ func (r *supabaseFavoriteRepo) ListByUser(ctx context.Context, userID string) ([
 		       COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), '') AS artist,
 		       0 AS duration, '' AS file_url, s.broadcaster_id AS uploaded_by, f.created_at
 		FROM favorites f
-		JOIN streams s ON s.id = f.track_id
+		JOIN streams s ON s.id = f.stream_id
 		LEFT JOIN users u ON u.id = s.broadcaster_id
 		WHERE f.user_id = $1
 		ORDER BY f.created_at DESC`
@@ -91,7 +91,7 @@ func (r *supabaseFavoriteRepo) ListByUser(ctx context.Context, userID string) ([
 		if err := rows.Scan(
 			&t.ID, &t.Title, &t.Artist, &t.Duration, &t.FileURL, &t.UploadedBy, &t.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("favorite_repo: scan track: %w", err)
+			return nil, fmt.Errorf("favorite_repo: scan stream: %w", err)
 		}
 		tracks = append(tracks, t)
 	}

@@ -12,5 +12,6 @@ type AdminRepository interface {
 	GetUser(ctx context.Context, id string) (*entity.User, error)
 	UpdateUserRole(ctx context.Context, id string, role entity.UserRole) error
 	SuspendUser(ctx context.Context, id string, suspend bool) error
+	DeleteUser(ctx context.Context, id string) error
 	GetStats(ctx context.Context) (*entity.AdminStats, error)
 }

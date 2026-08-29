@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - Docker Desktop or Docker Engine with Compose
 - OpenSSL
 - A reachable PostgreSQL/Supabase URL for `SUPABASE_DB_URL`

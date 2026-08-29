@@ -27,10 +27,10 @@ class FavoriteNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> add(String trackId) async {
-    if (trackId.trim().isEmpty) return;
+  Future<void> add(String streamId) async {
+    if (streamId.trim().isEmpty) return;
     try {
-      await _repo.add(trackId.trim());
+      await _repo.add(streamId.trim());
       await load();
     } catch (e) {
       error = e.toString();
@@ -38,9 +38,9 @@ class FavoriteNotifier extends ChangeNotifier {
     }
   }
 
-  Future<void> remove(String trackId) async {
+  Future<void> remove(String streamId) async {
     try {
-      await _repo.remove(trackId);
+      await _repo.remove(streamId);
       await load();
     } catch (e) {
       error = e.toString();

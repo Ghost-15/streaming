@@ -173,6 +173,7 @@ func TestLoadValidatesStreamingAndPprofConfiguration(t *testing.T) {
 	}{
 		{name: "invalid duration", key: "STREAM_IDLE_TIMEOUT", value: "later", wantErr: "STREAM_IDLE_TIMEOUT"},
 		{name: "invalid chunk size", key: "STREAM_CHUNK_SIZE", value: "100", wantErr: "streaming limits"},
+		{name: "invalid ingest bytes", key: "STREAM_MAX_INGEST_BYTES", value: "huge", wantErr: "STREAM_MAX_INGEST_BYTES"},
 		{name: "invalid boolean", key: "PPROF_ENABLED", value: "perhaps", wantErr: "PPROF_ENABLED"},
 		{name: "invalid metrics boolean", key: "OTEL_METRICS_ENABLED", value: "perhaps", wantErr: "OTEL_METRICS_ENABLED"},
 	}
@@ -198,12 +199,35 @@ func TestLoadValidatesStreamingAndPprofConfiguration(t *testing.T) {
 		}
 	})
 
+	t.Run("production pprof accepts localhost", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("METRICS_BEARER_TOKEN", "token")
+		t.Setenv("PPROF_ENABLED", "true")
+		t.Setenv("PPROF_ADDR", "localhost:6060")
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+	})
+
 	t.Run("production pprof rejects public bind", func(t *testing.T) {
 		setRequiredEnv(t)
 		t.Setenv("APP_ENV", "production")
 		t.Setenv("METRICS_BEARER_TOKEN", "token")
 		t.Setenv("PPROF_ENABLED", "true")
 		t.Setenv("PPROF_ADDR", "0.0.0.0:6060")
+		_, err := Load()
+		if err == nil || !strings.Contains(err.Error(), "loopback") {
+			t.Fatalf("Load() error = %v, want loopback error", err)
+		}
+	})
+
+	t.Run("production pprof rejects invalid address", func(t *testing.T) {
+		setRequiredEnv(t)
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("METRICS_BEARER_TOKEN", "token")
+		t.Setenv("PPROF_ENABLED", "true")
+		t.Setenv("PPROF_ADDR", "localhost")
 		_, err := Load()
 		if err == nil || !strings.Contains(err.Error(), "loopback") {
 			t.Fatalf("Load() error = %v, want loopback error", err)

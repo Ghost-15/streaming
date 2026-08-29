@@ -19,9 +19,17 @@ func NewFavoriteHandler(uc usecase.FavoriteUseCase) *FavoriteHandler {
 }
 
 type AddFavoriteRequest struct {
-	TrackID string `json:"track_id" binding:"required"`
+	StreamID string `json:"stream_id" binding:"required"`
 }
 
+// List godoc.
+// @Summary     List the favorites of the authenticated user
+// @Tags        favorites
+// @Produce     json
+// @Success     200 {object} map[string][]entity.Track
+// @Failure     401 {object} map[string]string
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/favorites [get]
 func (h *FavoriteHandler) List(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {
@@ -39,6 +47,17 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": tracks})
 }
 
+// Add godoc.
+// @Summary     Add a live stream to the favorites
+// @Tags        favorites
+// @Accept      json
+// @Produce     json
+// @Param       body body AddFavoriteRequest true "Favorite payload"
+// @Success     201
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Failure     500 {object} map[string]string
+// @Router      /api/v1/favorites [post]
 func (h *FavoriteHandler) Add(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {
@@ -53,7 +72,7 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 		return
 	}
 
-	if err := h.useCase.Add(c.Request.Context(), uid, req.TrackID); err != nil {
+	if err := h.useCase.Add(c.Request.Context(), uid, req.StreamID); err != nil {
 		middleware.Logger(c).Error().Err(err).Msg("add favorite failed")
 		if errors.Is(err, usecase.ErrFavoriteInvalid) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
@@ -62,10 +81,20 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	middleware.Logger(c).Info().Str("track_id", req.TrackID).Msg("favorite added")
+	middleware.Logger(c).Info().Str("stream_id", req.StreamID).Msg("favorite added")
 	c.Status(http.StatusCreated)
 }
 
+// Remove godoc.
+// @Summary     Remove a live stream from the favorites
+// @Tags        favorites
+// @Produce     json
+// @Param       streamID path string true "Stream ID"
+// @Success     204
+// @Failure     400 {object} map[string]string
+// @Failure     401 {object} map[string]string
+// @Failure     404 {object} map[string]string
+// @Router      /api/v1/favorites/{streamID} [delete]
 func (h *FavoriteHandler) Remove(c *gin.Context) {
 	uid, ok := ownerID(c)
 	if !ok {
@@ -73,7 +102,7 @@ func (h *FavoriteHandler) Remove(c *gin.Context) {
 		return
 	}
 
-	if err := h.useCase.Remove(c.Request.Context(), uid, c.Param("trackID")); err != nil {
+	if err := h.useCase.Remove(c.Request.Context(), uid, c.Param("streamID")); err != nil {
 		middleware.Logger(c).Warn().Err(err).Msg("remove favorite failed")
 		if errors.Is(err, usecase.ErrFavoriteInvalid) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
@@ -82,6 +111,6 @@ func (h *FavoriteHandler) Remove(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "favorite not found"})
 		return
 	}
-	middleware.Logger(c).Info().Str("track_id", c.Param("trackID")).Msg("favorite removed")
+	middleware.Logger(c).Info().Str("stream_id", c.Param("streamID")).Msg("favorite removed")
 	c.Status(http.StatusNoContent)
 }

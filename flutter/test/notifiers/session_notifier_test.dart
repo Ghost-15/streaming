@@ -20,6 +20,8 @@ void _mockSecureStorage([Future<Object?> Function(MethodCall call)? handler]) {
 
 AuthResponse _fakeResponse(Role role) => AuthResponse(
   token: 'tok-123',
+  refreshToken: 'refresh-123',
+  expiresIn: 3600,
   user: UserModel(
     id: 'u-1',
     email: 'test@test.com',

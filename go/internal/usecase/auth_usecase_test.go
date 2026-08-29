@@ -120,9 +120,14 @@ func TestAuthUseCase_Register(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &mock.MockUserRepository{}
 			tt.repoSetup(repo)
-			uc := usecase.NewAuthUseCase(repo, testKeyPath)
+			uc := usecase.NewAuthUseCase(repo, &mock.MockRefreshTokenRepository{}, testKeyPath, time.Hour, 720*time.Hour)
 
-			token, user, err := uc.Register(context.Background(), tt.email, tt.password, "", "", "user")
+			result, err := uc.Register(context.Background(), tt.email, tt.password, "", "", "user")
+			var token string
+			var user *entity.User
+			if result != nil {
+				token, user = result.AccessToken, result.User
+			}
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Register() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -243,9 +248,14 @@ func TestAuthUseCase_Login(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &mock.MockUserRepository{}
 			tt.repoSetup(repo)
-			uc := usecase.NewAuthUseCase(repo, testKeyPath)
+			uc := usecase.NewAuthUseCase(repo, &mock.MockRefreshTokenRepository{}, testKeyPath, time.Hour, 720*time.Hour)
 
-			token, user, err := uc.Login(context.Background(), tt.email, tt.password)
+			result, err := uc.Login(context.Background(), tt.email, tt.password)
+			var token string
+			var user *entity.User
+			if result != nil {
+				token, user = result.AccessToken, result.User
+			}
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Login() error = %v, wantErr %v", err, tt.wantErr)
 			}

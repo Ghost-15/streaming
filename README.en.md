@@ -7,7 +7,7 @@ PostgreSQL/Supabase and a Prometheus/Grafana observability stack.
 
 ## Delivered capabilities
 
-- Go 1.25 Clean Architecture API with RS256 JWT and User/Broadcaster/Admin RBAC.
+- Go 1.26 Clean Architecture API with RS256 JWT and User/Broadcaster/Admin RBAC.
 - Real HTTP chunked audio ingestion and fan-out to concurrent listeners.
 - Context propagation, sliding stream deadlines and deterministic shutdown.
 - Metrics derived from audio bytes actually read and written, not UI events.
@@ -18,7 +18,7 @@ PostgreSQL/Supabase and a Prometheus/Grafana observability stack.
 
 ## Local start
 
-Requirements: Go 1.25+, Flutter stable, OpenSSL and Docker with Compose.
+Requirements: Go 1.26+, Flutter stable, OpenSSL and Docker with Compose.
 
 ```powershell
 Copy-Item .env.example .env

@@ -52,7 +52,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final response = await AuthRepository().register({
+      final response = await const AuthRepository().register({
         'email': email,
         'password': password,
         'first_name': _firstNameController.text.trim(),
@@ -101,6 +101,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_rounded),
+                    tooltip: 'Retour',
                     color: Colors.white70,
                     onPressed: () =>
                         context.canPop() ? context.pop() : context.go('/login'),
@@ -229,6 +230,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ? Icons.visibility_outlined
                               : Icons.visibility_off_outlined,
                         ),
+                        tooltip: _obscurePassword
+                            ? 'Afficher le mot de passe'
+                            : 'Masquer le mot de passe',
                         onPressed: () => setState(
                           () => _obscurePassword = !_obscurePassword,
                         ),

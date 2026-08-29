@@ -108,3 +108,26 @@ func TestUserRepo_Delete_Mock(t *testing.T) {
 		t.Error("Delete missing: expected error")
 	}
 }
+
+func TestUserRepo_UpdatePassword_Mock(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r := &supabaseUserRepo{db: mock}
+
+	mock.ExpectExec("UPDATE users SET password_hash").WithArgs(anyArgs(2)...).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	if err := r.UpdatePassword(context.Background(), "u1", "new-hash"); err != nil {
+		t.Fatalf("UpdatePassword err = %v", err)
+	}
+
+	mock.ExpectExec("UPDATE users SET password_hash").WithArgs(anyArgs(2)...).WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+	if err := r.UpdatePassword(context.Background(), "ghost", "new-hash"); err == nil {
+		t.Error("UpdatePassword on a missing user: expected an error")
+	}
+}
+
+func TestUserRepo_UpdatePassword_NilDB(t *testing.T) {
+	r := &supabaseUserRepo{db: nil}
+	if err := r.UpdatePassword(context.Background(), "u1", "hash"); err == nil {
+		t.Error("UpdatePassword with a nil pool: expected an error")
+	}
+}

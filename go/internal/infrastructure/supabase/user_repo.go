@@ -138,6 +138,26 @@ func (r *supabaseUserRepo) Update(ctx context.Context, user *entity.User) (err e
 	return nil
 }
 
+// UpdatePassword replaces the stored bcrypt hash of a user.
+func (r *supabaseUserRepo) UpdatePassword(ctx context.Context, id, passwordHash string) (err error) {
+	ctx, span := startRepoSpan(ctx, "auth", "UserRepository", "UpdatePassword", "users", "UPDATE")
+	defer finishRepoSpan(span, &err)
+
+	if r.db == nil {
+		return errDatabaseUnavailable
+	}
+
+	const q = `UPDATE users SET password_hash = $1 WHERE id = $2`
+	tag, execErr := r.db.Exec(ctx, q, passwordHash, id)
+	if execErr != nil {
+		return fmt.Errorf("user_repo: update password: %w", execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user_repo: user %s not found", id)
+	}
+	return nil
+}
+
 // Delete removes a user by UUID.
 func (r *supabaseUserRepo) Delete(ctx context.Context, id string) (err error) {
 	ctx, span := startRepoSpan(ctx, "auth", "UserRepository", "Delete", "users", "DELETE")

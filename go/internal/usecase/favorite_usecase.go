@@ -12,8 +12,8 @@ import (
 var ErrFavoriteInvalid = errors.New("favorite: invalid input")
 
 type FavoriteUseCase interface {
-	Add(ctx context.Context, userID, trackID string) error
-	Remove(ctx context.Context, userID, trackID string) error
+	Add(ctx context.Context, userID, streamID string) error
+	Remove(ctx context.Context, userID, streamID string) error
 	List(ctx context.Context, userID string) ([]entity.Track, error)
 }
 
@@ -25,21 +25,21 @@ func NewFavoriteUseCase(favoriteRepo repository.FavoriteRepository) FavoriteUseC
 	return &favoriteUseCase{favoriteRepo: favoriteRepo}
 }
 
-func (uc *favoriteUseCase) Add(ctx context.Context, userID, trackID string) error {
-	if userID == "" || trackID == "" {
+func (uc *favoriteUseCase) Add(ctx context.Context, userID, streamID string) error {
+	if userID == "" || streamID == "" {
 		return ErrFavoriteInvalid
 	}
-	if err := uc.favoriteRepo.Add(ctx, userID, trackID); err != nil {
+	if err := uc.favoriteRepo.Add(ctx, userID, streamID); err != nil {
 		return fmt.Errorf("favorite: add: %w", err)
 	}
 	return nil
 }
 
-func (uc *favoriteUseCase) Remove(ctx context.Context, userID, trackID string) error {
-	if userID == "" || trackID == "" {
+func (uc *favoriteUseCase) Remove(ctx context.Context, userID, streamID string) error {
+	if userID == "" || streamID == "" {
 		return ErrFavoriteInvalid
 	}
-	if err := uc.favoriteRepo.Remove(ctx, userID, trackID); err != nil {
+	if err := uc.favoriteRepo.Remove(ctx, userID, streamID); err != nil {
 		return fmt.Errorf("favorite: remove: %w", err)
 	}
 	return nil

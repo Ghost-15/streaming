@@ -19,6 +19,8 @@ type Config struct {
 	SupabaseDBURL         string
 	JWTPrivateKeyPath     string
 	JWTPublicKeyPath      string
+	AuthAccessTokenTTL    time.Duration
+	AuthRefreshTokenTTL   time.Duration
 	OTELEndpoint          string
 	OTELServiceNamespace  string
 	OTELDeploymentEnv     string
@@ -37,6 +39,7 @@ type Config struct {
 	StreamChunkSize       int
 	StreamClientBuffer    int
 	PprofEnabled          bool
+	SwaggerEnabled        bool
 	PprofAddr             string
 }
 
@@ -55,6 +58,14 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	authAccessTokenTTL, err := durationEnv("AUTH_ACCESS_TOKEN_TTL", time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	authRefreshTokenTTL, err := durationEnv("AUTH_REFRESH_TOKEN_TTL", 30*24*time.Hour)
+	if err != nil {
+		return nil, err
+	}
 	httpReadHeaderTimeout, err := durationEnv("HTTP_READ_HEADER_TIMEOUT", 10*time.Second)
 	if err != nil {
 		return nil, err
@@ -95,6 +106,13 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The Swagger UI only renders the contract; every documented route stays
+	// behind its own RBAC middleware. It is on by default so the deployed API
+	// is self-documenting, and can be switched off per environment.
+	swaggerEnabled, err := boolEnv("SWAGGER_ENABLED", true)
+	if err != nil {
+		return nil, err
+	}
 	appEnv := getEnv("APP_ENV", "development")
 	otelMetricsEnabled, err := boolEnv("OTEL_METRICS_ENABLED", appEnv == "production")
 	if err != nil {
@@ -106,6 +124,8 @@ func Load() (*Config, error) {
 		SupabaseDBURL:         os.Getenv("SUPABASE_DB_URL"),
 		JWTPrivateKeyPath:     resolveConfigFilePath(os.Getenv("JWT_PRIVATE_KEY_PATH"), dotEnvDir),
 		JWTPublicKeyPath:      resolveConfigFilePath(os.Getenv("JWT_PUBLIC_KEY_PATH"), dotEnvDir),
+		AuthAccessTokenTTL:    authAccessTokenTTL,
+		AuthRefreshTokenTTL:   authRefreshTokenTTL,
 		OTELEndpoint:          getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 		OTELServiceNamespace:  getEnv("OTEL_SERVICE_NAMESPACE", "my-application-group"),
 		OTELDeploymentEnv:     getEnv("OTEL_DEPLOYMENT_ENVIRONMENT", "production"),
@@ -124,6 +144,7 @@ func Load() (*Config, error) {
 		StreamChunkSize:       streamChunkSize,
 		StreamClientBuffer:    streamClientBuffer,
 		PprofEnabled:          pprofEnabled,
+		SwaggerEnabled:        swaggerEnabled,
 		PprofAddr:             getEnv("PPROF_ADDR", "127.0.0.1:6060"),
 	}
 
@@ -155,6 +176,9 @@ func (c *Config) validate() error {
 	}
 	if c.Env == "production" && c.MetricsBearerToken == "" {
 		return fmt.Errorf("config: missing METRICS_BEARER_TOKEN or METRICS_BEARER_TOKEN_FILE in production")
+	}
+	if c.AuthAccessTokenTTL <= 0 || c.AuthRefreshTokenTTL <= c.AuthAccessTokenTTL {
+		return fmt.Errorf("config: AUTH_REFRESH_TOKEN_TTL must be positive and longer than AUTH_ACCESS_TOKEN_TTL")
 	}
 	if c.StreamMaxDuration <= 0 || c.StreamIdleTimeout <= 0 || c.StreamWriteTimeout <= 0 ||
 		c.ShutdownTimeout <= 0 || c.HTTPReadHeaderTimeout <= 0 || c.HTTPIdleTimeout <= 0 {
